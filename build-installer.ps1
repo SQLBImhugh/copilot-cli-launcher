@@ -82,9 +82,13 @@ if ($leftover.Count -gt 0) {
     $leftover | ForEach-Object { Write-Host "  $($_.Value)" -ForegroundColor Yellow }
 }
 
-# Write output
-$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-[System.IO.File]::WriteAllText($outFile, $content, $utf8NoBom)
+# Write output WITH a UTF-8 BOM. The installer template embeds a few non-ASCII
+# characters (em-dashes in user-visible Write-Host strings). Without a BOM,
+# Windows PowerShell 5.1 reads .ps1 files as Windows-1252 and renders those
+# em-dashes as mojibake (`â€"`). The BOM makes the encoding unambiguous so both
+# PowerShell 7 (pwsh.exe) and Windows PowerShell 5.1 decode the file correctly.
+$utf8WithBom = [System.Text.UTF8Encoding]::new($true)
+[System.IO.File]::WriteAllText($outFile, $content, $utf8WithBom)
 
 $outSize = (Get-Item $outFile).Length
 Write-Host ''
