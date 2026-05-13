@@ -104,17 +104,24 @@ function Read-Default {
     param(
         [string]$Prompt,
         [string]$Default,
+        [string[]]$Description,
         [switch]$AllowEmpty
     )
     if ($script:SilentMode) {
         return $Default
+    }
+    if ($Description) {
+        Write-Host ''
+        foreach ($line in $Description) {
+            Write-Host "  $line" -ForegroundColor DarkGray
+        }
     }
     $shown = if ($Default) { "[$Default]" } else { '' }
     $resp = Read-Host "$Prompt $shown"
     if ([string]::IsNullOrWhiteSpace($resp)) {
         if (-not $AllowEmpty -and -not $Default) {
             Write-Host "  Value required." -ForegroundColor Yellow
-            return Read-Default -Prompt $Prompt -Default $Default -AllowEmpty:$AllowEmpty
+            return Read-Default -Prompt $Prompt -Default $Default -Description $Description -AllowEmpty:$AllowEmpty
         }
         return $Default
     }
@@ -122,8 +129,18 @@ function Read-Default {
 }
 
 function Read-YesNo {
-    param([string]$Prompt, [bool]$Default)
+    param(
+        [string]$Prompt,
+        [bool]$Default,
+        [string[]]$Description
+    )
     if ($script:SilentMode) { return $Default }
+    if ($Description) {
+        Write-Host ''
+        foreach ($line in $Description) {
+            Write-Host "  $line" -ForegroundColor DarkGray
+        }
+    }
     $hint = if ($Default) { '[Y/n]' } else { '[y/N]' }
     $resp = Read-Host "$Prompt $hint"
     if ([string]::IsNullOrWhiteSpace($resp)) { return $Default }
@@ -161,20 +178,41 @@ Write-Host ''
 
 # ---------- Install location ----------
 if (-not $InstallDir) {
-    $InstallDir = Read-Default -Prompt 'Install location' -Default (Join-Path $env:USERPROFILE 'copilot-launcher')
+    $InstallDir = Read-Default -Prompt 'Install location' `
+        -Default (Join-Path $env:USERPROFILE 'copilot-launcher') `
+        -Description @(
+            'Where the launcher KIT files get extracted (Launch-Copilot.ps1, helpers,',
+            'your config.json, agents.md). This is the launcher itself, not your project',
+            'code and not where briefing logs go. Pick a folder you can leave alone.'
+        )
 }
 $InstallDir = [Environment]::ExpandEnvironmentVariables($InstallDir)
 
 # ---------- Project name ----------
 if (-not $ProjectName) {
     $cwdName = Split-Path -Leaf (Get-Location).Path
-    $ProjectName = Read-Default -Prompt 'Project name' -Default $cwdName
+    $ProjectName = Read-Default -Prompt 'Project name' -Default $cwdName `
+        -Description @(
+            'A short label for THIS launcher setup (not a folder path). It becomes:',
+            '  - the desktop shortcut filename: "<name> Copilot.lnk"',
+            '  - the briefing-session name passed to Copilot: "<name>-Briefings"',
+            '  - the default subfolder name under the state directory',
+            '  - substituted into agents.md wherever {ProjectName} appears',
+            'Use letters/numbers/dashes. Example: "MyApp", "ClientX-Web", "scratch".'
+        )
 }
 
 # ---------- State dir ----------
 if (-not $StateDir) {
     $defaultStateDir = Join-Path ([Environment]::GetFolderPath('Desktop')) "CopilotCLI\$ProjectName"
-    $StateDir = Read-Default -Prompt 'State directory (briefing logs, history)' -Default $defaultStateDir
+    $StateDir = Read-Default -Prompt 'State directory' -Default $defaultStateDir `
+        -Description @(
+            'Where the launcher writes its long-lived state across launches:',
+            '  - changelog briefings shown when Copilot CLI updates',
+            '  - the recorded "last seen" version number',
+            '  - cached AI-authored summaries and GitHub issue-status checks',
+            'Often placed on Desktop or OneDrive so the briefing logs are visible.'
+        )
 }
 $StateDir = [Environment]::ExpandEnvironmentVariables($StateDir)
 
@@ -185,17 +223,38 @@ $StateDir = [Environment]::ExpandEnvironmentVariables($StateDir)
 # the caller actually passed -ResumeSession to distinguish "not specified
 # (prompt for it)" from "explicitly blank (skip the prompt)".
 if (-not $PSBoundParameters.ContainsKey('ResumeSession')) {
-    $ResumeSession = Read-Default -Prompt 'Default Copilot CLI --resume session (blank = none)' -Default '' -AllowEmpty
+    $ResumeSession = Read-Default -Prompt 'Default Copilot CLI --resume session name' `
+        -Default '' -AllowEmpty `
+        -Description @(
+            'Optional. If you set a name here, every shortcut launch passes',
+            '"--resume <name>" to copilot, so you keep ONE persistent conversation',
+            'across launches (history, context, etc. are preserved).',
+            'Leave blank to start a fresh Copilot session each launch.',
+            'NOTE: this is the Copilot CLI session name, NOT the project name above.',
+            'Example: "MyApp-Main", "ClientX-bugfix-2026-05".'
+        )
 }
 
 # ---------- AI summary ----------
 if (-not $PSBoundParameters.ContainsKey('EnableAISummary')) {
-    $EnableAISummary = Read-YesNo -Prompt 'Enable AI-authored briefing summary? (uses one premium request per update)' -Default $false
+    $EnableAISummary = Read-YesNo -Prompt 'Enable AI-authored briefing summary?' -Default $false `
+        -Description @(
+            'When the Copilot CLI version changes, the launcher can ask an AI model',
+            'to summarize the upstream changelog, tailored to your agents.md context.',
+            'Each summary costs ONE premium model request, only on a version bump.',
+            'Skip this for a plain "version bumped from X to Y, see release notes" notice.'
+        )
 }
 
 # ---------- Allow-all ----------
 if (-not $PSBoundParameters.ContainsKey('EnableAllowAll')) {
-    $EnableAllowAll = Read-YesNo -Prompt 'Pass --allow-all to copilot? (auto-approves tool calls)' -Default $false
+    $EnableAllowAll = Read-YesNo -Prompt 'Pass --allow-all to copilot?' -Default $false `
+        -Description @(
+            'Adds --allow-all so Copilot auto-approves every tool call without asking.',
+            'Faster workflow, but bypasses the per-call safety prompt that lets you',
+            'review what Copilot is about to do (run commands, edit files, etc.).',
+            'Recommended only for scratch / dev environments you trust.'
+        )
 }
 
 # ---------- Shortcut ----------
@@ -203,7 +262,11 @@ $CreateDesktopShortcut = $true
 if ($PSBoundParameters.ContainsKey('NoDesktopShortcut')) {
     $CreateDesktopShortcut = -not [bool]$NoDesktopShortcut
 } elseif (-not $script:SilentMode) {
-    $CreateDesktopShortcut = Read-YesNo -Prompt 'Create desktop shortcut?' -Default $true
+    $CreateDesktopShortcut = Read-YesNo -Prompt 'Create desktop shortcut?' -Default $true `
+        -Description @(
+            'Creates a Windows shortcut on your Desktop named "<Project name> Copilot.lnk"',
+            'that launches the wrapper with the options you chose above.'
+        )
 }
 
 $briefingSessionName = "$ProjectName-Briefings"
