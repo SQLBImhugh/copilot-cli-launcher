@@ -121,6 +121,34 @@ Double-click the shortcut. The first launch records the current Copilot CLI vers
 
 ---
 
+## Adding more shortcuts after install
+
+The installer creates one shortcut. To create additional ones — for example one per project, each starting in its own folder, each with its own `--resume` session — run the post-install helper:
+
+```powershell
+cd C:\path\to\your-project
+pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1"
+```
+
+The wizard prompts for a label (becomes the `.lnk` filename), the working directory (defaults to your current folder), an optional `--resume` session name, and AI-summary / `--allow-all` toggles. It reads `config.json` for the project description but never writes to it, so your customizations are safe.
+
+Silent / scripted invocation:
+
+```powershell
+pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1" `
+    -Silent `
+    -Label "MyApp" `
+    -WorkingDirectory "C:\code\my-app" `
+    -ResumeSession "MyApp-Main" `
+    -EnableAISummary -EnableAllowAll
+```
+
+Pass `-Force` to overwrite an existing shortcut with the same label, or `-ShortcutDir <path>` to drop the `.lnk` somewhere other than the Desktop.
+
+> **Don't re-run the installer** to add another shortcut. The installer is for first-time setup; re-running it preserves your `config.json` and `agents.md` but is heavier than needed. Use `New-CopilotShortcut.ps1` for shortcut-only changes.
+
+---
+
 ## What runs on every launch
 
 ```
@@ -150,6 +178,7 @@ Idempotent. Silent unless something actually happens.
 | File | Purpose | Customize? |
 |---|---|---|
 | `Launch-Copilot.ps1` | The launcher | No |
+| `New-CopilotShortcut.ps1` | Post-install shortcut generator (see "Adding more shortcuts" above) | No |
 | `repair-copilot-sessions.py` | Session events.jsonl repair helper (called by launcher) | No |
 | `config.example.json` | Sample config with comments | Copy to `config.json` and edit |
 | `config.json` | Your config (gitignored) | **Yes** |

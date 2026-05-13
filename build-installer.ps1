@@ -37,11 +37,12 @@ function Read-AsBase64 {
 
 # Map placeholders to source files
 $payloadMap = [ordered]@{
-    'LAUNCH_COPILOT_PS1_B64'    = 'Launch-Copilot.ps1'
-    'REPAIR_SESSIONS_PY_B64'    = 'repair-copilot-sessions.py'
-    'AGENTS_EXAMPLE_MD_B64'     = 'agents.example.md'
-    'CONFIG_EXAMPLE_JSON_B64'   = 'config.example.json'
-    'README_MD_B64'             = 'README.md'
+    'LAUNCH_COPILOT_PS1_B64'        = 'Launch-Copilot.ps1'
+    'NEW_COPILOT_SHORTCUT_PS1_B64'  = 'New-CopilotShortcut.ps1'
+    'REPAIR_SESSIONS_PY_B64'        = 'repair-copilot-sessions.py'
+    'AGENTS_EXAMPLE_MD_B64'         = 'agents.example.md'
+    'CONFIG_EXAMPLE_JSON_B64'       = 'config.example.json'
+    'README_MD_B64'                 = 'README.md'
 }
 
 # Read template

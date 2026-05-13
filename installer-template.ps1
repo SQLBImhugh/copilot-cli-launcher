@@ -62,6 +62,7 @@ param(
     [string]$InstallDir,
     [string]$ProjectName,
     [string]$StateDir,
+    [string]$WorkingDirectory,
     [string]$ResumeSession,
     [switch]$EnableAISummary,
     [switch]$EnableAllowAll,
@@ -79,6 +80,7 @@ try {
 # ============================================================================
 
 $PAYLOAD_LAUNCH_COPILOT_PS1     = '{{LAUNCH_COPILOT_PS1_B64}}'
+$PAYLOAD_NEW_COPILOT_SHORTCUT_PS1 = '{{NEW_COPILOT_SHORTCUT_PS1_B64}}'
 $PAYLOAD_REPAIR_SESSIONS_PY     = '{{REPAIR_SESSIONS_PY_B64}}'
 $PAYLOAD_AGENTS_EXAMPLE_MD      = '{{AGENTS_EXAMPLE_MD_B64}}'
 $PAYLOAD_CONFIG_EXAMPLE_JSON    = '{{CONFIG_EXAMPLE_JSON_B64}}'
@@ -148,15 +150,58 @@ function Read-YesNo {
 }
 
 function Write-File {
-    param([string]$Path, [string]$Content)
+    param(
+        [string]$Path,
+        [string]$Content,
+        [switch]$PreserveExisting
+    )
     $dir = Split-Path $Path -Parent
     if (-not (Test-Path $dir)) {
         $null = New-Item -ItemType Directory -Force -Path $dir
     }
-    # Use UTF-8 without BOM to match how the source files are stored
-    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+    # Skip writing user-customized files (config.json, agents.md) if they
+    # already exist, so re-running the installer to pick up new kit files
+    # doesn't clobber the user's edits. Kit files (Launch-Copilot.ps1 etc.)
+    # always overwrite because they are the kit, not user content.
+    if ($PreserveExisting -and (Test-Path $Path)) {
+        Write-Host "  Kept (existing)  $Path" -ForegroundColor DarkGray
+        return
+    }
+    # Write .ps1 files with a UTF-8 BOM so Windows PowerShell 5.1 (which the
+    # generated shortcut may fall back to when pwsh is not installed) decodes
+    # non-ASCII characters in user-visible Write-Host strings correctly. PS 7
+    # and the BOM-aware text editors handle it transparently. Other file types
+    # (.py, .md, .json) stay no-BOM to avoid tripping parsers that don't
+    # special-case the BOM.
+    if ($Path -like '*.ps1') {
+        $encoding = [System.Text.UTF8Encoding]::new($true)
+    } else {
+        $encoding = [System.Text.UTF8Encoding]::new($false)
+    }
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
     Write-Host "  Wrote $Path" -ForegroundColor DarkGray
+}
+
+function Format-ShortcutArgs {
+    # Build the Arguments string for a Windows .lnk so each individual arg
+    # survives Windows command-line re-parsing. Wraps any value containing
+    # whitespace or double-quotes in double-quotes; embedded quotes are
+    # escaped by doubling. Anything safe is passed through unwrapped.
+    # NOTE: parameter is named -Arguments (not -Args). $Args is a PowerShell
+    # automatic variable and binding to it silently fails — produces empty
+    # output with no error. Don't rename without re-testing the .lnk Arguments.
+    param([string[]]$Arguments)
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($a in $Arguments) {
+        if ([string]::IsNullOrEmpty($a)) { continue }
+        if ($a -match '[\s"]') {
+            $escaped = $a -replace '"', '""'
+            $out.Add('"' + $escaped + '"')
+        } else {
+            $out.Add($a)
+        }
+    }
+    return ($out -join ' ')
 }
 
 # ============================================================================
@@ -215,6 +260,31 @@ if (-not $StateDir) {
         )
 }
 $StateDir = [Environment]::ExpandEnvironmentVariables($StateDir)
+
+# ---------- Working directory ----------
+# Default to the directory the installer was launched from, NOT the install
+# dir. The shortcut's working directory determines where Copilot starts; for
+# project-specific shortcuts that should be the project root, not the kit
+# folder. (Earlier versions defaulted to install dir, which was a latent bug
+# for any user actually using Copilot against a project.)
+if (-not $WorkingDirectory) {
+    $WorkingDirectory = Read-Default -Prompt 'Shortcut working directory' `
+        -Default ((Get-Location).Path) `
+        -Description @(
+            'Where Copilot will START when you double-click the shortcut.',
+            'Usually your project root (e.g. C:\code\my-app), so Copilot can see',
+            'your project files and your AGENTS.md.',
+            'NOT the launcher install dir (that would mean Copilot opens with',
+            'the kit folder as its working directory, which is rarely useful).',
+            'Default = the folder you ran the installer from.'
+        )
+}
+$WorkingDirectory = [Environment]::ExpandEnvironmentVariables($WorkingDirectory)
+if (-not (Test-Path $WorkingDirectory)) {
+    Write-Host "  ! Working directory does not exist: $WorkingDirectory" -ForegroundColor Yellow
+    Write-Host "    The shortcut will still be created, but launching it will fail." -ForegroundColor Yellow
+    Write-Host "    Create the folder before launching, or re-run with -WorkingDirectory <path>." -ForegroundColor Yellow
+}
 
 # ---------- Resume session ----------
 # Use ContainsKey rather than `-not $ResumeSession` because an empty string is
@@ -276,6 +346,7 @@ Write-Host 'Summary:' -ForegroundColor Cyan
 Write-Host "  Install location:       $InstallDir"
 Write-Host "  Project name:           $ProjectName"
 Write-Host "  State directory:        $StateDir"
+Write-Host "  Shortcut working dir:   $WorkingDirectory"
 Write-Host "  Briefing session name:  $briefingSessionName"
 Write-Host "  Resume session:         $(if ($ResumeSession) { $ResumeSession } else { '(none — fresh session each launch)' })"
 Write-Host "  AI summary:             $(if ($EnableAISummary) { 'enabled' } else { 'disabled' })"
@@ -303,6 +374,7 @@ $null = New-Item -ItemType Directory -Force -Path $StateDir
 
 # Decode and write source files
 Write-File -Path (Join-Path $InstallDir 'Launch-Copilot.ps1')           -Content (Decode-Payload $PAYLOAD_LAUNCH_COPILOT_PS1)
+Write-File -Path (Join-Path $InstallDir 'New-CopilotShortcut.ps1')      -Content (Decode-Payload $PAYLOAD_NEW_COPILOT_SHORTCUT_PS1)
 Write-File -Path (Join-Path $InstallDir 'repair-copilot-sessions.py')   -Content (Decode-Payload $PAYLOAD_REPAIR_SESSIONS_PY)
 Write-File -Path (Join-Path $InstallDir 'README.md')                    -Content (Decode-Payload $PAYLOAD_README_MD)
 Write-File -Path (Join-Path $InstallDir 'config.example.json')          -Content (Decode-Payload $PAYLOAD_CONFIG_EXAMPLE_JSON)
@@ -319,11 +391,11 @@ $userConfig = [ordered]@{
     autoUpdate             = $true
 }
 $configJson = $userConfig | ConvertTo-Json -Depth 4
-Write-File -Path (Join-Path $InstallDir 'config.json') -Content $configJson
+Write-File -Path (Join-Path $InstallDir 'config.json') -Content $configJson -PreserveExisting
 
 # Generate user AGENTS.md from template (with project name substituted)
 $agentsContent = (Decode-Payload $PAYLOAD_AGENTS_EXAMPLE_MD).Replace('{ProjectName}', $ProjectName)
-Write-File -Path (Join-Path $InstallDir 'agents.md') -Content $agentsContent
+Write-File -Path (Join-Path $InstallDir 'agents.md') -Content $agentsContent -PreserveExisting
 
 # ---------- Shortcut ----------
 if ($CreateDesktopShortcut) {
@@ -346,7 +418,7 @@ if ($CreateDesktopShortcut) {
             '-NoExit',
             '-NoLogo',
             '-ExecutionPolicy', 'Bypass',
-            '-File', "`"$launcherPath`""
+            '-File', $launcherPath
         )
         if ($EnableAISummary) { $argList += '-AISummary' }
         if ($ResumeSession)   { $argList += "--resume=$ResumeSession" }
@@ -356,8 +428,8 @@ if ($CreateDesktopShortcut) {
             $shell = New-Object -ComObject WScript.Shell
             $sc = $shell.CreateShortcut($shortcutPath)
             $sc.TargetPath       = $pwshCmd.Source
-            $sc.Arguments        = ($argList -join ' ')
-            $sc.WorkingDirectory = $InstallDir
+            $sc.Arguments        = Format-ShortcutArgs -Arguments $argList
+            $sc.WorkingDirectory = $WorkingDirectory
             $sc.Description      = "Launch GitHub Copilot CLI for $ProjectName with version-change briefing"
             # Use the Windows Terminal icon if available, else the pwsh icon
             $sc.IconLocation     = $pwshCmd.Source
@@ -394,6 +466,9 @@ if ($CreateDesktopShortcut) {
 Write-Host '  3. First launch records the current Copilot CLI version with no briefing.' -ForegroundColor Gray
 Write-Host '     From the next launch onward, you will see a changelog briefing on each' -ForegroundColor Gray
 Write-Host "     launch where the version has advanced." -ForegroundColor Gray
+Write-Host '  4. To create more shortcuts later (different projects, different sessions):' -ForegroundColor Gray
+Write-Host "       cd <your project>" -ForegroundColor Gray
+Write-Host "       pwsh `"$InstallDir\New-CopilotShortcut.ps1`"" -ForegroundColor Gray
 Write-Host ''
 Write-Host "Read more in $InstallDir\README.md" -ForegroundColor DarkGray
 Write-Host ''
