@@ -1,0 +1,13 @@
+# Local config — copy from config.example.json
+config.json
+
+# Local AGENTS.md — copy from agents.example.md
+agents.md
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

@@ -1,0 +1,25 @@
+{
+  "$schema": "./config.schema.json",
+  "$comment": "Copy this file to config.json and customize for your project. The launcher loads config.json from the same directory; if absent, it uses the values shown here as defaults.",
+
+  "projectName": "MyProject",
+  "$comment_projectName": "Used in messages and as the default briefing-session name.",
+
+  "stateDir": "%USERPROFILE%/Desktop/CopilotCLI/MyProject",
+  "$comment_stateDir": "Where last-seen-version.txt, last-briefing.log, briefing-history.log, and the issue-status cache live. Supports %USERPROFILE%, %APPDATA%, etc.",
+
+  "agentsMdPath": "./agents.md",
+  "$comment_agentsMdPath": "Path to the AGENTS.md file used as the briefing assistant's system prompt. Relative paths resolve against the launcher script directory.",
+
+  "briefingSessionName": "MyProject-Briefings",
+  "$comment_briefingSessionName": "Copilot CLI session name reused for AI summaries. Each summary appends a turn so the model can cross-reference prior briefings ('follows up on the X issue I flagged in v1.0.40').",
+
+  "trackedIssues": [3298],
+  "$comment_trackedIssues": "GitHub issue numbers in github/copilot-cli to monitor. When closed, the launcher prints a reminder so you can remove related workarounds.",
+
+  "applyKnownWorkarounds": true,
+  "$comment_applyKnownWorkarounds": "If true, runs Repair-Win32NativeAddon (issue #3298 — /keep-alive) and Repair-CopilotSessionDanglingToolUses (aborted tool_use cleanup) on every launch. Both are idempotent and silent when nothing needs fixing.",
+
+  "autoUpdate": true,
+  "$comment_autoUpdate": "If true, runs `copilot update` before reading the version. Set false if your CLI's built-in startup auto-update is reliable enough or you're often offline."
+}
