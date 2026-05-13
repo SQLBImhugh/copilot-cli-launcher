@@ -15,9 +15,28 @@ Designed to be **portable**: copy this folder anywhere, edit two files, point a 
 
 ## Setup
 
-You have two options:
+You have three options:
 
-### Option A — Single-file installer (recommended for sharing)
+### Option A — One-liner web install (fastest)
+
+If you're on a fresh machine and just want it installed, run this in a PowerShell 7 prompt:
+
+```powershell
+iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/install.ps1 | iex
+```
+
+That downloads a tiny bootstrap (~50 lines) which fetches the bundled installer and runs the interactive wizard. The wizard prompts you for project name, install dir, etc. — same prompts as Option B below, just no manual download step.
+
+For **silent / scripted installs** (e.g., baking into a setup script), use the two-liner form so you can pass parameters:
+
+```powershell
+iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/Install-CopilotLauncher.ps1 -OutFile "$env:TEMP\inst.ps1"
+& "$env:TEMP\inst.ps1" -Silent -ProjectName "MyApp" -ResumeSession "MyApp-Main" -EnableAISummary -EnableAllowAll
+```
+
+> The one-liner can't pass parameters because PowerShell's `iex` doesn't accept arguments, so it always runs in wizard mode. The two-liner downloads the installer to disk and invokes it directly, which lets you pass any of the parameters listed in Option B.
+
+### Option B — Single-file installer (recommended for sharing)
 
 Hand a peer one file: `dist/Install-CopilotLauncher.ps1` (~115 KB; the launcher, repair script, templates, and README are all base64-embedded).
 
@@ -55,7 +74,7 @@ Installer parameters:
 | `-NoDesktopShortcut` | off | Skip shortcut creation |
 | `-Silent` | off | Skip all prompts; use defaults + supplied params |
 
-### Option B — Manual file copy
+### Option C — Manual file copy
 
 If you'd rather see and edit each file yourself, skip the installer:
 
@@ -193,6 +212,7 @@ Idempotent. Silent unless something actually happens.
 | `installer-template.ps1` | Template for the bundled installer; `{{X_B64}}` placeholders get substituted at build time |
 | `build-installer.ps1` | Reads each source file, base64-encodes it, writes the bundled installer |
 | `dist/Install-CopilotLauncher.ps1` | The bundled single-file installer to share with peers |
+| `dist/install.ps1` | Tiny BOM-free bootstrap so `iwr -useb <url>/dist/install.ps1 \| iex` works (the bundled installer's BOM, needed for PS 5.1, breaks `iex` directly) |
 
 After editing any source file, re-run `pwsh build-installer.ps1` to refresh the bundled installer.
 
