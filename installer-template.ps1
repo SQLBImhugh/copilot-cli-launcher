@@ -179,7 +179,12 @@ if (-not $StateDir) {
 $StateDir = [Environment]::ExpandEnvironmentVariables($StateDir)
 
 # ---------- Resume session ----------
-if ($null -eq $ResumeSession) {
+# Use ContainsKey rather than `-not $ResumeSession` because an empty string is
+# a valid explicit value (meaning "no resume session"). PowerShell binds an
+# unspecified [string] param to '' (not $null), so we have to check whether
+# the caller actually passed -ResumeSession to distinguish "not specified
+# (prompt for it)" from "explicitly blank (skip the prompt)".
+if (-not $PSBoundParameters.ContainsKey('ResumeSession')) {
     $ResumeSession = Read-Default -Prompt 'Default Copilot CLI --resume session (blank = none)' -Default '' -AllowEmpty
 }
 
