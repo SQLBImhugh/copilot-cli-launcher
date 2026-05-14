@@ -279,6 +279,56 @@ function Repair-CopilotSessionDanglingToolUses {
 
 # ---------- changelog discovery ----------
 
+function Resolve-CopilotProcessTarget {
+    <#
+    Returns @{ FileName, PrefixArgs } describing how to spawn the copilot
+    CLI via [Process]::Start with UseShellExecute=$false.
+
+    npm on Windows installs `copilot` as three sibling shims: `copilot`
+    (POSIX), `copilot.cmd` (cmd.exe), and `copilot.ps1` (PowerShell).
+    Get-Command's $PSModulePath probe order can resolve the .ps1 first,
+    but Process.Start cannot run a .ps1 directly (it's not a valid PE,
+    not a .cmd) — fails with "not a valid application for this OS
+    platform" or "system cannot find file specified".
+
+    Strategy:
+      1. If Get-Command resolves to .exe/.cmd/.bat: use that path directly.
+      2. If it resolves to a .ps1 shim: prefer the .cmd sibling (npm
+         always ships one). Fall back to invoking pwsh -File <ps1>.
+      3. If nothing resolves: return $null.
+    #>
+    $cmd = Get-Command copilot -ErrorAction SilentlyContinue
+    if (-not $cmd) { return $null }
+
+    $src = $cmd.Source
+    $ext = ''
+    if ($src) { $ext = [System.IO.Path]::GetExtension($src).ToLowerInvariant() }
+
+    if ($ext -eq '.exe' -or $ext -eq '.cmd' -or $ext -eq '.bat') {
+        return @{ FileName = $src; PrefixArgs = @() }
+    }
+
+    if ($ext -eq '.ps1') {
+        $cmdSibling = [System.IO.Path]::ChangeExtension($src, '.cmd')
+        if (Test-Path $cmdSibling) {
+            return @{ FileName = $cmdSibling; PrefixArgs = @() }
+        }
+        $exeSibling = [System.IO.Path]::ChangeExtension($src, '.exe')
+        if (Test-Path $exeSibling) {
+            return @{ FileName = $exeSibling; PrefixArgs = @() }
+        }
+        $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+        if (-not $pwsh) { $pwsh = Get-Command powershell.exe -ErrorAction SilentlyContinue }
+        if ($pwsh) {
+            return @{ FileName = $pwsh.Source; PrefixArgs = @('-NoProfile', '-File', $src) }
+        }
+    }
+
+    # Unknown extension or no-extension shim — try as-is and let Process.Start
+    # produce the original error if it can't run it.
+    return @{ FileName = $src; PrefixArgs = @() }
+}
+
 function Resolve-ChangelogPath {
     try {
         $copilotCmd = Get-Command copilot -ErrorAction SilentlyContinue
@@ -411,7 +461,17 @@ function Get-PlainBriefingText {
     } elseif ($RemoteEntries) {
         foreach ($e in $RemoteEntries) {
             [void]$sb.AppendLine("## $($e.tag_name)")
-            if ($e.published_at) { [void]$sb.AppendLine($e.published_at.Substring(0,10)) }
+            if ($e.published_at) {
+                # Invoke-RestMethod auto-deserializes ISO timestamps to
+                # [DateTime], so .Substring would fail. Render the date as
+                # yyyy-MM-dd for parity with the bundled-changelog branch.
+                $dateStr = if ($e.published_at -is [DateTime]) {
+                    $e.published_at.ToString('yyyy-MM-dd')
+                } else {
+                    [string]$e.published_at
+                }
+                [void]$sb.AppendLine($dateStr)
+            }
             [void]$sb.AppendLine()
             if ($e.body) { [void]$sb.AppendLine($e.body) }
             [void]$sb.AppendLine()
@@ -495,18 +555,22 @@ This is your FIRST briefing. Memorize the project context above for future runs,
     Write-Host ''
 
     try {
-        $copilotCmd = Get-Command copilot -ErrorAction SilentlyContinue
-        if (-not $copilotCmd) {
+        $target = Resolve-CopilotProcessTarget
+        if (-not $target) {
             Write-Host '[Launch-Copilot] copilot CLI not found - skipping AI summary' -ForegroundColor DarkYellow
             return
         }
 
         $promptText = Get-Content $tempPrompt -Raw
-        $args = @('--prompt', $promptText, '--no-color', '--allow-all-tools', '--resume', $BriefingSessionName, '--working-directory', $StateDir)
+        # NOTE: parameter is named $copilotArgs (not $args). $args is a
+        # PowerShell automatic variable inside functions; assigning to it
+        # silently shadows the auto-binding and makes the intent unclear.
+        $copilotArgs = @('--prompt', $promptText, '--no-color', '--allow-all-tools', '--resume', $BriefingSessionName, '--working-directory', $StateDir)
 
         $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = 'copilot'
-        foreach ($a in $args) { [void]$psi.ArgumentList.Add($a) }
+        $psi.FileName = $target.FileName
+        foreach ($a in $target.PrefixArgs) { [void]$psi.ArgumentList.Add($a) }
+        foreach ($a in $copilotArgs)        { [void]$psi.ArgumentList.Add($a) }
         $psi.RedirectStandardOutput = $true
         $psi.RedirectStandardError = $true
         $psi.UseShellExecute = $false
