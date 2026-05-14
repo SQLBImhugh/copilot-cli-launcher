@@ -68,9 +68,13 @@ Installer parameters:
 | `-InstallDir` | `%USERPROFILE%\copilot-launcher` | Where the kit goes |
 | `-ProjectName` | prompt (or current dir name in silent mode) | Used in messages and as the briefing-session name |
 | `-StateDir` | `%USERPROFILE%\Desktop\CopilotCLI\<ProjectName>` | Where briefing logs and history live |
+| `-WorkingDirectory` | the folder you ran the installer from | Where Copilot starts when the shortcut opens (project root) |
 | `-ResumeSession` | empty | Default `--resume=<name>` for the shortcut |
 | `-EnableAISummary` | prompt | Adds `-AISummary` to the shortcut |
 | `-EnableAllowAll` | prompt | Adds `--allow-all` to the shortcut |
+| `-ExtraCopilotArgs` | empty | Extra copilot CLI flags appended to the shortcut, e.g. `"--max-autopilot-continues 100"`. Quoted values are preserved as single args. |
+| `-UseWindowsTerminal` | prompt; default Yes if `wt.exe` on PATH | Targets `wt.exe` instead of `pwsh.exe` so the shortcut opens in a Windows Terminal tab. Equivalent to `wt.exe -w 0 -d "<workdir>" "<pwsh>" -NoExit -File "<launcher>" ...` |
+| `-NoWindowsTerminal` | off | Force-disable Windows Terminal targeting even if `wt.exe` is on PATH. |
 | `-NoDesktopShortcut` | off | Skip shortcut creation |
 | `-Silent` | off | Skip all prompts; use defaults + supplied params |
 
@@ -149,9 +153,9 @@ cd C:\path\to\your-project
 pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1"
 ```
 
-The wizard prompts for a label (becomes the `.lnk` filename), the working directory (defaults to your current folder), an optional `--resume` session name, and AI-summary / `--allow-all` toggles. It reads `config.json` for the project description but never writes to it, so your customizations are safe.
+The wizard prompts for a label (becomes the `.lnk` filename), the working directory (defaults to your current folder), an optional `--resume` session name, AI-summary / `--allow-all` toggles, any extra copilot CLI flags, and whether to launch via Windows Terminal. It reads `config.json` for the project description but never writes to it, so your customizations are safe.
 
-Silent / scripted invocation:
+Silent / scripted invocation, fully featured:
 
 ```powershell
 pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1" `
@@ -159,10 +163,26 @@ pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1" `
     -Label "MyApp" `
     -WorkingDirectory "C:\code\my-app" `
     -ResumeSession "MyApp-Main" `
-    -EnableAISummary -EnableAllowAll
+    -EnableAISummary -EnableAllowAll `
+    -ExtraCopilotArgs "--max-autopilot-continues 100" `
+    -UseWindowsTerminal
 ```
 
-Pass `-Force` to overwrite an existing shortcut with the same label, or `-ShortcutDir <path>` to drop the `.lnk` somewhere other than the Desktop.
+`New-CopilotShortcut.ps1` parameters:
+
+| Param | Default | Notes |
+|---|---|---|
+| `-Label` | leaf of `-WorkingDirectory` | Shortcut filename (becomes `<Label> Copilot.lnk`). Validated against Windows filename rules. |
+| `-WorkingDirectory` | current dir | Where Copilot starts when the shortcut opens. |
+| `-ResumeSession` | empty | `--resume=<name>` value. Empty = fresh session each launch. |
+| `-EnableAISummary` | prompt | Add `-AISummary` to the shortcut. |
+| `-EnableAllowAll` | prompt | Add `--allow-all` to the shortcut. |
+| `-ExtraCopilotArgs` | empty | Verbatim extra copilot CLI flags, e.g. `"--max-autopilot-continues 100"`. Quoted values are preserved as single tokens. |
+| `-UseWindowsTerminal` | prompt; default Yes if `wt.exe` on PATH | Targets `wt.exe` instead of `pwsh.exe` so the shortcut opens in a Windows Terminal tab. |
+| `-NoWindowsTerminal` | off | Force-disable Windows Terminal targeting even if `wt.exe` is on PATH. |
+| `-ShortcutDir` | Desktop | Folder to drop the `.lnk` into. |
+| `-Force` | off | Overwrite an existing shortcut with the same label. |
+| `-Silent` | off | Skip all prompts; use defaults + supplied params. |
 
 > **Don't re-run the installer** to add another shortcut. The installer is for first-time setup; re-running it preserves your `config.json` and `agents.md` but is heavier than needed. Use `New-CopilotShortcut.ps1` for shortcut-only changes.
 

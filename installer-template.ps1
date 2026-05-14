@@ -64,8 +64,11 @@ param(
     [string]$StateDir,
     [string]$WorkingDirectory,
     [string]$ResumeSession,
+    [string]$ExtraCopilotArgs,
     [switch]$EnableAISummary,
     [switch]$EnableAllowAll,
+    [switch]$UseWindowsTerminal,
+    [switch]$NoWindowsTerminal,
     [switch]$NoDesktopShortcut,
     [switch]$Silent
 )
@@ -204,6 +207,31 @@ function Format-ShortcutArgs {
     return ($out -join ' ')
 }
 
+function Split-CommandLine {
+    # Tokenize a Windows-style command-line fragment, preserving double-quoted
+    # spans as a single token. Used for -ExtraCopilotArgs so users can pass
+    # things like '--max-autopilot-continues 100' or '--prompt "do the thing"'
+    # and have the words re-quoted correctly by Format-ShortcutArgs.
+    param([string]$Line)
+    $out = New-Object System.Collections.Generic.List[string]
+    if ([string]::IsNullOrWhiteSpace($Line)) { return ,$out.ToArray() }
+    foreach ($m in [regex]::Matches($Line, '"([^"]*)"|(\S+)')) {
+        if ($m.Groups[1].Success) {
+            $out.Add($m.Groups[1].Value)
+        } else {
+            $out.Add($m.Groups[2].Value)
+        }
+    }
+    return ,$out.ToArray()
+}
+
+function Find-WindowsTerminal {
+    # Locate wt.exe. Returns full path or $null.
+    $cmd = Get-Command wt.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    return $null
+}
+
 # ============================================================================
 # Wizard
 # ============================================================================
@@ -327,6 +355,42 @@ if (-not $PSBoundParameters.ContainsKey('EnableAllowAll')) {
         )
 }
 
+# ---------- Extra Copilot args ----------
+if (-not $PSBoundParameters.ContainsKey('ExtraCopilotArgs')) {
+    $ExtraCopilotArgs = Read-Default -Prompt 'Extra copilot CLI args' -Default '' -AllowEmpty `
+        -Description @(
+            'Optional. Extra arguments appended to the copilot command line in',
+            'the shortcut. Useful for flags this wizard does not have a dedicated',
+            'prompt for, such as:',
+            '    --max-autopilot-continues 100',
+            '    --max-autopilot-continues 100 --some-other-flag value',
+            'Leave blank for none. Quoted values are preserved as single args:',
+            '    --prompt "do the thing"'
+        )
+}
+
+# ---------- Windows Terminal ----------
+$wtPath = Find-WindowsTerminal
+if ($PSBoundParameters.ContainsKey('NoWindowsTerminal')) {
+    $UseWindowsTerminal = -not [bool]$NoWindowsTerminal
+} elseif ($PSBoundParameters.ContainsKey('UseWindowsTerminal')) {
+    # Already bound
+} else {
+    $defaultWT = [bool]$wtPath
+    $UseWindowsTerminal = Read-YesNo -Prompt 'Launch via Windows Terminal (wt.exe)?' -Default $defaultWT `
+        -Description @(
+            'When enabled, the shortcut targets wt.exe instead of pwsh.exe and',
+            'opens Copilot in a new Windows Terminal tab/window. Equivalent to:',
+            '    wt.exe -w 0 -d "<workdir>" "<pwsh>" -NoExit -File "<launcher>" ...',
+            'Benefits: tab support, profile theming, and your default WT settings.',
+            "Default = $(if ($defaultWT) { 'yes (wt.exe found on PATH)' } else { 'no (wt.exe not found)' })."
+        )
+}
+if ($UseWindowsTerminal -and -not $wtPath) {
+    Write-Host '  ! Windows Terminal selected but wt.exe not on PATH; falling back to pwsh.exe target.' -ForegroundColor Yellow
+    $UseWindowsTerminal = $false
+}
+
 # ---------- Shortcut ----------
 $CreateDesktopShortcut = $true
 if ($PSBoundParameters.ContainsKey('NoDesktopShortcut')) {
@@ -351,6 +415,8 @@ Write-Host "  Briefing session name:  $briefingSessionName"
 Write-Host "  Resume session:         $(if ($ResumeSession) { $ResumeSession } else { '(none — fresh session each launch)' })"
 Write-Host "  AI summary:             $(if ($EnableAISummary) { 'enabled' } else { 'disabled' })"
 Write-Host "  --allow-all:            $(if ($EnableAllowAll) { 'enabled' } else { 'disabled' })"
+Write-Host "  Extra copilot args:     $(if ($ExtraCopilotArgs) { $ExtraCopilotArgs } else { '(none)' })"
+Write-Host "  Launch via Win Terminal: $(if ($UseWindowsTerminal) { 'yes' } else { 'no (pwsh direct)' })"
 Write-Host "  Desktop shortcut:       $(if ($CreateDesktopShortcut) { 'yes' } else { 'no' })"
 Write-Host ''
 
@@ -414,24 +480,37 @@ if ($CreateDesktopShortcut) {
     if (-not $pwshCmd) {
         Write-Host '  ! Could not find pwsh.exe or powershell.exe — skipping shortcut.' -ForegroundColor Yellow
     } else {
-        $argList = @(
+        # Inner pwsh + launcher args (always built; either consumed directly
+        # as the shortcut Arguments, or as the tail end of a wt.exe argline).
+        $pwshLauncherArgs = @(
             '-NoExit',
             '-NoLogo',
             '-ExecutionPolicy', 'Bypass',
             '-File', $launcherPath
         )
-        if ($EnableAISummary) { $argList += '-AISummary' }
-        if ($ResumeSession)   { $argList += "--resume=$ResumeSession" }
-        if ($EnableAllowAll)  { $argList += '--allow-all' }
+        if ($EnableAISummary)  { $pwshLauncherArgs += '-AISummary' }
+        if ($EnableAllowAll)   { $pwshLauncherArgs += '--allow-all' }
+        if ($ResumeSession)    { $pwshLauncherArgs += "--resume=$ResumeSession" }
+        if ($ExtraCopilotArgs) { $pwshLauncherArgs += (Split-CommandLine $ExtraCopilotArgs) }
+
+        if ($UseWindowsTerminal -and $wtPath) {
+            # wt.exe -w 0 -d "<workdir>" "<pwsh>" <pwsh args>
+            $targetExe = $wtPath
+            $argList = @('-w', '0', '-d', $WorkingDirectory, $pwshCmd.Source) + $pwshLauncherArgs
+        } else {
+            $targetExe = $pwshCmd.Source
+            $argList = $pwshLauncherArgs
+        }
 
         try {
             $shell = New-Object -ComObject WScript.Shell
             $sc = $shell.CreateShortcut($shortcutPath)
-            $sc.TargetPath       = $pwshCmd.Source
+            $sc.TargetPath       = $targetExe
             $sc.Arguments        = Format-ShortcutArgs -Arguments $argList
             $sc.WorkingDirectory = $WorkingDirectory
             $sc.Description      = "Launch GitHub Copilot CLI for $ProjectName with version-change briefing"
-            # Use the Windows Terminal icon if available, else the pwsh icon
+            # Use the pwsh icon (WT inherits its own icon from the .lnk if we
+            # pointed at wt.exe, but pwsh's icon is more recognisable)
             $sc.IconLocation     = $pwshCmd.Source
             $sc.Save()
             Write-Host "  Created shortcut: $shortcutPath" -ForegroundColor Green

@@ -42,6 +42,21 @@
 .PARAMETER EnableAllowAll
     Add --allow-all to the shortcut.
 
+.PARAMETER ExtraCopilotArgs
+    Optional extra arguments appended to the copilot command line. Useful for
+    flags this script doesn't have a dedicated parameter for, such as
+    "--max-autopilot-continues 100". Quoted values are preserved as single
+    args (e.g. '--prompt "do the thing"').
+
+.PARAMETER UseWindowsTerminal
+    Target wt.exe instead of pwsh.exe so Copilot opens in a Windows Terminal
+    tab. Equivalent to:
+        wt.exe -w 0 -d "<workdir>" "<pwsh>" -NoExit -File "<launcher>" ...
+    Default in interactive mode: prompted (yes if wt.exe is on PATH).
+
+.PARAMETER NoWindowsTerminal
+    Force-disable Windows Terminal targeting even if wt.exe is on PATH.
+
 .PARAMETER ShortcutDir
     Folder to drop the .lnk into. Default: Desktop.
 
@@ -57,18 +72,24 @@
     pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1"
 
 .EXAMPLE
-    # Silent / scripted
+    # Silent / scripted, full Windows-Terminal pattern
     pwsh New-CopilotShortcut.ps1 -Silent `
         -Label "MyApp" -WorkingDirectory "C:\code\my-app" `
-        -ResumeSession "MyApp-Main" -EnableAISummary -EnableAllowAll
+        -ResumeSession "MyApp-Main" `
+        -EnableAISummary -EnableAllowAll `
+        -ExtraCopilotArgs "--max-autopilot-continues 100" `
+        -UseWindowsTerminal
 #>
 [CmdletBinding()]
 param(
     [string]$Label,
     [string]$WorkingDirectory,
     [string]$ResumeSession,
+    [string]$ExtraCopilotArgs,
     [switch]$EnableAISummary,
     [switch]$EnableAllowAll,
+    [switch]$UseWindowsTerminal,
+    [switch]$NoWindowsTerminal,
     [string]$ShortcutDir,
     [switch]$Force,
     [switch]$Silent
@@ -185,6 +206,31 @@ function Format-ShortcutArgs {
         }
     }
     return ($out -join ' ')
+}
+
+function Split-CommandLine {
+    # Tokenize a Windows-style command-line fragment, preserving double-quoted
+    # spans as a single token. Used for -ExtraCopilotArgs so users can pass
+    # things like '--max-autopilot-continues 100' or '--prompt "do the thing"'
+    # and have the words re-quoted correctly by Format-ShortcutArgs.
+    param([string]$Line)
+    $out = New-Object System.Collections.Generic.List[string]
+    if ([string]::IsNullOrWhiteSpace($Line)) { return ,$out.ToArray() }
+    foreach ($m in [regex]::Matches($Line, '"([^"]*)"|(\S+)')) {
+        if ($m.Groups[1].Success) {
+            $out.Add($m.Groups[1].Value)
+        } else {
+            $out.Add($m.Groups[2].Value)
+        }
+    }
+    return ,$out.ToArray()
+}
+
+function Find-WindowsTerminal {
+    # Locate wt.exe. Returns full path or $null.
+    $cmd = Get-Command wt.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    return $null
 }
 
 function Test-ValidFilenameLabel {
@@ -305,6 +351,45 @@ if (-not $PSBoundParameters.ContainsKey('EnableAllowAll')) {
 }
 
 # ============================================================================
+# Extra Copilot args
+# ============================================================================
+
+if (-not $PSBoundParameters.ContainsKey('ExtraCopilotArgs')) {
+    $ExtraCopilotArgs = Read-Default -Prompt 'Extra copilot CLI args' -Default '' -AllowEmpty `
+        -Description @(
+            'Optional. Extra arguments appended to the copilot command line in',
+            'the shortcut. Useful for flags not covered by the prompts above:',
+            '    --max-autopilot-continues 100',
+            'Leave blank for none. Quoted values are preserved as single args:',
+            '    --prompt "do the thing"'
+        )
+}
+
+# ============================================================================
+# Windows Terminal
+# ============================================================================
+
+$wtPath = Find-WindowsTerminal
+if ($PSBoundParameters.ContainsKey('NoWindowsTerminal')) {
+    $UseWindowsTerminal = -not [bool]$NoWindowsTerminal
+} elseif ($PSBoundParameters.ContainsKey('UseWindowsTerminal')) {
+    # Already bound
+} else {
+    $defaultWT = [bool]$wtPath
+    $UseWindowsTerminal = Read-YesNo -Prompt 'Launch via Windows Terminal (wt.exe)?' -Default $defaultWT `
+        -Description @(
+            'When enabled, the shortcut targets wt.exe instead of pwsh.exe and',
+            'opens Copilot in a new Windows Terminal tab/window. Equivalent to:',
+            '    wt.exe -w 0 -d "<workdir>" "<pwsh>" -NoExit -File "<launcher>" ...',
+            "Default = $(if ($defaultWT) { 'yes (wt.exe found on PATH)' } else { 'no (wt.exe not found)' })."
+        )
+}
+if ($UseWindowsTerminal -and -not $wtPath) {
+    Write-Host '  ! Windows Terminal selected but wt.exe not on PATH; falling back to pwsh.exe target.' -ForegroundColor Yellow
+    $UseWindowsTerminal = $false
+}
+
+# ============================================================================
 # Shortcut location
 # ============================================================================
 
@@ -342,6 +427,8 @@ Write-Host "  Launcher target:    $LauncherPath"
 Write-Host "  Resume session:     $(if ($ResumeSession) { $ResumeSession } else { '(none — fresh session each launch)' })"
 Write-Host "  AI summary:         $(if ($EnableAISummary) { 'enabled' } else { 'disabled' })"
 Write-Host "  --allow-all:        $(if ($EnableAllowAll) { 'enabled' } else { 'disabled' })"
+Write-Host "  Extra copilot args: $(if ($ExtraCopilotArgs) { $ExtraCopilotArgs } else { '(none)' })"
+Write-Host "  Windows Terminal:   $(if ($UseWindowsTerminal) { 'yes' } else { 'no (pwsh direct)' })"
 Write-Host ''
 
 if (Test-Path $shortcutPath) {
@@ -381,22 +468,33 @@ if (-not $pwshCmd) {
     exit 1
 }
 
-$argList = @(
+# Inner pwsh + launcher args (always built; either consumed directly as the
+# shortcut Arguments, or as the tail end of a wt.exe argline).
+$pwshLauncherArgs = @(
     '-NoExit',
     '-NoLogo',
     '-ExecutionPolicy', 'Bypass',
     '-File', $LauncherPath
 )
-if ($EnableAISummary) { $argList += '-AISummary' }
-if ($ResumeSession)   { $argList += "--resume=$ResumeSession" }
-if ($EnableAllowAll)  { $argList += '--allow-all' }
+if ($EnableAISummary)  { $pwshLauncherArgs += '-AISummary' }
+if ($EnableAllowAll)   { $pwshLauncherArgs += '--allow-all' }
+if ($ResumeSession)    { $pwshLauncherArgs += "--resume=$ResumeSession" }
+if ($ExtraCopilotArgs) { $pwshLauncherArgs += (Split-CommandLine $ExtraCopilotArgs) }
+
+if ($UseWindowsTerminal -and $wtPath) {
+    $targetExe = $wtPath
+    $argList = @('-w', '0', '-d', $WorkingDirectory, $pwshCmd.Source) + $pwshLauncherArgs
+} else {
+    $targetExe = $pwshCmd.Source
+    $argList = $pwshLauncherArgs
+}
 
 $descLabel = if ($configProjectName) { $configProjectName } else { $Label }
 
 try {
     $shell = New-Object -ComObject WScript.Shell
     $sc = $shell.CreateShortcut($shortcutPath)
-    $sc.TargetPath       = $pwshCmd.Source
+    $sc.TargetPath       = $targetExe
     $sc.Arguments        = Format-ShortcutArgs -Arguments $argList
     $sc.WorkingDirectory = $WorkingDirectory
     $sc.Description      = "Launch GitHub Copilot CLI for $descLabel with version-change briefing"
