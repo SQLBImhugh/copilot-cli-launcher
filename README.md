@@ -25,17 +25,17 @@ A single Windows desktop app that:
 
 Detailed plan: see the [architecture doc](./docs/architecture.md) once Phase 0 lands.
 
-## Try it (build artifact from CI)
+## Try it (build artifact from CI — manual only)
 
-There's no installer yet — that's Phase 6. In the meantime, builds are produced **on demand** from GitHub Actions to keep CI minutes/storage under the free-tier budget:
+There's no installer yet — that's Phase 6. Builds are produced **on demand** from GitHub Actions because routine dev runs locally (see "Building locally" below) and we want CI minutes for genuine artifact requests:
 
 1. Go to **[Actions → ci](https://github.com/SQLBImhugh/copilot-cli-launcher/actions/workflows/ci.yml)**.
 2. Click **"Run workflow"** (top-right green button), leave **publish=true** checked, click the green **Run workflow** button.
 3. Wait ~3-4 minutes for the run to finish. It builds, tests, then publishes the portable `.exe` and uploads it.
-4. Click into the completed run, scroll to **Artifacts**, and download `CopilotLauncher-portable-<sha>` (~38 MB zip).
+4. Click into the completed run, scroll to **Artifacts**, and download `CopilotLauncher-portable-<sha>` (~70-80 MB zip).
 5. Unzip anywhere and double-click `CopilotLauncher.exe`. The .NET 8 runtime AND the Windows App Runtime are both baked in — no installs of any kind required, the app just runs.
 
-> **Why not on every push?** Each Windows CI run consumes 2x quota minutes against GitHub's free tier (2,000 min/month), and each artifact is ~38 MB against the 0.5 GB included storage. Push events (and PRs) only run the lightweight build+test job; the slow publish+upload step is gated on a manual `workflow_dispatch` so we only build artifacts when someone actually wants one.
+> **CI policy**: direct pushes to `main` do not trigger CI at all. Only PR opens (none yet) and manual `workflow_dispatch` do. This keeps GH Actions minute usage at zero unless you explicitly want a build.
 
 What you'll see in the build:
 
@@ -45,26 +45,34 @@ What you'll see in the build:
 
 ## Building locally
 
-Requires:
-- .NET 8 SDK or newer
-- For the full WinUI 3 app: **Visual Studio 2022** (Community is fine) or **Visual Studio Build Tools** with the "Windows application development" workload. The Windows App SDK's PRI generation MSBuild tasks ship with VS, not the .NET CLI SDK alone.
-- For just running tests: any .NET 8 SDK is enough — the testable code lives in a separate `CopilotLauncher.Core` class library that has no WinUI dependencies.
+Routine dev runs **locally**, not on GitHub Actions, to keep CI minute usage at zero on direct pushes.
 
-### Tests + core (no VS needed)
+### Tests + Core (no extra install required)
 
 ```powershell
-dotnet test tests\CopilotLauncher.Tests\CopilotLauncher.Tests.csproj -c Release
+pwsh scripts\test.ps1
 ```
 
-### Full app
+That restores, builds the Core class library, and runs all xUnit tests (~5 seconds on a warm machine). Use this before every push.
+
+### Full WinUI app + .exe (requires Visual Studio Build Tools)
+
+The `src/CopilotLauncher` (WinUI 3) project needs build-time MSBuild tasks that ship with Visual Studio, not the .NET CLI SDK. To build the full app + portable .exe locally, install one of:
+
+- **Visual Studio 2022 Community** (free, ~6 GB) with the "Windows application development" workload, OR
+- **Visual Studio Build Tools 2022** (free, ~3-5 GB) with the same workload
+
+Then:
 
 ```powershell
 pwsh scripts\build.ps1
 ```
 
-A first-run release zip + GitHub Releases workflow + `iwr | iex` bootstrap will land in Phase 6.
+Output: `dist\CopilotLauncher\CopilotLauncher.exe` (~70-80 MB self-contained portable).
 
-See [docs/architecture.md](./docs/architecture.md) for the layering rationale.
+If you don't want to install VS Build Tools, you can still get a built .exe via "Try it" above — manually trigger CI's `publish` job to produce the artifact for download.
+
+See [docs/architecture.md](./docs/architecture.md) for why the project is split this way.
 
 ## Using the legacy launcher
 

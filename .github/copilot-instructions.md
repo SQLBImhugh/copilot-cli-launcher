@@ -94,15 +94,20 @@ README.md                            ← top-level user docs (points at 2.0)
 
 ### Building locally
 
-```powershell
-# Tests + Core (always works with .NET 8 SDK)
-dotnet test tests\CopilotLauncher.Tests\CopilotLauncher.Tests.csproj -c Release
+The convention here is **local-first dev**: routine builds and tests run on the contributor's machine, not on GitHub Actions. CI exists only as an on-demand artifact builder + a future PR safety net.
 
-# Full app (requires VS 2022 or VS Build Tools with Windows app workload)
+```powershell
+# One-command local validation. Restore + build Core + run xUnit (~5s).
+# Use before every push. Does NOT need Visual Studio Build Tools.
+pwsh scripts\test.ps1
+
+# Full app + portable .exe. Requires Visual Studio 2022 (Community is fine)
+# or VS Build Tools 2022 with the "Windows application development"
+# workload. Output: dist\CopilotLauncher\CopilotLauncher.exe (~70-80 MB).
 pwsh scripts\build.ps1
 ```
 
-CI (`.github/workflows/ci.yml`) runs on `windows-latest` which has VS Build Tools preinstalled — the full solution builds and tests on every PR.
+CI (`.github/workflows/ci.yml`) only triggers on `pull_request` (with path filter to skip doc-only changes) and manual `workflow_dispatch`. It does NOT trigger on pushes to `main`. Direct pushes burn zero CI minutes; PR opens trigger a `build-and-test` validation; manual dispatch with `publish=true` produces a downloadable `.exe` artifact.
 
 ## Coding conventions
 

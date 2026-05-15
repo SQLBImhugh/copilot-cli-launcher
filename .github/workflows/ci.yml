@@ -1,9 +1,11 @@
 name: ci
 
-# Triggers — kept tight to stay under the GH Actions free-tier minutes budget.
-# Windows runners count 2x against the budget, so a 4-min run = 8 quota minutes.
+# Manual + PR only. We run builds and tests LOCALLY for routine
+# development (see scripts/test.ps1 and scripts/build.ps1) to keep
+# GH Actions usage at zero on direct pushes to main. CI exists as:
+#   - a safety net for PRs (when we eventually open them)
+#   - an on-demand artifact builder via workflow_dispatch
 on:
-  # PR: always validate code changes before merge.
   pull_request:
     paths-ignore:
       - '**.md'
@@ -12,17 +14,6 @@ on:
       - 'mockups/**'
       - '.gitignore'
       - 'LICENSE'
-  # Push to main: only when source actually changes (skip doc-only commits).
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'legacy/**'
-      - 'docs/**'
-      - 'mockups/**'
-      - '.gitignore'
-      - 'LICENSE'
-  # Manual: lets users (or me) trigger a fresh build artifact on demand.
   workflow_dispatch:
     inputs:
       publish:
@@ -30,8 +21,7 @@ on:
         type: boolean
         default: true
 
-# Cancel in-flight runs when a new commit lands on the same branch/PR.
-# Saves wasted minutes on builds that are about to be superseded.
+# Cancel in-flight runs when superseded.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -39,7 +29,6 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: windows-latest
-    # Modest timeout — typical run is ~3-4 min; cap at 10 to catch hangs early.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -59,11 +48,8 @@ jobs:
         run: dotnet test CopilotLauncher.sln -c Release --no-build --verbosity normal
 
   publish-portable:
-    # Publishes the self-contained portable .exe and uploads as artifact.
-    # Only runs on manual workflow_dispatch (with publish=true, the default)
-    # — NOT on every push or PR — so we don't burn minutes/storage on
-    # builds the user isn't going to download. Run from the Actions tab
-    # when you want a fresh artifact to test.
+    # Manual artifact build. NEVER runs on push or PR — only when you click
+    # "Run workflow" from the Actions tab and leave publish=true.
     needs: build-and-test
     if: github.event_name == 'workflow_dispatch' && inputs.publish
     runs-on: windows-latest
@@ -77,19 +63,8 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Publish single-file portable
-        # Self-contained .NET 8 runtime baked in; ~38 MB compressed exe.
-        # PublishSingleFile requires EnableMsixTooling=true for embedded
-        # resources.pri generation. We keep =false at the project level so
-        # ordinary 'dotnet build' works on machines without VS Build Tools;
-        # override only here, on a runner that does have them.
-        #
-        # WindowsAppSDKSelfContained=true bundles the Windows App Runtime
-        # DLLs into the app folder so end users don't get the
-        # "Please install Windows App Runtime 1.6" dialog on first launch.
-        # Without this flag, the app is framework-dependent on a system-
-        # installed Windows App Runtime which most fresh Windows machines
-        # don't have. Adds ~30-40 MB to the bundle (~70-80 MB total) but
-        # makes the .exe truly portable / install-free.
+        # Self-contained .NET 8 + Windows App Runtime; ~70-80 MB compressed exe.
+        # See ci.yml history for the rationale on each property override.
         run: |
           dotnet publish src/CopilotLauncher/CopilotLauncher.csproj `
             -c Release `
@@ -110,8 +85,6 @@ jobs:
           name: CopilotLauncher-portable-${{ github.sha }}
           path: publish/CopilotLauncher/
           if-no-files-found: error
-          # 7 days instead of the default 90; we're tight on the 0.5 GB
-          # included storage budget.
           retention-days: 7
 
 
