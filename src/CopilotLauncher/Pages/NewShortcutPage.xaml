@@ -86,6 +86,23 @@
                                Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
                     <ComboBox x:Name="TerminalCombo" SelectionChanged="OnTerminalChanged" MinWidth="320"/>
                 </StackPanel>
+
+                <!-- AGENTS.md override -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="AGENTS.md override" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock Text="Optional. Per-shortcut AGENTS.md context file used by the AI summary on version bumps. Empty = inherit the global default from Settings."
+                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6" TextWrapping="Wrap"/>
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{x:Bind ViewModel.AgentsContextOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="(blank — inherit global)"/>
+                        <Button Grid.Column="1" Content="Browse…" Click="OnBrowseAgentsClick"/>
+                    </Grid>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 

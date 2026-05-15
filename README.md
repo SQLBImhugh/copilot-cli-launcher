@@ -25,6 +25,18 @@ A single Windows desktop app that:
 
 Detailed plan: see the [architecture doc](./docs/architecture.md) once Phase 0 lands.
 
+## Install (one-liner, when a release is published)
+
+Once a tagged release exists on GitHub, install with one PowerShell command — no admin, no separate runtime install, fully self-contained:
+
+```powershell
+iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/install.ps1 | iex
+```
+
+That downloads the latest release zip (~70 MB), extracts to `%LOCALAPPDATA%\CopilotLauncher\app\`, creates a Start Menu shortcut, and launches the app.
+
+> No release published yet? Use the "Try it" path below to grab a pre-release artifact from the Actions tab.
+
 ## Try it (build artifact from CI — manual only)
 
 There's no installer yet — that's Phase 6. Builds are produced **on demand** from GitHub Actions because routine dev runs locally (see "Building locally" below) and we want CI minutes for genuine artifact requests:

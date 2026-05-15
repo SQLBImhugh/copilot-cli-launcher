@@ -69,6 +69,26 @@ public sealed partial class NewShortcutPage : Page
         }
     }
 
+    private async void OnBrowseAgentsClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new FileOpenPicker();
+            picker.FileTypeFilter.Add(".md");
+            picker.FileTypeFilter.Add(".txt");
+            picker.FileTypeFilter.Add("*");
+            var hwnd = WindowNative.GetWindowHandle(((App)Application.Current).MainWindowOrNull
+                ?? throw new InvalidOperationException("No main window."));
+            InitializeWithWindow.Initialize(picker, hwnd);
+            var file = await picker.PickSingleFileAsync();
+            if (file is not null)
+                ViewModel.AgentsContextOverride = file.Path;
+        }
+        catch
+        {
+        }
+    }
+
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
         if (ViewModel.Save() is not null)

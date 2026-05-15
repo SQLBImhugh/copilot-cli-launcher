@@ -1,0 +1,80 @@
+name: release
+
+# Manual-only to protect the user's GH Actions minute budget. Trigger from
+# the Actions tab when you've tagged a version: pass the tag (e.g. 'v0.1.0')
+# and this workflow builds the portable zip and creates a GitHub Release.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0). Will be created if it does not exist.'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark this release as a pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # needed to create releases + tags
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore CopilotLauncher.sln
+
+      - name: Build (validate)
+        run: dotnet build CopilotLauncher.sln -c Release --no-restore
+
+      - name: Test (Core)
+        run: dotnet test CopilotLauncher.sln -c Release --no-build --verbosity minimal
+
+      - name: Publish portable single-file
+        # WindowsAppSDKSelfContained=true bundles the Windows App Runtime into
+        # the .exe so end users don't get the "install runtime" dialog. ~70 MB.
+        run: |
+          dotnet publish src/CopilotLauncher/CopilotLauncher.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:EnableMsixTooling=true `
+            -p:WindowsAppSDKSelfContained=true `
+            -p:AppxPackage=false `
+            -p:WindowsPackageType=None `
+            -o publish/CopilotLauncher
+
+      - name: Zip the artifact
+        shell: pwsh
+        run: |
+          $zip = "CopilotLauncher-portable-${{ inputs.tag }}.zip"
+          Compress-Archive -Path publish/CopilotLauncher/* -DestinationPath $zip -Force
+          $size = [math]::Round((Get-Item $zip).Length / 1MB, 1)
+          "Created $zip ($size MB)"
+          Get-FileHash $zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } | Set-Content "$zip.sha256.txt"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            CopilotLauncher-portable-${{ inputs.tag }}.zip
+            CopilotLauncher-portable-${{ inputs.tag }}.zip.sha256.txt

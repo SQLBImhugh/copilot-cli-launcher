@@ -2,9 +2,86 @@
 <Page
     x:Class="CopilotLauncher.Pages.BriefingPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <StackPanel Padding="32" Spacing="12">
-        <TextBlock Text="Briefing" Style="{StaticResource TitleLargeTextBlockStyle}"/>
-        <TextBlock Text="Phase 3 will show the changelog briefing on Copilot CLI version bumps, plus optional AI summaries." Opacity="0.7"/>
-    </StackPanel>
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:CopilotLauncher.Models">
+
+    <Grid Padding="32,24,32,16" RowSpacing="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock Text="Briefing" Style="{StaticResource TitleLargeTextBlockStyle}"/>
+            <TextBlock Text="Changelog briefings appear here when Copilot CLI updates. Click 'Check now' to force an update check immediately."
+                       Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button x:Name="CheckNowButton" Click="OnCheckNowClick" IsEnabled="True">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="↻"/>
+                    <TextBlock Text="Check now"/>
+                </StackPanel>
+            </Button>
+            <ProgressRing x:Name="CheckSpinner" IsActive="False" Width="16" Height="16"/>
+            <Button Content="Clear history" Click="OnClearClick"/>
+        </StackPanel>
+
+        <ListView Grid.Row="2"
+                  ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                  SelectionMode="None"
+                  IsItemClickEnabled="False"
+                  Padding="0"
+                  Background="Transparent">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Margin" Value="0,0,0,8"/>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:BriefingEntry">
+                    <Border Padding="16,12"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="{x:Bind FromVersion}"
+                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                                           Opacity="0.7"/>
+                                <TextBlock Text="→" Style="{StaticResource SubtitleTextBlockStyle}" Opacity="0.5"/>
+                                <TextBlock Text="{x:Bind ToVersion}"
+                                           Style="{StaticResource SubtitleTextBlockStyle}"
+                                           FontWeight="SemiBold"/>
+                                <TextBlock Text="{x:Bind Source}"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Opacity="0.6"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock Text="{x:Bind Body}"
+                                       FontFamily="Consolas, 'Cascadia Mono', monospace"
+                                       TextWrapping="Wrap"
+                                       IsTextSelectionEnabled="True"
+                                       Opacity="0.85"/>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <Border Grid.Row="3"
+                Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+                CornerRadius="6"
+                Padding="12,6">
+            <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Opacity="0.8"/>
+        </Border>
+    </Grid>
 </Page>

@@ -60,6 +60,10 @@
                                     Style="{StaticResource AccentButtonStyle}"
                                     Tag="{x:Bind}"
                                     Click="OnLaunchClick"/>
+                            <Button Content="↧ .lnk"
+                                    ToolTipService.ToolTip="Export as Windows shortcut (.lnk)"
+                                    Tag="{x:Bind}"
+                                    Click="OnExportLnkClick"/>
                             <Button Content="🗑"
                                     ToolTipService.ToolTip="Delete"
                                     Tag="{x:Bind}"

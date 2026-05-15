@@ -41,6 +41,7 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
     private bool _enableAllowAll;
     private string _extraArgs;
     private string _terminalOverride = string.Empty;
+    private string _agentsContextOverride = string.Empty;
     private string _statusMessage = string.Empty;
 
     public string Label
@@ -84,6 +85,17 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
     {
         get => _terminalOverride;
         set { if (_terminalOverride != value) { _terminalOverride = value ?? string.Empty; OnPropertyChanged(); RecalcPreview(); } }
+    }
+
+    /// <summary>
+    /// Optional override for the AGENTS.md file used to context the AI summary
+    /// when this shortcut launches. Empty = inherit the global default from
+    /// Settings.Briefings.AgentsContextFilePath.
+    /// </summary>
+    public string AgentsContextOverride
+    {
+        get => _agentsContextOverride;
+        set { if (_agentsContextOverride != value) { _agentsContextOverride = value ?? string.Empty; OnPropertyChanged(); } }
     }
 
     public string StatusMessage
@@ -153,6 +165,7 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
             EnableAllowAll = _enableAllowAll,
             ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs.Trim(),
             TerminalOverride = string.IsNullOrEmpty(_terminalOverride) || _terminalOverride == "auto" ? null : _terminalOverride,
+            AgentsContextOverride = string.IsNullOrWhiteSpace(_agentsContextOverride) ? null : _agentsContextOverride.Trim(),
         };
         _store.Add(entry);
         StatusMessage = $"Saved '{entry.Label}'.";
@@ -186,6 +199,7 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
         EnableAllowAll = _settings.Current.CopilotCli.DefaultAllowAll;
         ExtraArgs = _settings.Current.CopilotCli.DefaultExtraArgs ?? string.Empty;
         TerminalOverride = string.Empty;
+        AgentsContextOverride = string.Empty;
         // Keep WorkingDirectory as-is — user might be queuing several launches in the same dir.
         StatusMessage = "Form reset.";
     }

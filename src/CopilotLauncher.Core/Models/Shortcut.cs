@@ -22,6 +22,13 @@ public sealed class Shortcut
     /// </summary>
     public string? TerminalOverride { get; set; }
 
+    /// <summary>
+    /// Optional path to an AGENTS.md file used as context for the AI summary
+    /// when this shortcut launches. Null = inherit the global default from
+    /// <see cref="BriefingSettings.AgentsContextFilePath"/>.
+    /// </summary>
+    public string? AgentsContextOverride { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

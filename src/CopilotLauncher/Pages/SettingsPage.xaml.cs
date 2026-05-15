@@ -3,12 +3,16 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 using CopilotLauncher.Services;
+using CopilotLauncher.ViewModels;
 
 namespace CopilotLauncher.Pages;
 
 public sealed partial class SettingsPage : Page
 {
+    public SettingsViewModel ViewModel { get; }
     private readonly ISettingsService _settings;
     private readonly ITerminalDiscoveryService _terminals;
     private bool _initializing = true;
@@ -17,6 +21,7 @@ public sealed partial class SettingsPage : Page
     {
         _settings = App.Services.GetRequiredService<ISettingsService>();
         _terminals = App.Services.GetRequiredService<ITerminalDiscoveryService>();
+        ViewModel = new SettingsViewModel(_settings, _terminals);
         InitializeComponent();
         AppDataPathLabel.Text = $"App data folder: {_settings.AppDataDirectory}";
 
@@ -25,7 +30,11 @@ public sealed partial class SettingsPage : Page
         VersionLabel.Text = $"CopilotLauncher version: {version}";
 
         PopulateTerminals();
+        SyncCombo(UpdateFreqCombo, ViewModel.AutoUpdateFrequency);
+        SyncCombo(AfterLaunchCombo, ViewModel.AfterLaunch);
         _initializing = false;
+
+        Unloaded += (_, _) => ViewModel.Flush();
     }
 
     private void PopulateTerminals()
@@ -33,10 +42,8 @@ public sealed partial class SettingsPage : Page
         TerminalCombo.Items.Clear();
         TerminalCombo.Items.Add(new ComboBoxItem { Content = "Auto-detect (best available)", Tag = "auto" });
         foreach (var t in _terminals.Discovered)
-        {
             TerminalCombo.Items.Add(new ComboBoxItem { Content = $"{t.DisplayName} ({t.ExecutablePath})", Tag = t.Id });
-        }
-        var pref = _settings.Current.Terminal.DefaultTerminal ?? "auto";
+        var pref = ViewModel.DefaultTerminal ?? "auto";
         for (int i = 0; i < TerminalCombo.Items.Count; i++)
         {
             if (TerminalCombo.Items[i] is ComboBoxItem cbi && (string)cbi.Tag! == pref)
@@ -62,7 +69,20 @@ public sealed partial class SettingsPage : Page
                 return;
             }
         }
-        TerminalDetail.Text = "Order of preference when auto-detecting: Windows Terminal → PowerShell 7 → Windows PowerShell 5.1 → Command Prompt.";
+        TerminalDetail.Text = "Order of preference when auto-detecting: Windows Terminal -> PowerShell 7 -> Windows PowerShell 5.1 -> Command Prompt.";
+    }
+
+    private static void SyncCombo(ComboBox combo, string tagValue)
+    {
+        for (int i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is ComboBoxItem cbi && cbi.Tag is string t && t == tagValue)
+            {
+                combo.SelectedIndex = i;
+                return;
+            }
+        }
+        if (combo.SelectedIndex < 0 && combo.Items.Count > 0) combo.SelectedIndex = 0;
     }
 
     private void OnTerminalSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -70,9 +90,48 @@ public sealed partial class SettingsPage : Page
         if (_initializing) return;
         if (TerminalCombo.SelectedItem is ComboBoxItem cbi && cbi.Tag is string id)
         {
-            _settings.Current.Terminal.DefaultTerminal = id;
-            _settings.Save();
+            ViewModel.DefaultTerminal = id;
             UpdateTerminalDetail();
+        }
+    }
+
+    private void OnUpdateFreqChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing) return;
+        if (UpdateFreqCombo.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag)
+            ViewModel.AutoUpdateFrequency = tag;
+    }
+
+    private void OnAfterLaunchChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing) return;
+        if (AfterLaunchCombo.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag)
+            ViewModel.AfterLaunch = tag;
+    }
+
+    private void OnSliderChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        // Slider value is two-way bound to int property; the bound setter calls
+        // ScheduleSave. This handler exists in case we want extra behavior later.
+    }
+
+    private async void OnBrowseAgentsClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new FileOpenPicker();
+            picker.FileTypeFilter.Add(".md");
+            picker.FileTypeFilter.Add(".txt");
+            picker.FileTypeFilter.Add("*");
+            var hwnd = WindowNative.GetWindowHandle(((App)Application.Current).MainWindowOrNull
+                ?? throw new InvalidOperationException("No main window."));
+            InitializeWithWindow.Initialize(picker, hwnd);
+            var file = await picker.PickSingleFileAsync();
+            if (file is not null)
+                ViewModel.AgentsContextFilePath = file.Path;
+        }
+        catch
+        {
         }
     }
 
@@ -88,8 +147,6 @@ public sealed partial class SettingsPage : Page
         }
         catch
         {
-            // Best effort — folder open is non-critical.
         }
     }
 }
-

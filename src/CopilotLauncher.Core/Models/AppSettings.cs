@@ -9,6 +9,7 @@ public sealed class AppSettings
 {
     public TerminalSettings Terminal { get; set; } = new();
     public CopilotCliSettings CopilotCli { get; set; } = new();
+    public SessionsResumeSettings SessionsResume { get; set; } = new();
     public BriefingSettings Briefings { get; set; } = new();
     public RepairSettings Repair { get; set; } = new();
     public SessionListingSettings SessionListing { get; set; } = new();
@@ -16,6 +17,28 @@ public sealed class AppSettings
     public StorageSettings Storage { get; set; } = new();
 
     public bool MigrationCompleted { get; set; }
+
+    /// <summary>
+    /// Replace any null sub-objects with fresh defaults. Run after JSON
+    /// deserialization so an old or hand-edited settings.json that contains
+    /// "briefings": null doesn't NPE the entire app on launch. Property
+    /// initializers handle the missing-key case automatically; this handles
+    /// the explicit-null case.
+    /// </summary>
+    public void Normalize()
+    {
+        Terminal         ??= new();
+        CopilotCli       ??= new();
+        SessionsResume   ??= new();
+        Briefings        ??= new();
+        Repair           ??= new();
+        SessionListing   ??= new();
+        LauncherBehavior ??= new();
+        Storage          ??= new();
+
+        Repair.TrackedGitHubIssues   ??= new() { 3298 };
+        SessionListing.HiddenPathGlobs ??= new();
+    }
 }
 
 public sealed class TerminalSettings
@@ -37,6 +60,21 @@ public sealed class CopilotCliSettings
     public bool DefaultAllowAll { get; set; }
     public string? DefaultExtraArgs { get; set; }
     public string DefaultResumeTarget { get; set; } = "none";
+}
+
+/// <summary>
+/// Defaults applied when the user clicks the ▶ Resume button on a session
+/// card in the Sessions tab. Distinct from per-shortcut config (which is
+/// stored on each <see cref="Shortcut"/> and used by the Shortcuts page
+/// Launch button). These let the Sessions-tab one-click resume use the
+/// same flags every time without having to save a Shortcut for every
+/// session you might want to revisit.
+/// </summary>
+public sealed class SessionsResumeSettings
+{
+    public bool EnableAISummary { get; set; }
+    public bool EnableAllowAll { get; set; }
+    public string? ExtraCopilotArgs { get; set; }
 }
 
 public sealed class BriefingSettings

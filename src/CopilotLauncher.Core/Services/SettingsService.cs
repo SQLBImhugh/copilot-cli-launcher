@@ -47,6 +47,7 @@ public sealed class SettingsService : ISettingsService
         if (!File.Exists(SettingsFilePath))
         {
             Current = new AppSettings();
+            Current.Normalize();
             Save();
             return;
         }
@@ -64,8 +65,12 @@ public sealed class SettingsService : ISettingsService
             var backup = SettingsFilePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
             File.Copy(SettingsFilePath, backup, overwrite: true);
             Current = new AppSettings();
-            Save();
         }
+
+        // Replace any null sub-objects with fresh defaults so we never NPE on
+        // an old/hand-edited settings.json. Property initializers handle the
+        // missing-key case; this handles the explicit-null case.
+        Current.Normalize();
     }
 
     public void Save()

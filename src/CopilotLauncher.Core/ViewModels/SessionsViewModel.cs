@@ -112,7 +112,10 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
 
     /// <summary>
     /// Spawn a terminal session for this row. Picks the default terminal from
-    /// settings (or auto-pick from discovered terminals).
+    /// settings (or auto-pick from discovered terminals). Also applies the
+    /// user's "Sessions Resume defaults" (AI summary, --allow-all, extra args)
+    /// from <see cref="ISettingsService"/> so a one-click resume from the
+    /// Sessions tab uses the same flags every time.
     /// Returns true on success; false (and updates StatusMessage) on failure.
     /// </summary>
     public bool ResumeSession(SessionRow row)
@@ -120,10 +123,14 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         try
         {
             var terminal = ResolveDefaultTerminal();
+            var resumeDefaults = _settings.Current.SessionsResume;
             _launch.Spawn(new LaunchRequest
             {
                 WorkingDirectory = string.IsNullOrEmpty(row.Cwd) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : row.Cwd,
                 ResumeTarget = row.SessionId,
+                EnableAISummary = resumeDefaults.EnableAISummary,
+                EnableAllowAll = resumeDefaults.EnableAllowAll,
+                ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
                 Terminal = terminal,
             });
             StatusMessage = $"Resumed {row.ShortId}… in {terminal?.DisplayName ?? "direct"}.";
