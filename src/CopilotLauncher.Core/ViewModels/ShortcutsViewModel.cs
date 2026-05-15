@@ -17,6 +17,7 @@ public sealed class ShortcutsViewModel : INotifyPropertyChanged
     private readonly ILaunchService _launch;
     private readonly ITerminalDiscoveryService _terminals;
     private readonly ISettingsService _settings;
+    private readonly IAfterLaunchAction _afterLaunch;
 
     public ObservableCollection<Shortcut> Items { get; } = new();
 
@@ -31,12 +32,14 @@ public sealed class ShortcutsViewModel : INotifyPropertyChanged
         IShortcutsService store,
         ILaunchService launch,
         ITerminalDiscoveryService terminals,
-        ISettingsService settings)
+        ISettingsService settings,
+        IAfterLaunchAction? afterLaunch = null)
     {
         _store = store;
         _launch = launch;
         _terminals = terminals;
         _settings = settings;
+        _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
     }
 
     public void Reload()
@@ -74,6 +77,7 @@ public sealed class ShortcutsViewModel : INotifyPropertyChanged
                 Terminal = terminal,
             });
             StatusMessage = $"Launched '{entry.Label}' in {terminal?.DisplayName ?? "direct"}.";
+            _afterLaunch.Apply(_settings.Current.LauncherBehavior.AfterLaunch);
             return true;
         }
         catch (Exception ex)

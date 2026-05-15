@@ -10,6 +10,8 @@ namespace CopilotLauncher.Pages;
 public sealed partial class SessionsPage : Page
 {
     public SessionsViewModel ViewModel { get; }
+    private readonly IMigrationService _migration;
+    private LegacyDetectionResult? _legacyDetection;
 
     public SessionsPage()
     {
@@ -17,12 +19,44 @@ public sealed partial class SessionsPage : Page
             App.Services.GetRequiredService<ISessionDiscoveryService>(),
             App.Services.GetRequiredService<ITerminalDiscoveryService>(),
             App.Services.GetRequiredService<ILaunchService>(),
-            App.Services.GetRequiredService<ISettingsService>());
+            App.Services.GetRequiredService<ISettingsService>(),
+            App.Services.GetRequiredService<IAfterLaunchAction>());
+        _migration = App.Services.GetRequiredService<IMigrationService>();
         InitializeComponent();
-        // Defer Refresh to after first render so the StatusMessage placeholder
-        // ("Loading sessions…") is visible while we hit the disk on a 100+ session
-        // machine. ListView virtualization handles the actual render cost.
-        Loaded += (_, _) => ViewModel.Refresh();
+        Loaded += (_, _) =>
+        {
+            ViewModel.Refresh();
+            CheckForLegacyInstall();
+        };
+    }
+
+    private void CheckForLegacyInstall()
+    {
+        if (_migration.MigrationCompleted) return;
+        _legacyDetection = _migration.Detect();
+        if (!_legacyDetection.Found) return;
+
+        MigrationBar.Message = "Found a legacy PowerShell-launcher install at " +
+                               _legacyDetection.LegacyConfigPath +
+                               (_legacyDetection.LegacyAgentsMdPath is not null
+                                   ? "; agents.md will be copied into this app's data folder."
+                                   : ".");
+        MigrationBar.IsOpen = true;
+    }
+
+    private void OnImportLegacyClick(object sender, RoutedEventArgs e)
+    {
+        if (_legacyDetection is null) return;
+        var status = _migration.Import(_legacyDetection);
+        ViewModel.StatusMessage = status;  // surface in the page status bar
+        MigrationBar.IsOpen = false;
+    }
+
+    private void OnSkipLegacyClick(object sender, RoutedEventArgs e)
+    {
+        _migration.MarkCompleted();
+        MigrationBar.IsOpen = false;
+        ViewModel.StatusMessage = "Migration skipped — won't ask again.";
     }
 
     private void OnRefreshClick(object sender, RoutedEventArgs e) => ViewModel.Refresh();

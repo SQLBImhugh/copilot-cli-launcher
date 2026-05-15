@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -36,6 +37,9 @@ public partial class App : Application
         services.AddSingleton<IBriefingService, BriefingService>();
         services.AddSingleton<IBriefingHistoryService, BriefingHistoryService>();
         services.AddSingleton<IShortcutExportService, ShortcutExportService>();
+        services.AddSingleton<IKnownBugWorkaroundService, KnownBugWorkaroundService>();
+        services.AddSingleton<IMigrationService, MigrationService>();
+        services.AddSingleton<IAfterLaunchAction, Helpers.WinUIAfterLaunchAction>();
 
         return services.BuildServiceProvider();
     }
@@ -54,9 +58,18 @@ public partial class App : Application
             try
             {
                 var settings = Services.GetRequiredService<ISettingsService>();
-                if (!settings.Current.Repair.AutoRepairDanglingToolUse) return;
-                var repair = Services.GetRequiredService<ISessionRepairService>();
-                repair.RepairAll();
+                if (settings.Current.Repair.AutoRepairDanglingToolUse)
+                    Services.GetRequiredService<ISessionRepairService>().RepairAll();
+
+                // Apply known-bug workarounds (e.g. issue #3298 win32 keep-alive).
+                // Reads its own toggle internally; safe to call unconditionally.
+                Services.GetRequiredService<IKnownBugWorkaroundService>().ApplyAll();
+
+                // Sync the Start with Windows registry entry to whatever is
+                // currently saved in settings. Idempotent.
+                var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                if (!string.IsNullOrEmpty(exePath))
+                    Helpers.AutostartRegistry.Sync(settings.Current.LauncherBehavior.StartWithWindows, exePath);
             }
             catch
             {

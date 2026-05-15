@@ -17,6 +17,7 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     private readonly ITerminalDiscoveryService _terminals;
     private readonly ILaunchService _launch;
     private readonly ISettingsService _settings;
+    private readonly IAfterLaunchAction _afterLaunch;
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
 
@@ -65,7 +66,7 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     public string StatusMessage
     {
         get => _statusMessage;
-        private set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
+        set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
     }
 
     public SessionSortField SortField
@@ -86,12 +87,14 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         ISessionDiscoveryService discovery,
         ITerminalDiscoveryService terminals,
         ILaunchService launch,
-        ISettingsService settings)
+        ISettingsService settings,
+        IAfterLaunchAction? afterLaunch = null)
     {
         _discovery = discovery;
         _terminals = terminals;
         _launch = launch;
         _settings = settings;
+        _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
     }
 
     /// <summary>Re-scan disk + apply current filters. Safe to call repeatedly.</summary>
@@ -134,6 +137,7 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
                 Terminal = terminal,
             });
             StatusMessage = $"Resumed {row.ShortId}… in {terminal?.DisplayName ?? "direct"}.";
+            _afterLaunch.Apply(_settings.Current.LauncherBehavior.AfterLaunch);
             return true;
         }
         catch (Exception ex)

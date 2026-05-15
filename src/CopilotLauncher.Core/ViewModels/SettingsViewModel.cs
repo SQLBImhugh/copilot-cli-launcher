@@ -91,8 +91,12 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
 
     // Launcher behavior
     public string AfterLaunch { get => Settings.LauncherBehavior.AfterLaunch; set { Settings.LauncherBehavior.AfterLaunch = value; OnPropertyChanged(); ScheduleSave(); } }
-    public bool StartWithWindows { get => Settings.LauncherBehavior.StartWithWindows; set { Settings.LauncherBehavior.StartWithWindows = value; OnPropertyChanged(); ScheduleSave(); } }
+    public bool StartWithWindows { get => Settings.LauncherBehavior.StartWithWindows; set { Settings.LauncherBehavior.StartWithWindows = value; OnPropertyChanged(); ScheduleSave(); StartWithWindowsChanged?.Invoke(this, value); } }
     public string Theme { get => Settings.LauncherBehavior.Theme; set { Settings.LauncherBehavior.Theme = value; OnPropertyChanged(); ScheduleSave(); } }
+
+    /// <summary>Raised when StartWithWindows toggles. Consumed by SettingsPage to call
+    /// the platform-specific registry sync (which lives in the WinUI app project).</summary>
+    public event EventHandler<bool>? StartWithWindowsChanged;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>

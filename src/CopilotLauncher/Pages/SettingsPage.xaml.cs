@@ -32,6 +32,21 @@ public sealed partial class SettingsPage : Page
         PopulateTerminals();
         SyncCombo(UpdateFreqCombo, ViewModel.AutoUpdateFrequency);
         SyncCombo(AfterLaunchCombo, ViewModel.AfterLaunch);
+
+        // Wire the autostart registry write to the toggle. The Core VM raises an
+        // event because Microsoft.Win32.Registry isn't available in netstandard
+        // / .NET Core class libraries without referencing Windows-specific assemblies.
+        ViewModel.StartWithWindowsChanged += (_, enabled) =>
+        {
+            try
+            {
+                var exe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                if (!string.IsNullOrEmpty(exe))
+                    Helpers.AutostartRegistry.Sync(enabled, exe);
+            }
+            catch { }
+        };
+
         _initializing = false;
 
         Unloaded += (_, _) => ViewModel.Flush();

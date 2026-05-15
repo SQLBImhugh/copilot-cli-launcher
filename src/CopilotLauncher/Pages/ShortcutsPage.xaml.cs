@@ -21,7 +21,8 @@ public sealed partial class ShortcutsPage : Page
             App.Services.GetRequiredService<IShortcutsService>(),
             App.Services.GetRequiredService<ILaunchService>(),
             App.Services.GetRequiredService<ITerminalDiscoveryService>(),
-            App.Services.GetRequiredService<ISettingsService>());
+            App.Services.GetRequiredService<ISettingsService>(),
+            App.Services.GetRequiredService<IAfterLaunchAction>());
         _exporter = App.Services.GetRequiredService<IShortcutExportService>();
         InitializeComponent();
         Loaded += (_, _) => ViewModel.Reload();
