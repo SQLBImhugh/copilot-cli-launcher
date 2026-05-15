@@ -82,6 +82,14 @@ jobs:
         # resources.pri generation. We keep =false at the project level so
         # ordinary 'dotnet build' works on machines without VS Build Tools;
         # override only here, on a runner that does have them.
+        #
+        # WindowsAppSDKSelfContained=true bundles the Windows App Runtime
+        # DLLs into the app folder so end users don't get the
+        # "Please install Windows App Runtime 1.6" dialog on first launch.
+        # Without this flag, the app is framework-dependent on a system-
+        # installed Windows App Runtime which most fresh Windows machines
+        # don't have. Adds ~30-40 MB to the bundle (~70-80 MB total) but
+        # makes the .exe truly portable / install-free.
         run: |
           dotnet publish src/CopilotLauncher/CopilotLauncher.csproj `
             -c Release `
@@ -91,6 +99,7 @@ jobs:
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
             -p:EnableMsixTooling=true `
+            -p:WindowsAppSDKSelfContained=true `
             -p:AppxPackage=false `
             -p:WindowsPackageType=None `
             -o publish/CopilotLauncher

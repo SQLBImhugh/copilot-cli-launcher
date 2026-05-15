@@ -33,7 +33,7 @@ There's no installer yet — that's Phase 6. In the meantime, builds are produce
 2. Click **"Run workflow"** (top-right green button), leave **publish=true** checked, click the green **Run workflow** button.
 3. Wait ~3-4 minutes for the run to finish. It builds, tests, then publishes the portable `.exe` and uploads it.
 4. Click into the completed run, scroll to **Artifacts**, and download `CopilotLauncher-portable-<sha>` (~38 MB zip).
-5. Unzip anywhere and double-click `CopilotLauncher.exe`. The runtime is baked in — no .NET install required.
+5. Unzip anywhere and double-click `CopilotLauncher.exe`. The .NET 8 runtime AND the Windows App Runtime are both baked in — no installs of any kind required, the app just runs.
 
 > **Why not on every push?** Each Windows CI run consumes 2x quota minutes against GitHub's free tier (2,000 min/month), and each artifact is ~38 MB against the 0.5 GB included storage. Push events (and PRs) only run the lightweight build+test job; the slow publish+upload step is gated on a manual `workflow_dispatch` so we only build artifacts when someone actually wants one.
 
