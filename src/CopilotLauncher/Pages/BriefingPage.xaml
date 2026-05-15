@@ -3,7 +3,8 @@
     x:Class="CopilotLauncher.Pages.BriefingPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:models="using:CopilotLauncher.Models">
+    xmlns:models="using:CopilotLauncher.Models"
+    xmlns:controls="using:CopilotLauncher.Controls">
 
     <Grid Padding="32,24,32,16" RowSpacing="14">
         <Grid.RowDefinitions>
@@ -64,11 +65,9 @@
                                            Opacity="0.6"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="{x:Bind Body}"
-                                       FontFamily="Consolas, 'Cascadia Mono', monospace"
-                                       TextWrapping="Wrap"
-                                       IsTextSelectionEnabled="True"
-                                       Opacity="0.85"/>
+                            <controls:MarkdownTextBlock Markdown="{x:Bind Body}"
+                                                        Margin="0,4,0,0"
+                                                        Opacity="0.85"/>
                         </StackPanel>
                     </Border>
                 </DataTemplate>

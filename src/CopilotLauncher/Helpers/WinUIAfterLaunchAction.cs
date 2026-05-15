@@ -1,24 +1,29 @@
-using Microsoft.UI.Xaml;
-using WinRT.Interop;
-using CopilotLauncher.Services;
 using System.Runtime.InteropServices;
+using Microsoft.UI.Xaml;
+using CopilotLauncher.Services;
+using WinRT.Interop;
 
 namespace CopilotLauncher.Helpers;
 
 /// <summary>
 /// WinUI-side implementation of <see cref="IAfterLaunchAction"/>. Translates
 /// the user's "After launch" preference into actual window operations.
-/// "hideToTray" currently falls back to "minimize" because the system-tray
-/// icon (NotifyIcon) ships in a separate NuGet package that we haven't
-/// adopted yet — the setting persists so when we add tray support the
-/// behavior will just upgrade automatically.
+/// "hideToTray" hides the window only when a tray icon is active; otherwise
+/// it falls back to minimize so the window never becomes unrecoverable.
 /// </summary>
 public sealed class WinUIAfterLaunchAction : IAfterLaunchAction
 {
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
     private const int SW_MINIMIZE = 6;
-    private const int SW_HIDE = 0;
+
+    private readonly ITrayIconService _tray;
+
+    public WinUIAfterLaunchAction(ITrayIconService tray)
+    {
+        _tray = tray;
+    }
 
     public void Apply(string behavior)
     {
@@ -34,9 +39,21 @@ public sealed class WinUIAfterLaunchAction : IAfterLaunchAction
             switch (behavior)
             {
                 case "minimize":
-                case "hideToTray": // tray fallback
+                {
                     var hwnd = WindowNative.GetWindowHandle(win);
                     ShowWindow(hwnd, SW_MINIMIZE);
+                    break;
+                }
+                case "hideToTray":
+                    if (_tray.IsActive)
+                    {
+                        win.AppWindow.Hide();
+                    }
+                    else
+                    {
+                        var hwnd = WindowNative.GetWindowHandle(win);
+                        ShowWindow(hwnd, SW_MINIMIZE);
+                    }
                     break;
                 case "close":
                     win.Close();

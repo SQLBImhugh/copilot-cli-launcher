@@ -40,6 +40,8 @@ public partial class App : Application
         services.AddSingleton<IKnownBugWorkaroundService, KnownBugWorkaroundService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IAfterLaunchAction, Helpers.WinUIAfterLaunchAction>();
+        services.AddSingleton<IAISummaryService, AISummaryService>();
+        services.AddSingleton<ITrayIconService, TrayIconService>();
 
         return services.BuildServiceProvider();
     }
@@ -48,6 +50,55 @@ public partial class App : Application
     {
         MainWindowOrNull = new MainWindow();
         MainWindowOrNull.Activate();
+
+        var mainWindow = MainWindowOrNull;
+        if (mainWindow is not null)
+        {
+            var tray = Services.GetRequiredService<ITrayIconService>();
+
+            mainWindow.AppWindow.Closing += (_, closingArgs) =>
+            {
+                try
+                {
+                    var settings = Services.GetRequiredService<ISettingsService>();
+                    var shouldHideToTray = string.Equals(
+                        settings.Current.LauncherBehavior.AfterLaunch,
+                        "hideToTray",
+                        StringComparison.OrdinalIgnoreCase);
+
+                    if (tray.IsQuitting || !shouldHideToTray || !tray.IsActive)
+                        return;
+
+                    closingArgs.Cancel = true;
+                    mainWindow.AppWindow.Hide();
+                }
+                catch
+                {
+                    // Best-effort. If interception fails, allow normal close.
+                }
+            };
+
+            mainWindow.Closed += (_, _) =>
+            {
+                try
+                {
+                    tray.Shutdown();
+                }
+                catch
+                {
+                    // Best-effort cleanup on shutdown.
+                }
+            };
+
+            try
+            {
+                tray.Initialize();
+            }
+            catch
+            {
+                // Tray icon is optional; continue without it.
+            }
+        }
 
         // Phase 4: silently repair any sessions with dangling tool_use events
         // in the background so --resume works on next launch. Skips active

@@ -15,7 +15,9 @@ public sealed partial class BriefingPage : Page
         ViewModel = new BriefingViewModel(
             App.Services.GetRequiredService<IBriefingHistoryService>(),
             App.Services.GetRequiredService<IUpdateCheckService>(),
-            App.Services.GetRequiredService<IBriefingService>());
+            App.Services.GetRequiredService<IBriefingService>(),
+            App.Services.GetRequiredService<ISettingsService>(),
+            App.Services.GetRequiredService<IAISummaryService>());
         InitializeComponent();
         Loaded += (_, _) => ViewModel.Reload();
     }

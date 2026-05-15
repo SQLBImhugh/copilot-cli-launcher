@@ -16,6 +16,8 @@ public sealed class BriefingViewModel : INotifyPropertyChanged
     private readonly IBriefingHistoryService _history;
     private readonly IUpdateCheckService _updates;
     private readonly IBriefingService _briefings;
+    private readonly ISettingsService _settings;
+    private readonly IAISummaryService _ai;
     private int _checkInFlight;  // single-flight guard
 
     public ObservableCollection<BriefingEntry> Items { get; } = new();
@@ -37,11 +39,15 @@ public sealed class BriefingViewModel : INotifyPropertyChanged
     public BriefingViewModel(
         IBriefingHistoryService history,
         IUpdateCheckService updates,
-        IBriefingService briefings)
+        IBriefingService briefings,
+        ISettingsService settings,
+        IAISummaryService? ai = null)
     {
         _history = history;
         _updates = updates;
         _briefings = briefings;
+        _settings = settings;
+        _ai = ai ?? new NoopAISummaryService();
     }
 
     public void Reload()
@@ -89,10 +95,24 @@ public sealed class BriefingViewModel : INotifyPropertyChanged
                 return;
             }
 
-            // Render a plain bundled-changelog briefing for now. AI-summary
-            // path lights up when AISummaryService is wired end-to-end in a
-            // later phase.
             var body = _briefings.Render(result.PreviousVersion, result.CurrentVersion, Array.Empty<ReleaseEntry>());
+            var aiUnavailable = false;
+
+            if (_ai.IsEnabled)
+            {
+                StatusMessage = "Generating AI summary...";
+                var summary = await _ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, result.RawOutput, ct).ConfigureAwait(true);
+                if (!string.IsNullOrWhiteSpace(summary))
+                {
+                    body = "## AI Summary\n\n" + summary.Trim() + "\n\n---\n\n" + body;
+                }
+                else
+                {
+                    aiUnavailable = true;
+                    StatusMessage = "AI summary unavailable; using bundled changelog.";
+                }
+            }
+
             var entry = new BriefingEntry
             {
                 Id = Guid.NewGuid().ToString(),
@@ -104,7 +124,8 @@ public sealed class BriefingViewModel : INotifyPropertyChanged
             };
             _history.Add(entry);
             Items.Insert(0, entry);
-            StatusMessage = $"New briefing: {result.PreviousVersion} → {result.CurrentVersion}.";
+            if (!aiUnavailable)
+                StatusMessage = $"New briefing: {result.PreviousVersion} → {result.CurrentVersion}.";
         }
         catch (Exception ex)
         {

@@ -45,6 +45,10 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <!-- System-tray icon (NotifyIcon) for WinAppSDK -->
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.1.4" />
+    <!-- Markdown -> formatted text for the Briefing tab -->
+    <PackageReference Include="Markdig" Version="0.38.0" />
   </ItemGroup>
 
   <ItemGroup>
