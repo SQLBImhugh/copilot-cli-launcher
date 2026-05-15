@@ -15,14 +15,17 @@
     <WindowsPackageType>None</WindowsPackageType>
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>false</EnableMsixTooling>
-    <!-- Unpackaged apps don't need MRT-generated .pri files. Disabling these
-         avoids the build failure from MrtCore.PriGen.targets when building
-         outside Visual Studio (the ExpandPriContent task DLL ships with VS
-         only, not with the dotnet CLI SDK). The targets are gated on
-         AppxGeneratePriEnabled, so flipping it short-circuits the whole flow. -->
-    <AppxGeneratePriEnabled>false</AppxGeneratePriEnabled>
-    <EnableMrtResourceIndexer>false</EnableMrtResourceIndexer>
-    <EnableDefaultPriItems>false</EnableDefaultPriItems>
+    <!-- PRI / MRT resource generation is enabled by default; we previously
+         disabled it as a workaround for missing VS Build Tools, but doing so
+         ships a .exe without resources.pri, which makes XAML resource lookups
+         (XamlControlsResources merged dictionary, theme resources) crash at
+         runtime in Microsoft.UI.Xaml.dll. With VS / Build Tools installed
+         (the AppxPackage MSBuild tasks), PRI gen works correctly. Local
+         scripts/build.ps1 uses VS's MSBuild so the tasks resolve; CI's
+         windows-latest also has them. The .NET CLI's standalone MSBuild
+         can't see the AppxPackage tasks — but if anyone hits that case for
+         non-publish builds, they should call VS MSBuild directly via the
+         build.ps1 helper. -->
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
