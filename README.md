@@ -27,14 +27,17 @@ Detailed plan: see the [architecture doc](./docs/architecture.md) once Phase 0 l
 
 ## Try it (build artifact from CI)
 
-There's no installer yet — that's Phase 6. In the meantime, every push to `main` builds a portable `.exe` you can grab from GitHub Actions:
+There's no installer yet — that's Phase 6. In the meantime, builds are produced **on demand** from GitHub Actions to keep CI minutes/storage under the free-tier budget:
 
-1. Go to **[Actions → ci](https://github.com/SQLBImhugh/copilot-cli-launcher/actions/workflows/ci.yml)** in this repo.
-2. Click the latest green run.
-3. Scroll to **Artifacts** and download `CopilotLauncher-portable-<sha>` (a zip containing `CopilotLauncher.exe` + a few satellite files).
-4. Unzip anywhere and double-click `CopilotLauncher.exe`. The runtime is baked in — no .NET install required.
+1. Go to **[Actions → ci](https://github.com/SQLBImhugh/copilot-cli-launcher/actions/workflows/ci.yml)**.
+2. Click **"Run workflow"** (top-right green button), leave **publish=true** checked, click the green **Run workflow** button.
+3. Wait ~3-4 minutes for the run to finish. It builds, tests, then publishes the portable `.exe` and uploads it.
+4. Click into the completed run, scroll to **Artifacts**, and download `CopilotLauncher-portable-<sha>` (~38 MB zip).
+5. Unzip anywhere and double-click `CopilotLauncher.exe`. The runtime is baked in — no .NET install required.
 
-What you'll see in this build:
+> **Why not on every push?** Each Windows CI run consumes 2x quota minutes against GitHub's free tier (2,000 min/month), and each artifact is ~38 MB against the 0.5 GB included storage. Push events (and PRs) only run the lightweight build+test job; the slow publish+upload step is gated on a manual `workflow_dispatch` so we only build artifacts when someone actually wants one.
+
+What you'll see in the build:
 
 - **Sessions tab** (default): real list of all your `~/.copilot/session-state/` sessions with filter chips (Recent / All named / Heavily used / Show all), free-text search over cwd / repo / branch / id, and a working **Resume** button that opens Windows Terminal (or your chosen terminal from Settings) with `copilot --resume=<id>` in the session's working directory.
 - **Settings tab**: pick your default terminal (Auto-detect / Windows Terminal / pwsh / powershell / cmd), see the app data folder path, and open it with one click.
