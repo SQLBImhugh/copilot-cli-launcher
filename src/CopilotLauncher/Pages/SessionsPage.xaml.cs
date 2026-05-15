@@ -33,5 +33,21 @@ public sealed partial class SessionsPage : Page
             ViewModel.ResumeSession(row);
         }
     }
+
+    private void OnSortChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag &&
+            Enum.TryParse<SessionSortField>(tag, out var field))
+        {
+            ViewModel.SortField = field;
+        }
+    }
+
+    private void OnToggleSortDirection(object sender, RoutedEventArgs e)
+    {
+        ViewModel.SortDescending = !ViewModel.SortDescending;
+        // Glyph: descending = ScrollChevronDown (E74B), ascending = ScrollChevronUp (E74A)
+        SortDirectionGlyph.Glyph = ViewModel.SortDescending ? "\uE74B" : "\uE74A";
+    }
 }
 

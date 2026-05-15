@@ -58,7 +58,7 @@ public sealed class RepairSettings
 public sealed class SessionListingSettings
 {
     public int RecentWindowDays { get; set; } = 15;
-    public int HeavyUseSummaryThreshold { get; set; } = 20;
+    public int HeavyUseSummaryThreshold { get; set; } = 10;
     public bool GroupByProject { get; set; }
     public bool ShowFullSessionId { get; set; }
     public List<string> HiddenPathGlobs { get; set; } = new();

@@ -38,14 +38,14 @@
 
                 <StackPanel Spacing="0">
                     <CheckBox Content="Named" IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
-                    <TextBlock Text="You assigned a name via copilot --name"
+                    <TextBlock Text="You assigned a name via copilot --name or /rename"
                                Margin="28,-2,0,0" Opacity="0.6"
                                Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
 
                 <StackPanel Spacing="0">
                     <CheckBox Content="Heavily used" IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
-                    <TextBlock Text="20+ summary points (long-running session)"
+                    <TextBlock Text="10+ summary points (long-running session)"
                                Margin="28,-2,0,0" Opacity="0.6"
                                Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
@@ -61,11 +61,36 @@
             <Button Grid.Column="1" Content="↻ Refresh" Click="OnRefreshClick" VerticalAlignment="Top"/>
         </Grid>
 
-        <!-- Search -->
-        <AutoSuggestBox Grid.Row="2"
-                        QueryIcon="Find"
-                        PlaceholderText="Filter by path, repo, branch, or session id…"
-                        Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+        <!-- Search + Sort row -->
+        <Grid Grid.Row="2" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <AutoSuggestBox Grid.Column="0"
+                            QueryIcon="Find"
+                            PlaceholderText="Filter by path, repo, branch, or session id…"
+                            Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+            <TextBlock Grid.Column="1" Text="Sort by:" VerticalAlignment="Center" Opacity="0.7"/>
+
+            <ComboBox Grid.Column="2" x:Name="SortCombo" SelectionChanged="OnSortChanged" MinWidth="160">
+                <ComboBoxItem Tag="LastModified" Content="Last modified" IsSelected="True"/>
+                <ComboBoxItem Tag="Name"         Content="Name"/>
+                <ComboBoxItem Tag="Cwd"          Content="Working directory"/>
+                <ComboBoxItem Tag="Repository"   Content="Repository"/>
+                <ComboBoxItem Tag="SummaryCount" Content="Summary count"/>
+                <ComboBoxItem Tag="Size"         Content="Size on disk"/>
+            </ComboBox>
+
+            <Button Grid.Column="3" Click="OnToggleSortDirection"
+                    ToolTipService.ToolTip="Reverse sort order">
+                <FontIcon x:Name="SortDirectionGlyph" Glyph="&#xE74B;" FontSize="14"/>
+            </Button>
+        </Grid>
 
         <!-- Session list -->
         <ListView Grid.Row="3"

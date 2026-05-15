@@ -29,6 +29,8 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     private bool _showAll = false;
     private string _searchText = string.Empty;
     private string _statusMessage = "Loading sessions…";
+    private SessionSortField _sortField = SessionSortField.LastModified;
+    private bool _sortDescending = true;
 
     public bool ShowRecent
     {
@@ -64,6 +66,18 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     {
         get => _statusMessage;
         private set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
+    }
+
+    public SessionSortField SortField
+    {
+        get => _sortField;
+        set { if (_sortField != value) { _sortField = value; OnPropertyChanged(); ApplyFilters(); } }
+    }
+
+    public bool SortDescending
+    {
+        get => _sortDescending;
+        set { if (_sortDescending != value) { _sortDescending = value; OnPropertyChanged(); ApplyFilters(); } }
     }
 
     private List<CopilotSession> _all = new();
@@ -180,13 +194,34 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(_searchText))
             rows = rows.Where(s => MatchesSearch(s, _searchText));
 
-        rows = rows.OrderByDescending(s => s.LastModified);
+        rows = ApplySort(rows);
 
         foreach (var s in rows)
             Visible.Add(SessionRow.From(s));
 
         StatusMessage = $"{Visible.Count} of {_all.Count} session(s) visible.";
         OnPropertyChanged(nameof(VisibleCount));
+    }
+
+    private IEnumerable<CopilotSession> ApplySort(IEnumerable<CopilotSession> rows)
+    {
+        // Use a single sort key extractor based on the chosen field; flipping
+        // direction is just OrderBy vs OrderByDescending.
+        return _sortField switch
+        {
+            SessionSortField.LastModified  => _sortDescending ? rows.OrderByDescending(s => s.LastModified)            : rows.OrderBy(s => s.LastModified),
+            SessionSortField.Name          => _sortDescending ? rows.OrderByDescending(s => s.Name ?? s.Cwd ?? s.Id, StringComparer.OrdinalIgnoreCase)
+                                                              : rows.OrderBy(s => s.Name ?? s.Cwd ?? s.Id, StringComparer.OrdinalIgnoreCase),
+            SessionSortField.Cwd           => _sortDescending ? rows.OrderByDescending(s => s.Cwd ?? "", StringComparer.OrdinalIgnoreCase)
+                                                              : rows.OrderBy(s => s.Cwd ?? "", StringComparer.OrdinalIgnoreCase),
+            SessionSortField.Repository    => _sortDescending ? rows.OrderByDescending(s => s.Repository ?? "", StringComparer.OrdinalIgnoreCase)
+                                                              : rows.OrderBy(s => s.Repository ?? "", StringComparer.OrdinalIgnoreCase),
+            SessionSortField.SummaryCount  => _sortDescending ? rows.OrderByDescending(s => s.SummaryCount)
+                                                              : rows.OrderBy(s => s.SummaryCount),
+            SessionSortField.Size          => _sortDescending ? rows.OrderByDescending(s => s.SizeBytes)
+                                                              : rows.OrderBy(s => s.SizeBytes),
+            _                              => rows.OrderByDescending(s => s.LastModified),
+        };
     }
 
     private bool MatchesAllCheckedChips(CopilotSession s)
@@ -212,6 +247,17 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// <summary>Sort field for the Sessions tab.</summary>
+public enum SessionSortField
+{
+    LastModified,
+    Name,
+    Cwd,
+    Repository,
+    SummaryCount,
+    Size,
 }
 
 /// <summary>
@@ -240,7 +286,7 @@ public sealed class SessionRow
     {
         var ago = HumanizeRelative(s.LastModified);
         var tags = new List<string>();
-        if (s.SummaryCount >= 20) tags.Add($"heavy: {s.SummaryCount} summaries");
+        if (s.SummaryCount >= 10) tags.Add($"heavy: {s.SummaryCount} summaries");
         else if (s.SummaryCount > 0) tags.Add($"{s.SummaryCount} summaries");
         if (s.SizeBytes > 0) tags.Add(FormatBytes(s.SizeBytes));
 
@@ -273,7 +319,7 @@ public sealed class SessionRow
             LastOpenedDisplay = $"{ago} · id {(s.Id.Length >= 8 ? s.Id[..8] : s.Id)}…",
             Tags = string.Join(" · ", tags),
             UserNamed = s.UserNamed,
-            HeavyUse = s.SummaryCount >= 20,
+            HeavyUse = s.SummaryCount >= 10,
         };
     }
 
