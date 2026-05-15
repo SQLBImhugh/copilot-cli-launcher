@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Services;
 using CopilotLauncher.ViewModels;
 
@@ -31,6 +32,39 @@ public sealed partial class SessionsPage : Page
         if (sender is Button btn && btn.Tag is SessionRow row)
         {
             ViewModel.ResumeSession(row);
+        }
+    }
+
+    private void OnSaveAsLaunchClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not SessionRow row) return;
+
+        // Suggested label: a user-given name is the best signal; otherwise
+        // the cwd leaf (e.g. "FabricPOCPortal"). Auto-generated names from
+        // Copilot are often 90-char prompt prefixes — not great launch
+        // labels, so we skip those in favor of the workdir leaf.
+        string label;
+        if (row.HasUserName && !string.IsNullOrWhiteSpace(row.Title))
+        {
+            label = row.Title;
+        }
+        else
+        {
+            try { label = System.IO.Path.GetFileName(row.Cwd.TrimEnd('\\', '/')); }
+            catch { label = string.Empty; }
+            if (string.IsNullOrWhiteSpace(label)) label = row.ShortId;
+        }
+
+        NewLaunchHandoff.Pending = new NewLaunchPayload(
+            SuggestedLabel: label,
+            WorkingDirectory: row.Cwd,
+            ResumeId: row.SessionId);
+
+        // Switch to the New Launch tab; its Loaded handler picks up the
+        // pending payload and pre-populates the form.
+        if (Application.Current is App app && app.MainWindowOrNull is MainWindow mw)
+        {
+            mw.NavigateToTab("new");
         }
     }
 

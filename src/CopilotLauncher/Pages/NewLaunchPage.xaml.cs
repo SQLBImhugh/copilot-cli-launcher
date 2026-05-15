@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Services;
 using CopilotLauncher.ViewModels;
 
@@ -21,7 +22,17 @@ public sealed partial class NewLaunchPage : Page
             App.Services.GetRequiredService<ISettingsService>());
         InitializeComponent();
         PopulateTerminals();
+        Loaded += (_, _) => ConsumePendingHandoff();
         ViewModel.RecalcPreview();
+    }
+
+    private void ConsumePendingHandoff()
+    {
+        if (NewLaunchHandoff.Pending is { } payload)
+        {
+            ViewModel.PopulateFrom(payload.SuggestedLabel, payload.WorkingDirectory, payload.ResumeId);
+            NewLaunchHandoff.Pending = null;
+        }
     }
 
     private void PopulateTerminals()

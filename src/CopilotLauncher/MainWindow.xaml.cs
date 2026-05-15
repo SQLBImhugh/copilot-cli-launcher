@@ -110,4 +110,19 @@ public sealed partial class MainWindow : Window
             ContentFrame.Navigate(page);
         }
     }
+
+    /// <summary>Programmatically switch to the tab with the given Tag value
+    /// (e.g. "new" for New Launch). Triggers the existing SelectionChanged
+    /// handler so the Frame navigates and the nav item highlights together.</summary>
+    public void NavigateToTab(string tag)
+    {
+        foreach (var raw in NavView.MenuItems)
+        {
+            if (raw is NavigationViewItem nvi && nvi.Tag is string t && t == tag)
+            {
+                NavView.SelectedItem = nvi;
+                return;
+            }
+        }
+    }
 }

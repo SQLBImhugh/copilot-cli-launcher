@@ -157,12 +157,17 @@
                                        Style="{StaticResource CaptionTextBlockStyle}"/>
                         </StackPanel>
 
-                        <Button Grid.Column="1"
-                                Content="▶ Resume"
-                                Style="{StaticResource AccentButtonStyle}"
-                                VerticalAlignment="Center"
-                                Tag="{x:Bind}"
-                                Click="OnResumeClick"/>
+                        <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="6" VerticalAlignment="Center" HorizontalAlignment="Right">
+                            <Button Content="▶ Resume"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Tag="{x:Bind}"
+                                    Click="OnResumeClick"
+                                    HorizontalAlignment="Stretch"/>
+                            <Button Content="Save as launch…"
+                                    Tag="{x:Bind}"
+                                    Click="OnSaveAsLaunchClick"
+                                    HorizontalAlignment="Stretch"/>
+                        </StackPanel>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
