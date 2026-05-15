@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -19,8 +20,29 @@ jobs:
       - name: Restore
         run: dotnet restore CopilotLauncher.sln
 
-      - name: Build
+      - name: Build (full solution incl. WinUI app)
         run: dotnet build CopilotLauncher.sln -c Release --no-restore
 
-      - name: Test
+      - name: Test (Core via xUnit)
         run: dotnet test CopilotLauncher.sln -c Release --no-build --verbosity normal
+
+      - name: Publish single-file portable
+        # Self-contained .NET 8 runtime baked in; ~70 MB compressed exe + a few satellites.
+        run: |
+          dotnet publish src/CopilotLauncher/CopilotLauncher.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -o publish/CopilotLauncher
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CopilotLauncher-portable-${{ github.sha }}
+          path: publish/CopilotLauncher/
+          if-no-files-found: error
+          retention-days: 30
+

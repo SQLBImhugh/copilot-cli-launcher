@@ -15,17 +15,32 @@ A single Windows desktop app that:
 
 | Phase | Status |
 |---|---|
-| 0. Skeleton + legacy move | 🟡 in progress |
-| 1. Sessions tab MVP | ⏳ |
+| 0. Skeleton + legacy move | ✅ done |
+| 1. Sessions tab MVP | 🟡 services + Sessions tab live; Saved Launches + New Launch wizard pending |
 | 2. Saved Launches + New Launch wizard | ⏳ |
-| 3. Briefings | ⏳ |
-| 4. Repair & workarounds | ⏳ |
+| 3. Briefings | 🟡 services done; UI pending |
+| 4. Repair & workarounds | 🟡 SessionRepairService done; KnownBugWorkaroundService + UI pending |
 | 5. Polish (tray, autostart, .lnk export) | ⏳ |
-| 6. Release infrastructure | ⏳ |
+| 6. Release infrastructure | 🟡 CI artifact upload working; install.ps1 bootstrap pending |
 
 Detailed plan: see the [architecture doc](./docs/architecture.md) once Phase 0 lands.
 
-## Building
+## Try it (build artifact from CI)
+
+There's no installer yet — that's Phase 6. In the meantime, every push to `main` builds a portable `.exe` you can grab from GitHub Actions:
+
+1. Go to **[Actions → ci](https://github.com/SQLBImhugh/copilot-cli-launcher/actions/workflows/ci.yml)** in this repo.
+2. Click the latest green run.
+3. Scroll to **Artifacts** and download `CopilotLauncher-portable-<sha>` (a zip containing `CopilotLauncher.exe` + a few satellite files).
+4. Unzip anywhere and double-click `CopilotLauncher.exe`. The runtime is baked in — no .NET install required.
+
+What you'll see in this build:
+
+- **Sessions tab** (default): real list of all your `~/.copilot/session-state/` sessions with filter chips (Recent / All named / Heavily used / Show all), free-text search over cwd / repo / branch / id, and a working **Resume** button that opens Windows Terminal (or your chosen terminal from Settings) with `copilot --resume=<id>` in the session's working directory.
+- **Settings tab**: pick your default terminal (Auto-detect / Windows Terminal / pwsh / powershell / cmd), see the app data folder path, and open it with one click.
+- **Saved Launches / New Launch / Briefing**: still placeholders — those phases land next.
+
+## Building locally
 
 Requires:
 - .NET 8 SDK or newer

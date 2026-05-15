@@ -20,9 +20,16 @@ public partial class App : Application
     {
         var services = new ServiceCollection();
 
-        // Phase 0: skeletal services. Each gains real behavior in subsequent phases.
+        // All singletons — these services hold cached state (settings, discovered
+        // sessions, terminal list) that should survive page navigation.
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<ISessionDiscoveryService, SessionDiscoveryService>();
+        services.AddSingleton<ITerminalDiscoveryService, TerminalDiscoveryService>();
+        services.AddSingleton<ILaunchService, LaunchService>();
+        services.AddSingleton<ISavedLaunchesService, SavedLaunchesService>();
+        services.AddSingleton<ISessionRepairService, SessionRepairService>();
+        services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
+        services.AddSingleton<IBriefingService, BriefingService>();
 
         return services.BuildServiceProvider();
     }
@@ -33,3 +40,4 @@ public partial class App : Application
         _mainWindow.Activate();
     }
 }
+
