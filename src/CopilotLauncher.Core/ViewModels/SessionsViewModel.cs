@@ -269,12 +269,23 @@ public sealed class SessionRow
     public required string SessionId { get; init; }
     public required string ShortId { get; init; }
 
-    /// <summary>Bold title at the top of the card. Falls back gracefully when the
-    /// session has no user-given name: cwd-leaf or short id.</summary>
+    /// <summary>
+    /// User-given name. EMPTY when the session is unnamed — we deliberately
+    /// don't fall back to the cwd-leaf here because that creates ambiguity
+    /// when several anonymous sessions share a project folder (the real
+    /// named session and the anonymous ones would all look identical).
+    /// </summary>
     public required string Title { get; init; }
+
+    /// <summary>True when <see cref="Title"/> reflects a real --name / /rename. Drives Title visibility.</summary>
+    public bool HasName { get; init; }
 
     /// <summary>Full working directory path; subtitle under the title.</summary>
     public required string Cwd { get; init; }
+
+    /// <summary>Opacity for the Cwd TextBlock — full when there's no name (cwd is the visual anchor),
+    /// dimmed when a bold name is showing above it.</summary>
+    public double CwdOpacity => HasName ? 0.7 : 1.0;
 
     public required string RepoBranch { get; init; }
     public required string LastOpenedDisplay { get; init; }
@@ -290,28 +301,19 @@ public sealed class SessionRow
         else if (s.SummaryCount > 0) tags.Add($"{s.SummaryCount} summaries");
         if (s.SizeBytes > 0) tags.Add(FormatBytes(s.SizeBytes));
 
-        // Title preference: user-given name > cwd leaf > short id.
-        string title;
-        if (s.UserNamed && !string.IsNullOrWhiteSpace(s.Name))
-        {
-            title = s.Name!;
-        }
-        else if (!string.IsNullOrWhiteSpace(s.Cwd))
-        {
-            try { title = Path.GetFileName(s.Cwd!.TrimEnd('\\', '/')) ?? s.Cwd!; }
-            catch { title = s.Cwd!; }
-            if (string.IsNullOrWhiteSpace(title)) title = s.Cwd!;
-        }
-        else
-        {
-            title = s.Id.Length >= 8 ? s.Id[..8] + "…" : s.Id;
-        }
+        // Title is the actual user-given name, or empty if unnamed. Do NOT fall
+        // back to cwd-leaf or short-id — that creates a misleading bold title
+        // that looks like a real name. Unnamed sessions show nothing in the
+        // title slot; the Cwd line takes visual prominence instead.
+        var hasName = s.UserNamed && !string.IsNullOrWhiteSpace(s.Name);
+        var title = hasName ? s.Name! : string.Empty;
 
         return new SessionRow
         {
             SessionId = s.Id,
             ShortId = s.Id.Length >= 8 ? s.Id[..8] : s.Id,
             Title = title,
+            HasName = hasName,
             Cwd = string.IsNullOrEmpty(s.Cwd) ? "(unknown working dir)" : s.Cwd,
             RepoBranch = string.IsNullOrEmpty(s.Repository)
                 ? "(no git repo)"

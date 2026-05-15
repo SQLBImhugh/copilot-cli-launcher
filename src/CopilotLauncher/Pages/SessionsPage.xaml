@@ -123,9 +123,10 @@
                             <TextBlock Text="{x:Bind Title}"
                                        Style="{StaticResource SubtitleTextBlockStyle}"
                                        FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis"/>
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{x:Bind HasName, Converter={StaticResource BoolToVisibility}}"/>
                             <TextBlock Text="{x:Bind Cwd}"
-                                       Opacity="0.7"
+                                       Opacity="{x:Bind CwdOpacity}"
                                        Style="{StaticResource BodyTextBlockStyle}"
                                        TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{x:Bind RepoBranch}"

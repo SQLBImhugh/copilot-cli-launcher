@@ -30,6 +30,15 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $repoRoot
 
+# Stop any running CopilotLauncher.exe instances so they don't lock the
+# output file during the GenerateBundle step. Self-extracting single-file
+# .exes hold a handle on the on-disk .exe even after extraction to %TEMP%,
+# which produces an UnauthorizedAccessException at publish time. Best-effort
+# cleanup; ignore failures.
+foreach ($p in (Get-Process CopilotLauncher -ErrorAction SilentlyContinue)) {
+    try { Stop-Process -Id $p.Id -Force -ErrorAction Stop; Start-Sleep -Milliseconds 200 } catch {}
+}
+
 # Find VS MSBuild via vswhere.
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
