@@ -24,10 +24,17 @@ public sealed partial class MainWindow : Window
             // Mica not supported (Windows 10) — leave default chrome.
         }
 
+        // Extend the app content into the title-bar area so the bar's
+        // background becomes the same Mica/app surface as the rest of the
+        // window. Without this, Windows draws a default white title bar
+        // and our ButtonForegroundColor / ButtonHoverColor settings paint
+        // the buttons invisibly against the white. NavigationView's pane
+        // header naturally fills that strip, so the layout still looks fine.
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+
         // Make the title bar follow the OS / app theme so the system buttons
-        // (min/max/close) are dark in dark mode and light in light mode. Without
-        // this, WinUI 3 unpackaged apps render a white title bar on every
-        // system regardless of theme.
+        // (min/max/close) are dark in dark mode and light in light mode.
         ApplyTitleBarTheme();
 
         // Default landing page.

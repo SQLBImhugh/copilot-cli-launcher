@@ -8,7 +8,30 @@
     Title="Copilot Launcher">
 
     <Grid>
-        <muxc:NavigationView
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Custom drag area for the title bar. ExtendsContentIntoTitleBar=true
+             means we own this 32px strip; SetTitleBar(AppTitleBar) makes the
+             whole strip a draggable region. Leave the right ~138px clear so
+             the system min/max/close buttons aren't covered (they're drawn
+             by Windows on top of our content). -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Background="Transparent">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="138"/>  <!-- system caption buttons -->
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Copilot Launcher"
+                       VerticalAlignment="Center"
+                       Margin="16,0,0,0"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Opacity="0.8"/>
+        </Grid>
+
+        <muxc:NavigationView Grid.Row="1"
             x:Name="NavView"
             PaneDisplayMode="Left"
             IsBackButtonVisible="Collapsed"
