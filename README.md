@@ -1,300 +1,63 @@
-# Copilot CLI Launcher
+# Copilot Launcher 2.0
 
-A portable PowerShell wrapper for [GitHub Copilot CLI](https://github.com/github/copilot-cli) on Windows that adds:
+> **Status: rebuild in progress.** A WinUI 3 desktop app that replaces the old PowerShell-based launcher kit (now in [`legacy/`](./legacy/README-LEGACY.md)) with a session picker, saved-launches manager, and centralized settings.
 
-- **Auto-update** before every launch (so you're always on the latest version)
-- **Version-change briefing** with the changelog of everything new since your last launch
-- **Optional AI-authored summary** contextualized to your project (uses one premium request)
-- **Rolling briefing history** appended to a single file so you never lose past briefings
-- **Session repair** — auto-fixes corrupt sessions with dangling `tool_use` events that would otherwise reject on `--resume` with a 400 from the API
-- **Known-bug workarounds** — patches the missing `native/win32/index.js` loader (issue [#3298](https://github.com/github/copilot-cli/issues/3298)) so `/keep-alive` works on Windows
+A single Windows desktop app that:
 
-Designed to be **portable**: copy this folder anywhere, edit two files, point a Windows shortcut at it. Or use the **single-file installer** for a wizard-driven setup that handles everything.
+- **Lists every Copilot CLI session** on your machine with smart filters (Recent / All named / Heavily used / Show all). One-click resume.
+- **Saves reusable launches** (project + workdir + flags + terminal) inside the app — no scattered `.lnk` shortcuts on your Desktop.
+- **Configurable default terminal** — Windows Terminal, pwsh.exe, ConEmu, Hyper, Tabby, anything with a token-based arg template.
+- **Auto-update + version-change briefings** (with optional AI-authored summaries) carried over from the PS launcher.
+- **Session repair + known-bug workarounds** ported to C# from the old `.py` and `.ps1` helpers.
+- **Migrates from the legacy install** on first run; opt-in, non-destructive.
 
----
+## Status
 
-## Setup
-
-You have three options:
-
-### Option A — One-liner web install (fastest)
-
-If you're on a fresh machine and just want it installed, run this in a PowerShell 7 prompt:
-
-```powershell
-iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/install.ps1 | iex
-```
-
-That downloads a tiny bootstrap (~50 lines) which fetches the bundled installer and runs the interactive wizard. The wizard prompts you for project name, install dir, etc. — same prompts as Option B below, just no manual download step.
-
-For **silent / scripted installs** (e.g., baking into a setup script), use the two-liner form so you can pass parameters:
-
-```powershell
-iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/Install-CopilotLauncher.ps1 -OutFile "$env:TEMP\inst.ps1"
-& "$env:TEMP\inst.ps1" -Silent -ProjectName "MyApp" -ResumeSession "MyApp-Main" -EnableAISummary -EnableAllowAll
-```
-
-> The one-liner can't pass parameters because PowerShell's `iex` doesn't accept arguments, so it always runs in wizard mode. The two-liner downloads the installer to disk and invokes it directly, which lets you pass any of the parameters listed in Option B.
-
-### Option B — Single-file installer (recommended for sharing)
-
-Hand a peer one file: `dist/Install-CopilotLauncher.ps1` (~115 KB; the launcher, repair script, templates, and README are all base64-embedded).
-
-```powershell
-# Wizard mode — prompts for project name, install dir, etc.
-pwsh -ExecutionPolicy Bypass -File .\Install-CopilotLauncher.ps1
-
-# Silent mode — for unattended/scripted installs
-pwsh -ExecutionPolicy Bypass -File .\Install-CopilotLauncher.ps1 `
-    -Silent `
-    -ProjectName "MyApp" `
-    -ResumeSession "MyApp-Main" `
-    -EnableAISummary `
-    -EnableAllowAll
-```
-
-The installer:
-
-1. Asks for project name, install dir, state dir, AI-summary on/off, `--allow-all` on/off, shortcut on/off
-2. Extracts all 5 source files to the install dir
-3. Generates a `config.json` from your wizard inputs
-4. Generates `agents.md` from the template (with `{ProjectName}` substituted)
-5. Creates a Windows desktop shortcut targeting `Launch-Copilot.ps1` with the right args
-
-Installer parameters:
-
-| Param | Default | Notes |
-|---|---|---|
-| `-InstallDir` | `%USERPROFILE%\copilot-launcher` | Where the kit goes |
-| `-ProjectName` | prompt (or current dir name in silent mode) | Used in messages and as the briefing-session name |
-| `-StateDir` | `%USERPROFILE%\Desktop\CopilotCLI\<ProjectName>` | Where briefing logs and history live |
-| `-WorkingDirectory` | the folder you ran the installer from | Where Copilot starts when the shortcut opens (project root) |
-| `-ResumeSession` | empty | Default `--resume=<name>` for the shortcut |
-| `-EnableAISummary` | prompt | Adds `-AISummary` to the shortcut |
-| `-EnableAllowAll` | prompt | Adds `--allow-all` to the shortcut |
-| `-ExtraCopilotArgs` | empty | Extra copilot CLI flags appended to the shortcut, e.g. `"--max-autopilot-continues 100"`. Quoted values are preserved as single args. |
-| `-UseWindowsTerminal` | prompt; default Yes if `wt.exe` on PATH | Targets `wt.exe` instead of `pwsh.exe` so the shortcut opens in a Windows Terminal tab. Equivalent to `wt.exe -w 0 -d "<workdir>" "<pwsh>" -NoExit -File "<launcher>" ...` |
-| `-NoWindowsTerminal` | off | Force-disable Windows Terminal targeting even if `wt.exe` is on PATH. |
-| `-NoDesktopShortcut` | off | Skip shortcut creation |
-| `-Silent` | off | Skip all prompts; use defaults + supplied params |
-
-### Option C — Manual file copy
-
-If you'd rather see and edit each file yourself, skip the installer:
-
-#### 1. Copy this folder
-
-Copy `copilot-launcher/` anywhere you like — e.g. `C:\Tools\copilot-launcher\` or `Documents\copilot-launcher\`.
-
-#### 2. Create `config.json`
-
-```powershell
-cd C:\Tools\copilot-launcher
-Copy-Item config.example.json config.json
-```
-
-Edit `config.json` to set your project name and where state files should live. The keys you'll likely change:
-
-| Key | Default | What it controls |
-|---|---|---|
-| `projectName` | current dir name | Used in messages and as the default briefing-session name |
-| `stateDir` | `%USERPROFILE%/Desktop/CopilotCLI/<projectName>` | Where briefing logs, history, and caches live |
-| `agentsMdPath` | `./agents.md` | Path to your AGENTS.md template (see below) |
-| `briefingSessionName` | `<projectName>-Briefings` | Copilot CLI session name reused for AI summaries — gives the model continuity across launches |
-| `trackedIssues` | `[3298]` | GitHub issue numbers to monitor; banner appears when one closes |
-| `applyKnownWorkarounds` | `true` | Run the keep-alive loader patch + session repair on every launch |
-| `autoUpdate` | `true` | Run `copilot update` before reading the version |
-
-All other config keys have sensible defaults — leave them out of your `config.json` if you don't need to override.
-
-#### 3. Customize `agents.md` (only needed for `-AISummary`)
-
-```powershell
-Copy-Item agents.example.md agents.md
-notepad agents.md
-```
-
-Replace the `## Project Context` section with a 1-paragraph description of your project (language, framework, key surface area, how you use Copilot CLI). The AI summary uses this to decide which CLI changes are relevant.
-
-The placeholder `{ProjectName}` is auto-substituted from your config at runtime.
-
-#### 4. Create a Windows shortcut
-
-Right-click your desktop → New → Shortcut. Target:
-
-```
-pwsh.exe -NoExit -NoLogo -ExecutionPolicy Bypass -File "C:\Tools\copilot-launcher\Launch-Copilot.ps1" -AISummary --resume=MyProject-Main --allow-all
-```
-
-| Argument | Purpose |
+| Phase | Status |
 |---|---|
-| `pwsh.exe` | PowerShell 7+ (use `powershell.exe` if you're on Windows PowerShell 5.1) |
-| `-NoExit -NoLogo` | Keep the window open and skip the banner |
-| `-ExecutionPolicy Bypass` | Allow the script to run regardless of your machine's policy |
-| `-File "...\Launch-Copilot.ps1"` | The launcher |
-| `-AISummary` | Generate the AI-authored briefing (omit if you don't want premium-request usage) |
-| `--resume=MyProject-Main` | Resume a named Copilot CLI session — change to your session name, or omit to start a fresh session each time |
-| `--allow-all` | Pass-through arg → Copilot CLI's auto-approve mode |
+| 0. Skeleton + legacy move | 🟡 in progress |
+| 1. Sessions tab MVP | ⏳ |
+| 2. Saved Launches + New Launch wizard | ⏳ |
+| 3. Briefings | ⏳ |
+| 4. Repair & workarounds | ⏳ |
+| 5. Polish (tray, autostart, .lnk export) | ⏳ |
+| 6. Release infrastructure | ⏳ |
 
-Anything after `-File "..."` and the launcher's own switches (`-AISummary`, `-NoUpdate`, `-ConfigPath`) is forwarded directly to `copilot`.
+Detailed plan: see the [architecture doc](./docs/architecture.md) once Phase 0 lands.
 
-#### 5. Done
+## Building
 
-Double-click the shortcut. The first launch records the current Copilot CLI version with no briefing. From the next launch onward, you'll see a changelog briefing whenever the version has advanced.
+Requires:
+- .NET 8 SDK or newer
+- For the full WinUI 3 app: **Visual Studio 2022** (Community is fine) or **Visual Studio Build Tools** with the "Windows application development" workload. The Windows App SDK's PRI generation MSBuild tasks ship with VS, not the .NET CLI SDK alone.
+- For just running tests: any .NET 8 SDK is enough — the testable code lives in a separate `CopilotLauncher.Core` class library that has no WinUI dependencies.
 
----
-
-## Adding more shortcuts after install
-
-The installer creates one shortcut. To create additional ones — for example one per project, each starting in its own folder, each with its own `--resume` session — run the post-install helper:
-
-```powershell
-cd C:\path\to\your-project
-pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1"
-```
-
-The wizard prompts for a label (becomes the `.lnk` filename), the working directory (defaults to your current folder), an optional `--resume` session name, AI-summary / `--allow-all` toggles, any extra copilot CLI flags, and whether to launch via Windows Terminal. It reads `config.json` for the project description but never writes to it, so your customizations are safe.
-
-Silent / scripted invocation, fully featured:
+### Tests + core (no VS needed)
 
 ```powershell
-pwsh "$env:USERPROFILE\copilot-launcher\New-CopilotShortcut.ps1" `
-    -Silent `
-    -Label "MyApp" `
-    -WorkingDirectory "C:\code\my-app" `
-    -ResumeSession "MyApp-Main" `
-    -EnableAISummary -EnableAllowAll `
-    -ExtraCopilotArgs "--max-autopilot-continues 100" `
-    -UseWindowsTerminal
+dotnet test tests\CopilotLauncher.Tests\CopilotLauncher.Tests.csproj -c Release
 ```
 
-`New-CopilotShortcut.ps1` parameters:
+### Full app
 
-| Param | Default | Notes |
-|---|---|---|
-| `-Label` | leaf of `-WorkingDirectory` | Shortcut filename (becomes `<Label> Copilot.lnk`). Validated against Windows filename rules. |
-| `-WorkingDirectory` | current dir | Where Copilot starts when the shortcut opens. |
-| `-ResumeSession` | empty | `--resume=<name>` value. Empty = fresh session each launch. |
-| `-EnableAISummary` | prompt | Add `-AISummary` to the shortcut. |
-| `-EnableAllowAll` | prompt | Add `--allow-all` to the shortcut. |
-| `-ExtraCopilotArgs` | empty | Verbatim extra copilot CLI flags, e.g. `"--max-autopilot-continues 100"`. Quoted values are preserved as single tokens. |
-| `-UseWindowsTerminal` | prompt; default Yes if `wt.exe` on PATH | Targets `wt.exe` instead of `pwsh.exe` so the shortcut opens in a Windows Terminal tab. |
-| `-NoWindowsTerminal` | off | Force-disable Windows Terminal targeting even if `wt.exe` is on PATH. |
-| `-ShortcutDir` | Desktop | Folder to drop the `.lnk` into. |
-| `-Force` | off | Overwrite an existing shortcut with the same label. |
-| `-Silent` | off | Skip all prompts; use defaults + supplied params. |
-
-> **Don't re-run the installer** to add another shortcut. The installer is for first-time setup; re-running it preserves your `config.json` and `agents.md` but is heavier than needed. Use `New-CopilotShortcut.ps1` for shortcut-only changes.
-
----
-
-## What runs on every launch
-
-```
-shortcut → Launch-Copilot.ps1
-  ├─ Load config.json (or defaults)
-  ├─ Check tracked GitHub issues for closure (cached 24h)
-  ├─ Run `copilot update`             ← gets the freshest version on this launch
-  ├─ Apply known-bug workarounds:
-  │     • Repair-Win32NativeAddon      ← keep-alive loader (issue #3298)
-  │     • Repair-CopilotSessionDanglingToolUses  ← scans every session
-  ├─ If installed version > last-seen:
-  │     • Render changelog briefing (bundled npm changelog or GitHub Releases)
-  │     • If -AISummary: AI-authored summary using agents.md as context
-  │     • Append briefing to briefing-history.log
-  │     • Wait for keypress
-  └─ Hand off to `copilot` with all extra args
+```powershell
+pwsh scripts\build.ps1
 ```
 
-Idempotent. Silent unless something actually happens.
+A first-run release zip + GitHub Releases workflow + `iwr | iex` bootstrap will land in Phase 6.
 
----
+See [docs/architecture.md](./docs/architecture.md) for the layering rationale.
 
-## Files
+## Using the legacy launcher
 
-### Source kit (this folder)
+The original PowerShell kit lives at [`legacy/`](./legacy/README-LEGACY.md) and remains fully functional. Install it with:
 
-| File | Purpose | Customize? |
-|---|---|---|
-| `Launch-Copilot.ps1` | The launcher | No |
-| `New-CopilotShortcut.ps1` | Post-install shortcut generator (see "Adding more shortcuts" above) | No |
-| `repair-copilot-sessions.py` | Session events.jsonl repair helper (called by launcher) | No |
-| `config.example.json` | Sample config with comments | Copy to `config.json` and edit |
-| `config.json` | Your config (gitignored) | **Yes** |
-| `agents.example.md` | Sample AGENTS.md template | Copy to `agents.md` and edit |
-| `agents.md` | Your AGENTS.md (gitignored) | **Yes** (only if using `-AISummary`) |
-| `README.md` | This file | No |
-
-### Installer / build (this folder)
-
-| File | Purpose |
-|---|---|
-| `installer-template.ps1` | Template for the bundled installer; `{{X_B64}}` placeholders get substituted at build time |
-| `build-installer.ps1` | Reads each source file, base64-encodes it, writes the bundled installer |
-| `dist/Install-CopilotLauncher.ps1` | The bundled single-file installer to share with peers |
-| `dist/install.ps1` | Tiny BOM-free bootstrap so `iwr -useb <url>/dist/install.ps1 \| iex` works (the bundled installer's BOM, needed for PS 5.1, breaks `iex` directly) |
-
-After editing any source file, re-run `pwsh build-installer.ps1` to refresh the bundled installer.
-
----
-
-## Briefing history
-
-Every launch where the version advanced appends to `<stateDir>/briefing-history.log`:
-
-```
-========================================================================
-=== Briefing 1.0.46 -> 1.0.47  @  2026-05-13 09:56:18
-========================================================================
-... full changelog block ...
-
-=== AI SUMMARY ===
-Highlights for MyProject:
-- /fork now accepts an optional name and shows origin in the sessions dialog.
-  Follows up on the /fork command I flagged in v1.0.45...
-...
+```powershell
+iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/legacy/dist/install.ps1 | iex
 ```
 
-Single rolling file (one source of truth). Add a retention helper if you want to prune entries older than N days.
-
----
-
-## Switches (Launch-Copilot.ps1)
-
-| Flag | Default | What it does |
-|---|---|---|
-| `-AISummary` | off | Generate the AI-authored briefing summary (one premium request per launch when an update is detected) |
-| `-NoUpdate` | off | Skip the explicit `copilot update` invocation. Useful when offline. |
-| `-ConfigPath <path>` | `./config.json` | Use a different config file (e.g. for different projects) |
-| `<extra args>` | — | Anything else is passed through to `copilot` (e.g. `--resume=...`, `--prompt`, `--allow-all`) |
-
----
-
-## Requirements
-
-| Requirement | Why |
-|---|---|
-| **PowerShell 7+** | UTF-8 console, modern CmdletBinding |
-| **Windows** | The keep-alive loader patch and pkg-cache layout are Windows-specific; the briefing flow itself works anywhere PowerShell 7 + Copilot CLI run |
-| **Python 3.x** (`py` or `python` on PATH) | Used by `repair-copilot-sessions.py`. Skipped silently if not present. |
-| **`gh` CLI** *(optional)* | Used for tracked-issue status checks and remote changelog fallback. Skipped silently if not present. |
-| **GitHub Copilot CLI** | The thing you're launching |
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| `copilot update returned unexpected output` | The CLI's update output format changed. Open `Launch-Copilot.ps1`, find `Invoke-CopilotUpdate`, and add a new regex for the observed pattern. |
-| Briefing fires on every launch even when nothing changed | Check `<stateDir>/last-seen-version.txt` — it should contain the current version. Delete it to reset. |
-| AI summary is generic / doesn't reference your project | Edit `agents.md` — the model only knows what's in there. The first AI summary trains the named session; subsequent summaries reuse that context. |
-| Native addon patch not applying | Run as a user that can write to `%LOCALAPPDATA%\copilot\pkg\universal\<version>\native\win32\`. Verify with `Test-Path` on that directory. |
-| Session repair patches a session you're actively using | Active sessions have an `inuse.<pid>.lock` file and are skipped. If yours is corrupt while open, close the CLI first, then re-launch. |
-| Installer says "payload not populated" | The bundled `dist/Install-CopilotLauncher.ps1` was built from an outdated template. Re-run `build-installer.ps1`. |
-
----
+The 2.0 app will detect that install on first run and offer to migrate your settings + shortcuts.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](./LICENSE)

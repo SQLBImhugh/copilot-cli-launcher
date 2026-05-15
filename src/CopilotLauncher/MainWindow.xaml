@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="CopilotLauncher.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:pages="using:CopilotLauncher.Pages"
+    Title="Copilot Launcher">
+
+    <Grid>
+        <muxc:NavigationView
+            x:Name="NavView"
+            PaneDisplayMode="Left"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="True"
+            SelectionChanged="NavView_SelectionChanged">
+
+            <muxc:NavigationView.MenuItems>
+                <muxc:NavigationViewItem Tag="sessions" Content="Sessions">
+                    <muxc:NavigationViewItem.Icon>
+                        <muxc:FontIcon Glyph="&#xE823;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem Tag="saved" Content="Saved Launches">
+                    <muxc:NavigationViewItem.Icon>
+                        <muxc:FontIcon Glyph="&#xE734;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem Tag="new" Content="New Launch">
+                    <muxc:NavigationViewItem.Icon>
+                        <muxc:FontIcon Glyph="&#xE710;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem Tag="briefing" Content="Briefing">
+                    <muxc:NavigationViewItem.Icon>
+                        <muxc:FontIcon Glyph="&#xE7C3;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+            </muxc:NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame" />
+        </muxc:NavigationView>
+    </Grid>
+</Window>

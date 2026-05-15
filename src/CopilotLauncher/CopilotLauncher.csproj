@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinUI 3 / Windows App SDK target. The minimum platform is Windows 10
+         build 17763 (1809), which matches Windows App SDK 1.5+ requirements. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>CopilotLauncher</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- Unpackaged: keeps the app a normal .exe rather than an MSIX. The
+         app self-bootstraps the Windows App SDK runtime via WindowsPackageType=None. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <!-- Unpackaged apps don't need MRT-generated .pri files. Disabling these
+         avoids the build failure from MrtCore.PriGen.targets when building
+         outside Visual Studio (the ExpandPriContent task DLL ships with VS
+         only, not with the dotnet CLI SDK). The targets are gated on
+         AppxGeneratePriEnabled, so flipping it short-circuits the whole flow. -->
+    <AppxGeneratePriEnabled>false</AppxGeneratePriEnabled>
+    <EnableMrtResourceIndexer>false</EnableMrtResourceIndexer>
+    <EnableDefaultPriItems>false</EnableDefaultPriItems>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>CopilotLauncher</AssemblyName>
+    <ApplicationIcon Condition="Exists('Assets/AppIcon.ico')">Assets/AppIcon.ico</ApplicationIcon>
+
+    <!-- Single-file publish settings; flipped on by scripts/build.ps1 -->
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- All testable / UI-independent code lives in CopilotLauncher.Core
+         so it can be built and tested with the .NET 8 SDK alone, without
+         needing the WinUI/AppxPackage MSBuild tasks that ship with VS. -->
+    <ProjectReference Include="..\CopilotLauncher.Core\CopilotLauncher.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+</Project>

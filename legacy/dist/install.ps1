@@ -1,7 +1,7 @@
 # GitHub Copilot CLI Launcher - one-liner bootstrap.
 #
 # Usage:
-#   iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/install.ps1 | iex
+#   iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/legacy/dist/install.ps1 | iex
 #
 # Why this file exists:
 # The bundled installer (Install-CopilotLauncher.ps1) is written with a
@@ -21,7 +21,7 @@
 # the two-liner documented in the README "Quick install" section.
 
 $ErrorActionPreference = 'Stop'
-$installerUrl = 'https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/Install-CopilotLauncher.ps1'
+$installerUrl = 'https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/legacy/dist/Install-CopilotLauncher.ps1'
 $tempPath = Join-Path $env:TEMP 'Install-CopilotLauncher.ps1'
 
 try {

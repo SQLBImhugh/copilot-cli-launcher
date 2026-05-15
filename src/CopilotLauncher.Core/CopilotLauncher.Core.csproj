@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Pure .NET 8 class library — no WinUI dependencies. Holds models,
+         helpers, and services that don't touch UI. Built and tested anywhere
+         .NET 8 SDK is available, including Linux CI runners. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>CopilotLauncher</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="16.2.1" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CopilotLauncher.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="32" Spacing="12">
+            <TextBlock Text="Settings" Style="{StaticResource TitleLargeTextBlockStyle}"/>
+            <TextBlock Text="Phase 0 wires up Storage + About; remaining 6 groups land alongside their dependent features." Opacity="0.7"/>
+
+            <TextBlock Text="Storage" Margin="0,16,0,0" Style="{StaticResource SubtitleTextBlockStyle}"/>
+            <TextBlock x:Name="AppDataPathLabel" Opacity="0.7"/>
+
+            <TextBlock Text="About" Margin="0,16,0,0" Style="{StaticResource SubtitleTextBlockStyle}"/>
+            <TextBlock x:Name="VersionLabel" Opacity="0.7"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

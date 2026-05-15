@@ -1,8 +1,18 @@
-# Local config — copy from config.example.json
-config.json
+# Local config (legacy PS launcher) — copy from config.example.json
+legacy/config.json
+# Local AGENTS.md (legacy PS launcher) — copy from agents.example.md
+legacy/agents.md
 
-# Local AGENTS.md — copy from agents.example.md
-agents.md
+# .NET build artifacts
+bin/
+obj/
+*.user
+.vs/
+*.suo
+
+# Publish output
+dist/CopilotLauncher/
+dist/*.zip
 
 # OS / editor noise
 .DS_Store

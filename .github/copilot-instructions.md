@@ -1,137 +1,160 @@
-# Copilot CLI Launcher
+# Copilot CLI Launcher 2.0 — agent instructions
 
-Windows launcher kit for [GitHub Copilot CLI](https://github.com/github/copilot-cli) that adds auto-update, version-change briefings, AI-authored summaries, session repair, and known-bug workarounds. Distributed as a portable folder + a single-file installer.
+A WinUI 3 desktop app that lists existing GitHub Copilot CLI sessions, lets the user save reusable launches, and centralizes settings (default terminal, AI summary on/off, auto-update behavior, etc.). Replaces the legacy PowerShell launcher kit (now in `legacy/`).
+
+> **For the legacy PowerShell kit**, see [`copilot-instructions-LEGACY.md`](./copilot-instructions-LEGACY.md). Bug-fix patches still land there; new features go to 2.0.
 
 ## Architecture
 
-The repo is **3 user-facing files + 2 build-time files + a generated installer**:
+Three projects, layered:
 
-- **`Launch-Copilot.ps1`** — The wrapper. PowerShell 7+ script that runs on every Copilot CLI launch. Pre-flight pipeline: load config → check tracked GitHub issues for closure → run `copilot update` → apply known-bug workarounds → detect version change → render changelog briefing → optionally generate AI summary → append to history → hand off to `copilot` with passthrough args.
-- **`repair-copilot-sessions.py`** — Standalone Python helper. Walks every session under `~/.copilot/session-state/<uuid>/events.jsonl`, finds tool_use IDs without matching tool.execution_complete (typical cause: Ctrl+C aborted a tool mid-flight), and inserts a synthetic `success: false` completion event. Idempotent. Skips active sessions (lock file present). Backs up `events.jsonl` before mutating.
-- **`config.example.json` + `agents.example.md`** — Templates copied to `config.json` + `agents.md` by the user (or by the installer wizard with substitutions). The two `.example` files ship in the repo; the unsuffixed user copies are gitignored.
-- **`installer-template.ps1` + `build-installer.ps1`** — Build pipeline. The template has `{{LAUNCH_COPILOT_PS1_B64}}`, `{{REPAIR_SESSIONS_PY_B64}}`, etc. placeholders. The build script reads each source file, base64-encodes it, substitutes the placeholders, and writes `dist/Install-CopilotLauncher.ps1` — the single-file distributable.
-- **`dist/Install-CopilotLauncher.ps1`** — The bundled installer (committed to the repo). Self-contained; downloading this one file is sufficient to install the kit. Wizard mode prompts for project name / install dir / shortcut options. Silent mode accepts all params on command line.
+```
+src/CopilotLauncher.Core    pure .NET 8 class library — no WinUI deps
+  ├ Models/                 CopilotSession, SavedLaunch, AppSettings (+ subtypes)
+  ├ Helpers/                ArgQuoter (port of Format-ShortcutArgs from legacy)
+  └ Services/               SettingsService, SessionDiscoveryService, …
+
+src/CopilotLauncher         WinUI 3 / .NET 8 / Windows App SDK 1.6 desktop app
+  ├ App.xaml + MainWindow   NavigationView with 5 tabs + Settings
+  ├ Pages/                  Sessions, SavedLaunches, NewLaunch, Briefing, Settings
+  └ ViewModels/             (added per-phase as features land)
+  References → Core
+
+tests/CopilotLauncher.Tests xUnit, .NET 8
+  References → Core (NOT the WinUI app)
+```
+
+## Why the Core split
+
+The Windows App SDK's `MrtCore.PriGen.targets` requires AppxPackage build tasks that ship with **Visual Studio**, not the .NET CLI SDK. Without VS Build Tools installed, the WinUI 3 csproj can't build at all. By keeping all testable logic in `CopilotLauncher.Core` (a plain .NET 8 class library), tests build and run with just the .NET 8 SDK — important for both fast local iteration and reliable CI.
+
+This is a hard rule:
+
+- ✅ All business logic, models, services, helpers go in **Core**
+- ✅ Pages, view-models, code-behind, XAML → **CopilotLauncher** (WinUI app)
+- ❌ Never put logic that could be unit-tested into the WinUI project; move it to Core
 
 ## File map
 
 ```
-Launch-Copilot.ps1            ← the launcher (no project hardcoding)
-repair-copilot-sessions.py    ← session events.jsonl repair helper
-config.example.json           ← annotated config template
-agents.example.md             ← AGENTS.md template with {ProjectName} placeholder
-installer-template.ps1        ← installer with {{X_B64}} placeholders
-build-installer.ps1           ← bundles source files into dist/
-dist/Install-CopilotLauncher.ps1  ← bundled distributable (regenerate with build-installer.ps1)
-dist/install.ps1              ← BOM-free bootstrap for `iwr | iex` one-liner (NOT generated; edit directly)
-README.md                     ← user-facing docs
-LICENSE                       ← MIT
-.gitignore                    ← excludes config.json, agents.md, OS noise
+src/
+  CopilotLauncher.Core/              ← class library (testable, .NET 8)
+    Models/{CopilotSession,SavedLaunch,AppSettings}.cs
+    Helpers/ArgQuoter.cs             ← port of legacy Format-ShortcutArgs
+    Services/{SettingsService,SessionDiscoveryService}.cs
+  CopilotLauncher/                   ← WinUI 3 app
+    App.xaml(.cs)                    ← DI container, App.Services
+    MainWindow.xaml(.cs)             ← NavigationView shell + Mica backdrop
+    Pages/                           ← five page stubs; pages get real UI per phase
+    app.manifest                     ← PerMonitorV2 DPI awareness
+    CopilotLauncher.csproj
+tests/
+  CopilotLauncher.Tests/             ← xUnit, .NET 8, ProjectReference → Core only
+    {ArgQuoterTests, SessionDiscoveryServiceTests}.cs
+scripts/
+  build.ps1                          ← wraps `dotnet publish` for single-file
+docs/
+  architecture.md                    ← living architecture doc
+.github/
+  workflows/ci.yml                   ← restore + build + test on PR (windows-latest)
+  copilot-instructions.md            ← this file
+  copilot-instructions-LEGACY.md     ← old PS-kit instructions (preserved)
+legacy/                              ← entire 1.x PS launcher, unmodified
+  ├ Launch-Copilot.ps1, New-CopilotShortcut.ps1, installer-template.ps1, …
+  ├ dist/{Install-CopilotLauncher.ps1, install.ps1}
+  └ README-LEGACY.md
+CopilotLauncher.sln
+README.md                            ← top-level user docs (points at 2.0)
+.gitignore                           ← bin/, obj/, dist/, legacy/{config.json,agents.md}
 ```
 
 ## Workflow for changes
 
-After editing **any** of the source files, regenerate the installer so `dist/Install-CopilotLauncher.ps1` stays in sync:
+### Adding a new service
+
+1. Define the interface in `src/CopilotLauncher.Core/Services/IFooService.cs`.
+2. Implement in `FooService.cs` next to it.
+3. Register in `App.xaml.cs::ConfigureServices()` as a singleton (Phase 0 baseline).
+4. Add unit tests in `tests/CopilotLauncher.Tests/FooServiceTests.cs`.
+5. Run `dotnet test tests\CopilotLauncher.Tests\CopilotLauncher.Tests.csproj -c Release` — must stay green.
+6. Use the service from a Page or ViewModel via `App.Services.GetService(typeof(IFooService))!`.
+
+### Adding a new page
+
+1. Add `Pages/FooPage.xaml` + `FooPage.xaml.cs` in the WinUI app.
+2. Add a `<NavigationViewItem Tag="foo" Content="Foo">` entry to `MainWindow.xaml`.
+3. Wire the tag → `typeof(FooPage)` mapping in `MainWindow.xaml.cs::NavView_SelectionChanged`.
+
+### Adding a new setting
+
+1. Add the property to the relevant sub-settings class in `Models/AppSettings.cs`.
+2. Use `[ObservableProperty]` on the SettingsViewModel (when VMs land).
+3. Add a `SettingsCard` to `Pages/SettingsPage.xaml` bound to the property.
+4. The `SettingsService` writes/reads the entire `AppSettings` object as JSON; no extra serialization wiring needed.
+
+### Building locally
 
 ```powershell
-pwsh build-installer.ps1
-git add -A
-git commit -m "..."
+# Tests + Core (always works with .NET 8 SDK)
+dotnet test tests\CopilotLauncher.Tests\CopilotLauncher.Tests.csproj -c Release
+
+# Full app (requires VS 2022 or VS Build Tools with Windows app workload)
+pwsh scripts\build.ps1
 ```
 
-The build script verifies all `{{X}}` placeholders were substituted and warns if any remain.
-
-To smoke-test the installer end-to-end without affecting your real install:
-
-```powershell
-$test = "$env:TEMP\copilot-launcher-test"
-Remove-Item -Recurse -Force $test -ErrorAction SilentlyContinue
-pwsh dist\Install-CopilotLauncher.ps1 `
-    -Silent -InstallDir $test -ProjectName "TestProj" `
-    -StateDir "$test\state" -NoDesktopShortcut
-# Verify files written, then:
-Remove-Item -Recurse -Force $test
-```
+CI (`.github/workflows/ci.yml`) runs on `windows-latest` which has VS Build Tools preinstalled — the full solution builds and tests on every PR.
 
 ## Coding conventions
 
-### PowerShell
+### C#
 
-- **PowerShell 7+** target. Don't rely on Windows PowerShell 5.1 quirks.
-- Use `[CmdletBinding()]` and typed `param()` blocks at the top of every script and function.
-- Force UTF-8 console encoding at script start (`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`) so em-dashes and emoji from AI summaries render correctly instead of mojibake (`Γçö` for `—`).
-- Function naming: `Verb-Noun` (PascalCase), prefer approved verbs (`Get-`, `Set-`, `Test-`, `Invoke-`, `Repair-`, `New-`).
-- Helper functions live above `# ---------- main ----------` in `Launch-Copilot.ps1`. Code below that line runs at top level — keep it linear and readable.
-- For `[Nullable[bool]]` parameters, prefer `[switch]` + `$PSBoundParameters.ContainsKey('X')` checks. Nullable bools don't survive the child-process boundary cleanly when invoked via `pwsh -File ...`.
-- Color conventions: `DarkGray` for diagnostic chatter, `DarkYellow` for non-fatal warnings, `Green` for success/state-change, `Yellow` for "needs attention", `Cyan/Magenta` for section headers.
-- Idempotency is mandatory. Every `Repair-*` function must be a no-op when nothing needs fixing, must back up before mutating, and must log only when it actually changed something.
+- **C# 12** with `<Nullable>enable</Nullable>` and `<ImplicitUsings>enable</ImplicitUsings>`.
+- File-scoped namespaces (`namespace CopilotLauncher.Services;`).
+- One public class per file.
+- Use `required` for non-nullable model properties that must be initialized at construction.
+- For services, `internal` test-only constructors (e.g. for path overrides) — use `BindingFlags.NonPublic` + reflection in tests rather than making things public.
 
-### Python
+### XAML
 
-- Single-file scripts only (no packages). Each script is invoked as `py -3 script.py` from PowerShell.
-- Standard library only — no pip dependencies. The launcher needs to work on a vanilla Windows machine with just Python installed.
-- Use `from __future__ import annotations` for modern type hints on Python 3.9+.
-- Never raise unhandled exceptions to the caller. Failures should print a clear message to stderr and return a sensible exit code (0 = no-op or success, nonzero = hard error). The launcher swallows the script's output and continues regardless — silent failure is preferable to crashing the launch.
+- One Page per `.xaml` + `.xaml.cs` pair. Code-behind is `InitializeComponent()` and trivial event-to-VM wiring only.
+- Prefer `x:Bind` with `Mode=OneWay` over `Binding`. Faster, type-checked at compile time.
+- Use built-in styles: `TitleLargeTextBlockStyle`, `SubtitleTextBlockStyle`, `BodyTextBlockStyle`, `CaptionTextBlockStyle`.
+- Glyph icons from Segoe Fluent Icons; Mica backdrop applied once in `MainWindow.xaml.cs` ctor.
 
-### Markdown
+### Settings
 
-- The user-facing `README.md` is the source of truth for setup. Keep it current with any UX changes.
-- The `agents.example.md` template uses `{ProjectName}` as the only placeholder. The installer substitutes this when generating the user's `agents.md`. The launcher also substitutes it at runtime if the user edits the file directly.
+- Settings persist as `%LOCALAPPDATA%\CopilotLauncher\settings.json` via atomic write (write `.tmp` then `File.Replace`).
+- A corrupt JSON triggers a `.corrupt-<timestamp>` backup + reset to defaults. Never silently overwrite without a backup.
+- Default values live on the model property declarations in `AppSettings.cs`, not in `SettingsService`. Single source of truth.
 
-## Testing approach
+### Sessions
 
-Manual smoke tests are the standard. There's no automated test suite — the launcher is interactive and Copilot CLI's behavior changes between versions, so the cost of maintaining tests against a moving target is higher than the value.
+- Session metadata source of truth is `~/.copilot/session-state/<uuid>/workspace.yaml`. Don't parse `events.jsonl` for metadata — it can be 100s of MB.
+- Active sessions are detected by sibling `inuse.*.lock` files. Never modify or repair a locked session.
 
-When you make a change, run **both** of these before committing:
+## Testing
 
-1. **Direct launcher test** — verifies the script itself works:
-   ```powershell
-   pwsh -NoProfile -File Launch-Copilot.ps1 -NoUpdate --version
-   ```
-   Should print the bridge messages, then `GitHub Copilot CLI X.Y.Z.`, then exit cleanly.
+### Unit (xUnit, runs in CI)
 
-2. **Installer roundtrip test** — verifies the bundled installer extracts and runs correctly:
-   ```powershell
-   pwsh build-installer.ps1
-   $test = "$env:TEMP\copilot-launcher-test"
-   pwsh dist\Install-CopilotLauncher.ps1 -Silent -InstallDir $test `
-       -ProjectName "Test" -StateDir "$test\state" -NoDesktopShortcut
-   pwsh "$test\Launch-Copilot.ps1" -NoUpdate --version
-   Remove-Item -Recurse -Force $test
-   ```
+- Each service that has side effects beyond a getter gets a `*Tests.cs` companion.
+- Use `Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid())` for per-test temp directories. Implement `IDisposable` to clean up.
+- For services with default ctors that read from `%USERPROFILE%`, expose an `internal` ctor that takes the root path. Construct via reflection in tests so production code stays clean.
 
-Verify any new `Repair-*` function with both code paths (file present → no-op, file absent → patches and logs).
+### Manual smoke (per phase)
 
-## Distribution
+Documented in the session plan.md and run before each phase commit.
 
-The installer is published in the repo at `dist/Install-CopilotLauncher.ps1`. Direct raw download URL:
+## Known patterns to preserve (carried from legacy)
 
-```
-https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/Install-CopilotLauncher.ps1
-```
-
-Peers download that one file and run it with `pwsh -ExecutionPolicy Bypass -File .\Install-CopilotLauncher.ps1`. The wizard handles everything else.
-
-For the **one-liner web install** (`iwr -useb .../dist/install.ps1 | iex`), there is a separate tiny bootstrap at `dist/install.ps1`. **Why two files**: the bundled installer is written with a UTF-8 BOM (added in commit `b919961` to fix Windows PowerShell 5.1 mojibake on em-dashes/emoji). PowerShell's `iex` does not strip a leading U+FEFF from a string it is asked to evaluate, so piping the bundled installer through `iwr | iex` (or `iex "& { $(irm URL) } -args"`) breaks with `Missing argument in parameter list`. The bootstrap is plain ASCII (no BOM), no `param()` block, downloads the bundled installer to `$env:TEMP`, and invokes it via `& $tempPath` so PowerShell's normal file-execution path handles the BOM correctly. Don't add a BOM to `dist/install.ps1` and don't add user-visible non-ASCII text to it. If you ever need to update the bootstrap's URL or behavior, edit it directly — it isn't generated by `build-installer.ps1`.
-
-When releasing a new version:
-
-1. Edit source files
-2. Run `pwsh build-installer.ps1` to regenerate `dist/`
-3. Bump any version reference in `README.md` if the UX changed
-4. Commit with a descriptive message; the bundled installer ships in the same commit as the source changes (one source of truth per commit)
-5. Optionally tag with `git tag vX.Y.Z && git push --tags` if the change is user-facing
-
-## Known patterns to preserve
-
-- **`copilot update` output parsing**: The CLI emits either `"No update needed, current version is X.Y.Z, ..."` or `"Copilot CLI version X.Y.Z installed."`. Both patterns are matched in `Invoke-CopilotUpdate`. If GitHub changes the output format, add a new regex branch and surface unrecognized output as a warning (we already do this).
-- **Tracked-issue caching**: `Test-CopilotCliIssueClosed` caches the GitHub API response for 24 hours in `<stateDir>/issue-<N>-status.json`. Don't lower the TTL — there's no benefit to hitting the API more than daily, and `gh` rate limits matter on shared workstations.
-- **Session lock detection**: `repair-copilot-sessions.py` skips sessions with `inuse.*.lock` files. Never try to repair an active session — the live writer would race with our patcher.
-- **Windows-only assumptions**: `Repair-Win32NativeAddon` writes to `%LOCALAPPDATA%\copilot\pkg\universal\<version>\native\win32\`. This path is Windows-specific; the function early-returns if the directory doesn't exist (so the launcher works on macOS/Linux too, just without the keep-alive workaround).
+- **`copilot.cmd` resolution for `Process.Start`** — npm on Windows ships `copilot`, `copilot.cmd`, and `copilot.ps1`. `Get-Command copilot` may resolve the `.ps1`, which `Process.Start` cannot run. The C# port (when added in Phase 1+) must look for the `.cmd` sibling first. See `legacy/Launch-Copilot.ps1::Resolve-CopilotProcessTarget` for the well-tested logic.
+- **DateTime auto-deserialization in changelog API** — GitHub Releases API `published_at` field auto-deserializes to `DateTime`, not `string`. The C# port must use `.ToString("yyyy-MM-dd")`, not `.Substring(0, 10)`.
+- **PowerShell parameter naming gotcha** — `$Args` is a reserved automatic variable. Carried-over PS code must use `$Arguments` or another name.
+- **UTF-8 BOM on .ps1 files invoked under PS 5.1** — preserved in `legacy/dist/install.ps1` (no BOM, ASCII-only) vs `legacy/dist/Install-CopilotLauncher.ps1` (BOM-bearing). If the new app ever ships PS scripts, follow the same rule.
 
 ## Upstream issues to watch
 
 | Issue | Why it matters |
 |---|---|
-| [github/copilot-cli#3298](https://github.com/github/copilot-cli/issues/3298) | The keep-alive `native/win32/index.js` loader regression. When closed and the fix ships, the launcher's banner will tell the user to remove `Repair-Win32NativeAddon` from their setup. |
+| [github/copilot-cli#3298](https://github.com/github/copilot-cli/issues/3298) | The Win32 keep-alive `native/win32/index.js` loader regression. The KnownBugWorkaroundService (Phase 4) ports the legacy fix; auto-disables when issue closes via the daily-cached `gh` API check. |
 
-When upstream closes a tracked issue and the fix actually ships in a new CLI version, remove the corresponding `Repair-*` function from `Launch-Copilot.ps1` and the issue from the default `trackedIssues` list in `config.example.json`. Update the README's troubleshooting table accordingly.
+When upstream closes a tracked issue and the fix actually ships, remove the corresponding workaround from `KnownBugWorkaroundService` and from the default `TrackedGitHubIssues` list in `RepairSettings`. Update `legacy/Launch-Copilot.ps1` similarly so the legacy kit stays in sync.
