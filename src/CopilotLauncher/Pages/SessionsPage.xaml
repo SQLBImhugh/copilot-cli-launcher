@@ -120,11 +120,26 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Spacing="4">
+                            <!-- User-named session: bold subtitle -->
                             <TextBlock Text="{x:Bind Title}"
                                        Style="{StaticResource SubtitleTextBlockStyle}"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"
-                                       Visibility="{x:Bind HasName, Converter={StaticResource BoolToVisibility}}"/>
+                                       Visibility="{x:Bind HasUserName, Converter={StaticResource BoolToVisibility}}"/>
+
+                            <!-- Auto-generated name: regular weight, with caption -->
+                            <TextBlock Text="{x:Bind Title}"
+                                       Style="{StaticResource SubtitleTextBlockStyle}"
+                                       FontWeight="Normal"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{x:Bind HasAutoName, Converter={StaticResource BoolToVisibility}}"/>
+                            <TextBlock Text="{x:Bind AutoNameDescription}"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Opacity="0.55"
+                                       FontStyle="Italic"
+                                       Margin="0,-2,0,0"
+                                       Visibility="{x:Bind HasAutoName, Converter={StaticResource BoolToVisibility}}"/>
+
                             <TextBlock Text="{x:Bind Cwd}"
                                        Opacity="{x:Bind CwdOpacity}"
                                        Style="{StaticResource BodyTextBlockStyle}"

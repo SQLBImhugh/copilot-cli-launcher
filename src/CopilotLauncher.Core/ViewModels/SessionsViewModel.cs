@@ -270,22 +270,29 @@ public sealed class SessionRow
     public required string ShortId { get; init; }
 
     /// <summary>
-    /// User-given name. EMPTY when the session is unnamed — we deliberately
-    /// don't fall back to the cwd-leaf here because that creates ambiguity
-    /// when several anonymous sessions share a project folder (the real
-    /// named session and the anonymous ones would all look identical).
+    /// Display title:
+    /// - User-given name (when <see cref="UserNamed"/> = true), shown bold
+    /// - Copilot's auto-generated name from the first prompt, shown regular weight
+    /// - Empty when no name field at all (very rare; brand-new session)
+    /// Long auto names are truncated for display.
     /// </summary>
     public required string Title { get; init; }
 
-    /// <summary>True when <see cref="Title"/> reflects a real --name / /rename. Drives Title visibility.</summary>
-    public bool HasName { get; init; }
+    /// <summary>True when <see cref="Title"/> is the user's deliberate --name / /rename. Bold.</summary>
+    public bool HasUserName { get; init; }
+
+    /// <summary>True when <see cref="Title"/> is Copilot's auto-summary (not user-named). Regular weight + caption.</summary>
+    public bool HasAutoName { get; init; }
+
+    /// <summary>Caption line under an auto-name explaining where it came from.</summary>
+    public string AutoNameDescription { get; init; } = "Auto-summary by Copilot from the first prompt — not an official name";
 
     /// <summary>Full working directory path; subtitle under the title.</summary>
     public required string Cwd { get; init; }
 
-    /// <summary>Opacity for the Cwd TextBlock — full when there's no name (cwd is the visual anchor),
-    /// dimmed when a bold name is showing above it.</summary>
-    public double CwdOpacity => HasName ? 0.7 : 1.0;
+    /// <summary>Opacity for the Cwd TextBlock — full when no name shows above it,
+    /// dimmed when something occupies the title slot.</summary>
+    public double CwdOpacity => (HasUserName || HasAutoName) ? 0.7 : 1.0;
 
     public required string RepoBranch { get; init; }
     public required string LastOpenedDisplay { get; init; }
@@ -301,19 +308,25 @@ public sealed class SessionRow
         else if (s.SummaryCount > 0) tags.Add($"{s.SummaryCount} summaries");
         if (s.SizeBytes > 0) tags.Add(FormatBytes(s.SizeBytes));
 
-        // Title is the actual user-given name, or empty if unnamed. Do NOT fall
-        // back to cwd-leaf or short-id — that creates a misleading bold title
-        // that looks like a real name. Unnamed sessions show nothing in the
-        // title slot; the Cwd line takes visual prominence instead.
-        var hasName = s.UserNamed && !string.IsNullOrWhiteSpace(s.Name);
-        var title = hasName ? s.Name! : string.Empty;
+        // Title resolution:
+        //   user_named=true,  name set  -> bold (HasUserName)
+        //   user_named=false, name set  -> regular weight (HasAutoName) — Copilot
+        //                                  auto-generates the name field after the
+        //                                  first user prompt; treat as soft hint.
+        //   no name at all              -> empty title; cwd takes visual prominence.
+        var rawName = s.Name;
+        var hasAnyName = !string.IsNullOrWhiteSpace(rawName);
+        var hasUserName = s.UserNamed && hasAnyName;
+        var hasAutoName = !s.UserNamed && hasAnyName;
+        var title = hasAnyName ? CleanForDisplay(rawName!, maxLen: hasAutoName ? 90 : 120) : string.Empty;
 
         return new SessionRow
         {
             SessionId = s.Id,
             ShortId = s.Id.Length >= 8 ? s.Id[..8] : s.Id,
             Title = title,
-            HasName = hasName,
+            HasUserName = hasUserName,
+            HasAutoName = hasAutoName,
             Cwd = string.IsNullOrEmpty(s.Cwd) ? "(unknown working dir)" : s.Cwd,
             RepoBranch = string.IsNullOrEmpty(s.Repository)
                 ? "(no git repo)"
@@ -341,5 +354,26 @@ public sealed class SessionRow
         if (bytes >= 1L << 20) return $"{bytes / (double)(1L << 20):F0} MB";
         if (bytes >= 1L << 10) return $"{bytes / (double)(1L << 10):F0} KB";
         return $"{bytes} B";
+    }
+
+    /// <summary>
+    /// Sanitize a title for single-line display: collapse newlines/tabs to
+    /// spaces, trim trailing whitespace, truncate to <paramref name="maxLen"/>
+    /// with an ellipsis. Auto-generated names from Copilot can be entire
+    /// prompt prefixes hundreds of characters long.
+    /// </summary>
+    private static string CleanForDisplay(string s, int maxLen)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        var cleaned = s
+            .Replace("\r", " ")
+            .Replace("\n", " ")
+            .Replace("\t", " ")
+            .Trim();
+        // Collapse runs of spaces.
+        while (cleaned.Contains("  ")) cleaned = cleaned.Replace("  ", " ");
+        if (cleaned.Length > maxLen)
+            cleaned = cleaned[..maxLen].TrimEnd() + "…";
+        return cleaned;
     }
 }
