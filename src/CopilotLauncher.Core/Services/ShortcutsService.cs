@@ -3,18 +3,18 @@ using CopilotLauncher.Models;
 
 namespace CopilotLauncher.Services;
 
-public interface ISavedLaunchesService
+public interface IShortcutsService
 {
     string FilePath { get; }
-    IReadOnlyList<SavedLaunch> All { get; }
+    IReadOnlyList<Shortcut> All { get; }
     void Reload();
-    void Add(SavedLaunch launch);
-    void Update(SavedLaunch launch);
+    void Add(Shortcut launch);
+    void Update(Shortcut launch);
     void Remove(string id);
-    SavedLaunch? GetById(string id);
+    Shortcut? GetById(string id);
 }
 
-public sealed class SavedLaunchesService : ISavedLaunchesService
+public sealed class ShortcutsService : IShortcutsService
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -23,16 +23,16 @@ public sealed class SavedLaunchesService : ISavedLaunchesService
     };
 
     public string FilePath { get; }
-    private List<SavedLaunch> _items = new();
-    public IReadOnlyList<SavedLaunch> All => _items;
+    private List<Shortcut> _items = new();
+    public IReadOnlyList<Shortcut> All => _items;
 
-    public SavedLaunchesService()
+    public ShortcutsService()
         : this(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CopilotLauncher", "launches.json")) { }
+            "CopilotLauncher", "shortcuts.json")) { }
 
     /// <summary>Test-only ctor.</summary>
-    internal SavedLaunchesService(string filePath)
+    internal ShortcutsService(string filePath)
     {
         FilePath = filePath;
         Reload();
@@ -40,9 +40,27 @@ public sealed class SavedLaunchesService : ISavedLaunchesService
 
     public void Reload()
     {
+        // One-time migration: the file used to be called launches.json before
+        // we renamed the entity from "Launch" to "Shortcut". If the new path
+        // doesn't exist but the legacy one does, rename it in place so the
+        // user keeps their saved entries across the rename.
         if (!File.Exists(FilePath))
         {
-            _items = new List<SavedLaunch>();
+            var dir = Path.GetDirectoryName(FilePath);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                var legacyPath = Path.Combine(dir, "launches.json");
+                if (File.Exists(legacyPath))
+                {
+                    try { File.Move(legacyPath, FilePath); }
+                    catch { /* fall through to empty-list path */ }
+                }
+            }
+        }
+
+        if (!File.Exists(FilePath))
+        {
+            _items = new List<Shortcut>();
             return;
         }
 
@@ -67,7 +85,7 @@ public sealed class SavedLaunchesService : ISavedLaunchesService
 
         try
         {
-            _items = JsonSerializer.Deserialize<List<SavedLaunch>>(json, JsonOpts) ?? new List<SavedLaunch>();
+            _items = JsonSerializer.Deserialize<List<Shortcut>>(json, JsonOpts) ?? new List<Shortcut>();
         }
         catch (JsonException)
         {
@@ -84,17 +102,17 @@ public sealed class SavedLaunchesService : ISavedLaunchesService
             {
                 // Best effort backup; if even that fails, proceed with reset.
             }
-            _items = new List<SavedLaunch>();
+            _items = new List<Shortcut>();
         }
     }
 
-    public void Add(SavedLaunch launch)
+    public void Add(Shortcut launch)
     {
         _items.Add(launch);
         SaveAtomic();
     }
 
-    public void Update(SavedLaunch launch)
+    public void Update(Shortcut launch)
     {
         var idx = _items.FindIndex(x => x.Id == launch.Id);
         if (idx < 0) throw new KeyNotFoundException($"No launch with id={launch.Id}");
@@ -109,7 +127,7 @@ public sealed class SavedLaunchesService : ISavedLaunchesService
         SaveAtomic();
     }
 
-    public SavedLaunch? GetById(string id) => _items.FirstOrDefault(x => x.Id == id);
+    public Shortcut? GetById(string id) => _items.FirstOrDefault(x => x.Id == id);
 
     private void SaveAtomic()
     {

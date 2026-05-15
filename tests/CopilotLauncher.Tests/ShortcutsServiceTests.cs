@@ -4,16 +4,16 @@ using Xunit;
 
 namespace CopilotLauncher.Tests;
 
-public class SavedLaunchesServiceTests : IDisposable
+public class ShortcutsServiceTests : IDisposable
 {
     private readonly string _tmpDir;
     private readonly string _filePath;
 
-    public SavedLaunchesServiceTests()
+    public ShortcutsServiceTests()
     {
         _tmpDir = Path.Combine(Path.GetTempPath(), "copilot-launcher-saved-tests-" + Guid.NewGuid());
         Directory.CreateDirectory(_tmpDir);
-        _filePath = Path.Combine(_tmpDir, "launches.json");
+        _filePath = Path.Combine(_tmpDir, "shortcuts.json");
     }
 
     public void Dispose()
@@ -100,7 +100,7 @@ public class SavedLaunchesServiceTests : IDisposable
         var svc = NewSvc();
         Assert.Empty(svc.All);
         // A backup file should exist.
-        Assert.NotEmpty(Directory.GetFiles(_tmpDir, "launches.json.corrupt-*"));
+        Assert.NotEmpty(Directory.GetFiles(_tmpDir, "shortcuts.json.corrupt-*"));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class SavedLaunchesServiceTests : IDisposable
     {
         // Setup: create a service with valid data loaded.
         var svc = NewSvc();
-        svc.Add(new SavedLaunch { Id = "x", Label = "important", WorkingDirectory = @"C:\proj" });
+        svc.Add(new Shortcut { Id = "x", Label = "important", WorkingDirectory = @"C:\proj" });
         Assert.Single(svc.All);
 
         // Now corrupt-file path: open the underlying file with FileShare.None
@@ -123,18 +123,18 @@ public class SavedLaunchesServiceTests : IDisposable
         // only for actually-corrupt JSON).
         Assert.Single(svc.All);
         Assert.Equal("important", svc.All[0].Label);
-        Assert.Empty(Directory.GetFiles(_tmpDir, "launches.json.corrupt-*"));
+        Assert.Empty(Directory.GetFiles(_tmpDir, "shortcuts.json.corrupt-*"));
     }
 
-    private SavedLaunchesService NewSvc()
+    private ShortcutsService NewSvc()
     {
-        var ctor = typeof(SavedLaunchesService)
+        var ctor = typeof(ShortcutsService)
             .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
                             null, new[] { typeof(string) }, null);
-        return (SavedLaunchesService)ctor!.Invoke(new object[] { _filePath });
+        return (ShortcutsService)ctor!.Invoke(new object[] { _filePath });
     }
 
-    private static SavedLaunch NewLaunch(string label) => new()
+    private static Shortcut NewLaunch(string label) => new()
     {
         Id = Guid.NewGuid().ToString(),
         Label = label,

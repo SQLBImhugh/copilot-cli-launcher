@@ -7,14 +7,14 @@ using CopilotLauncher.ViewModels;
 
 namespace CopilotLauncher.Pages;
 
-public sealed partial class SavedLaunchesPage : Page
+public sealed partial class ShortcutsPage : Page
 {
-    public SavedLaunchesViewModel ViewModel { get; }
+    public ShortcutsViewModel ViewModel { get; }
 
-    public SavedLaunchesPage()
+    public ShortcutsPage()
     {
-        ViewModel = new SavedLaunchesViewModel(
-            App.Services.GetRequiredService<ISavedLaunchesService>(),
+        ViewModel = new ShortcutsViewModel(
+            App.Services.GetRequiredService<IShortcutsService>(),
             App.Services.GetRequiredService<ILaunchService>(),
             App.Services.GetRequiredService<ITerminalDiscoveryService>(),
             App.Services.GetRequiredService<ISettingsService>());
@@ -24,13 +24,13 @@ public sealed partial class SavedLaunchesPage : Page
 
     private void OnLaunchClick(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is SavedLaunch entry)
+        if (sender is Button btn && btn.Tag is Shortcut entry)
             ViewModel.LaunchOne(entry);
     }
 
     private void OnDeleteClick(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is SavedLaunch entry)
+        if (sender is Button btn && btn.Tag is Shortcut entry)
             ViewModel.Delete(entry);
     }
 }

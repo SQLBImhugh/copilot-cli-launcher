@@ -9,14 +9,14 @@ using CopilotLauncher.ViewModels;
 
 namespace CopilotLauncher.Pages;
 
-public sealed partial class NewLaunchPage : Page
+public sealed partial class NewShortcutPage : Page
 {
-    public NewLaunchViewModel ViewModel { get; }
+    public NewShortcutViewModel ViewModel { get; }
 
-    public NewLaunchPage()
+    public NewShortcutPage()
     {
-        ViewModel = new NewLaunchViewModel(
-            App.Services.GetRequiredService<ISavedLaunchesService>(),
+        ViewModel = new NewShortcutViewModel(
+            App.Services.GetRequiredService<IShortcutsService>(),
             App.Services.GetRequiredService<ILaunchService>(),
             App.Services.GetRequiredService<ITerminalDiscoveryService>(),
             App.Services.GetRequiredService<ISettingsService>());
@@ -28,10 +28,10 @@ public sealed partial class NewLaunchPage : Page
 
     private void ConsumePendingHandoff()
     {
-        if (NewLaunchHandoff.Pending is { } payload)
+        if (NewShortcutHandoff.Pending is { } payload)
         {
             ViewModel.PopulateFrom(payload.SuggestedLabel, payload.WorkingDirectory, payload.ResumeId);
-            NewLaunchHandoff.Pending = null;
+            NewShortcutHandoff.Pending = null;
         }
     }
 

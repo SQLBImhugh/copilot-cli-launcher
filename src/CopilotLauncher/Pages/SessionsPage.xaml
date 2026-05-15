@@ -163,7 +163,7 @@
                                     Tag="{x:Bind}"
                                     Click="OnResumeClick"
                                     HorizontalAlignment="Stretch"/>
-                            <Button Content="Save as launch…"
+                            <Button Content="Save as shortcut…"
                                     Tag="{x:Bind}"
                                     Click="OnSaveAsLaunchClick"
                                     HorizontalAlignment="Stretch"/>

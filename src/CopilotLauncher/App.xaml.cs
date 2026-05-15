@@ -28,7 +28,7 @@ public partial class App : Application
         services.AddSingleton<ISessionDiscoveryService, SessionDiscoveryService>();
         services.AddSingleton<ITerminalDiscoveryService, TerminalDiscoveryService>();
         services.AddSingleton<ILaunchService, LaunchService>();
-        services.AddSingleton<ISavedLaunchesService, SavedLaunchesService>();
+        services.AddSingleton<IShortcutsService, ShortcutsService>();
         services.AddSingleton<ISessionRepairService, SessionRepairService>();
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
         services.AddSingleton<IBriefingService, BriefingService>();

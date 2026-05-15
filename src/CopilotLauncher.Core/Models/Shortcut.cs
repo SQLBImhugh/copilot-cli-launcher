@@ -1,10 +1,10 @@
 namespace CopilotLauncher.Models;
 
 /// <summary>
-/// User-defined launch shortcut stored in launches.json.
-/// Each entry is one row in the Saved Launches tab.
+/// User-defined launch shortcut stored in shortcuts.json.
+/// Each entry is one row in the Shortcuts tab.
 /// </summary>
-public sealed class SavedLaunch
+public sealed class Shortcut
 {
     public required string Id { get; init; }              // GUID
     public required string Label { get; set; }

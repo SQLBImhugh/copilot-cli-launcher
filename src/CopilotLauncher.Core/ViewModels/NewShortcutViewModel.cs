@@ -7,19 +7,19 @@ using CopilotLauncher.Services;
 namespace CopilotLauncher.ViewModels;
 
 /// <summary>
-/// ViewModel for the New Launch wizard. Holds form state, computes a live
-/// command-line preview, and persists the result via <see cref="ISavedLaunchesService"/>
+/// ViewModel for the New Shortcut wizard. Holds form state, computes a live
+/// command-line preview, and persists the result via <see cref="IShortcutsService"/>
 /// (with optional immediate spawn through <see cref="ILaunchService"/>).
 /// </summary>
-public sealed class NewLaunchViewModel : INotifyPropertyChanged
+public sealed class NewShortcutViewModel : INotifyPropertyChanged
 {
-    private readonly ISavedLaunchesService _store;
+    private readonly IShortcutsService _store;
     private readonly ILaunchService _launch;
     private readonly ITerminalDiscoveryService _terminals;
     private readonly ISettingsService _settings;
 
-    public NewLaunchViewModel(
-        ISavedLaunchesService store,
+    public NewShortcutViewModel(
+        IShortcutsService store,
         ILaunchService launch,
         ITerminalDiscoveryService terminals,
         ISettingsService settings)
@@ -135,15 +135,15 @@ public sealed class NewLaunchViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>Save the form as a SavedLaunch entry. Returns the new entry, or null if invalid.</summary>
-    public SavedLaunch? Save()
+    /// <summary>Save the form as a Shortcut entry. Returns the new entry, or null if invalid.</summary>
+    public Shortcut? Save()
     {
         if (!CanSave)
         {
             StatusMessage = "Label and working directory are required.";
             return null;
         }
-        var entry = new SavedLaunch
+        var entry = new Shortcut
         {
             Id = Guid.NewGuid().ToString(),
             Label = _label.Trim(),
@@ -190,7 +190,7 @@ public sealed class NewLaunchViewModel : INotifyPropertyChanged
         StatusMessage = "Form reset.";
     }
 
-    /// <summary>Pre-populate the form from an existing CopilotSession (the 'Save as launch…' flow).</summary>
+    /// <summary>Pre-populate the form from an existing CopilotSession (the 'Save as shortcut…' flow).</summary>
     public void PopulateFrom(string suggestedLabel, string workingDir, string? resumeId = null)
     {
         Label = suggestedLabel ?? string.Empty;

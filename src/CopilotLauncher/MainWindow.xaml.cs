@@ -101,18 +101,18 @@ public sealed partial class MainWindow : Window
         {
             var page = tag switch
             {
-                "sessions" => typeof(SessionsPage),
-                "saved"    => typeof(SavedLaunchesPage),
-                "new"      => typeof(NewLaunchPage),
-                "briefing" => typeof(BriefingPage),
-                _          => typeof(SessionsPage),
+                "sessions"    => typeof(SessionsPage),
+                "shortcuts"   => typeof(ShortcutsPage),
+                "newshortcut" => typeof(NewShortcutPage),
+                "briefing"    => typeof(BriefingPage),
+                _             => typeof(SessionsPage),
             };
             ContentFrame.Navigate(page);
         }
     }
 
     /// <summary>Programmatically switch to the tab with the given Tag value
-    /// (e.g. "new" for New Launch). Triggers the existing SelectionChanged
+    /// (e.g. "new" for New Shortcut). Triggers the existing SelectionChanged
     /// handler so the Frame navigates and the nav item highlights together.</summary>
     public void NavigateToTab(string tag)
     {

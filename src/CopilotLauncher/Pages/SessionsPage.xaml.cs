@@ -55,16 +55,16 @@ public sealed partial class SessionsPage : Page
             if (string.IsNullOrWhiteSpace(label)) label = row.ShortId;
         }
 
-        NewLaunchHandoff.Pending = new NewLaunchPayload(
+        NewShortcutHandoff.Pending = new NewShortcutPayload(
             SuggestedLabel: label,
             WorkingDirectory: row.Cwd,
             ResumeId: row.SessionId);
 
-        // Switch to the New Launch tab; its Loaded handler picks up the
+        // Switch to the New Shortcut tab; its Loaded handler picks up the
         // pending payload and pre-populates the form.
         if (Application.Current is App app && app.MainWindowOrNull is MainWindow mw)
         {
-            mw.NavigateToTab("new");
+            mw.NavigateToTab("newshortcut");
         }
     }
 

@@ -7,18 +7,18 @@ using CopilotLauncher.Services;
 namespace CopilotLauncher.ViewModels;
 
 /// <summary>
-/// ViewModel for the Saved Launches page. Wraps <see cref="ISavedLaunchesService"/>
+/// ViewModel for the Shortcuts page. Wraps <see cref="IShortcutsService"/>
 /// + <see cref="ILaunchService"/> behind an ObservableCollection so the UI updates
 /// when entries are added / removed.
 /// </summary>
-public sealed class SavedLaunchesViewModel : INotifyPropertyChanged
+public sealed class ShortcutsViewModel : INotifyPropertyChanged
 {
-    private readonly ISavedLaunchesService _store;
+    private readonly IShortcutsService _store;
     private readonly ILaunchService _launch;
     private readonly ITerminalDiscoveryService _terminals;
     private readonly ISettingsService _settings;
 
-    public ObservableCollection<SavedLaunch> Items { get; } = new();
+    public ObservableCollection<Shortcut> Items { get; } = new();
 
     private string _statusMessage = string.Empty;
     public string StatusMessage
@@ -27,8 +27,8 @@ public sealed class SavedLaunchesViewModel : INotifyPropertyChanged
         private set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
     }
 
-    public SavedLaunchesViewModel(
-        ISavedLaunchesService store,
+    public ShortcutsViewModel(
+        IShortcutsService store,
         ILaunchService launch,
         ITerminalDiscoveryService terminals,
         ISettingsService settings)
@@ -48,18 +48,18 @@ public sealed class SavedLaunchesViewModel : INotifyPropertyChanged
             foreach (var l in _store.All) Items.Add(l);
             StatusMessage = Items.Count switch
             {
-                0 => "No saved launches yet. Use the New Launch tab (or 'Save as launch…' on a session card) to add one.",
-                1 => "1 saved launch.",
-                _ => $"{Items.Count} saved launches.",
+                0 => "No saved shortcuts yet. Use the New Shortcut tab (or 'Save as shortcut…' on a session card) to add one.",
+                1 => "1 saved shortcut.",
+                _ => $"{Items.Count} saved shortcuts.",
             };
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Failed to load launches.json: {ex.Message}";
+            StatusMessage = $"Failed to load shortcuts.json: {ex.Message}";
         }
     }
 
-    public bool LaunchOne(SavedLaunch entry)
+    public bool LaunchOne(Shortcut entry)
     {
         try
         {
@@ -83,7 +83,7 @@ public sealed class SavedLaunchesViewModel : INotifyPropertyChanged
         }
     }
 
-    public void Delete(SavedLaunch entry)
+    public void Delete(Shortcut entry)
     {
         _store.Remove(entry.Id);
         Items.Remove(entry);
