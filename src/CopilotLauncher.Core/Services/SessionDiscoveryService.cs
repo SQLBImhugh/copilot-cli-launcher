@@ -74,6 +74,8 @@ public sealed class SessionDiscoveryService : ISessionDiscoveryService
             Id           = folderInfo.Name,
             FolderPath   = folder,
             LastModified = folderInfo.LastWriteTimeUtc,
+            Name         = NullIfEmpty(dict.GetValueOrDefault("name")),
+            Summary      = NullIfEmpty(dict.GetValueOrDefault("summary")),
             Cwd          = dict.GetValueOrDefault("cwd"),
             Repository   = dict.GetValueOrDefault("repository"),
             Branch       = dict.GetValueOrDefault("branch"),
@@ -86,6 +88,8 @@ public sealed class SessionDiscoveryService : ISessionDiscoveryService
             IsLocked     = hasLock,
         };
     }
+
+    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
     private static Dictionary<string, string> ReadYamlFlat(string path)
     {

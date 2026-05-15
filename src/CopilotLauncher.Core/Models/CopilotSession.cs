@@ -8,6 +8,13 @@ public sealed class CopilotSession
 {
     public required string Id { get; init; }
     public required DateTime LastModified { get; init; }
+
+    /// <summary>User-given name from <c>copilot --name &lt;...&gt;</c>. Null if unnamed.</summary>
+    public string? Name { get; init; }
+
+    /// <summary>Optional short summary stored alongside the name. May be auto-generated.</summary>
+    public string? Summary { get; init; }
+
     public string? Cwd { get; init; }
     public string? Repository { get; init; }
     public string? Branch { get; init; }
@@ -24,3 +31,4 @@ public sealed class CopilotSession
     /// <summary>True if a sibling inuse.*.lock file is present (active session).</summary>
     public bool IsLocked { get; init; }
 }
+

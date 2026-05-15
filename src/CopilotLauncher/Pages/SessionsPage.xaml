@@ -28,14 +28,37 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <CheckBox x:Name="ChipRecent" Content="Recent (15d)" IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
-                <CheckBox x:Name="ChipNamed"  Content="All named"   IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
-                <CheckBox x:Name="ChipHeavy"  Content="Heavily used" IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
-                <CheckBox x:Name="ChipAll"    Content="Show all"    IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="20" VerticalAlignment="Top">
+                <StackPanel Spacing="0">
+                    <CheckBox Content="Recent (15d)" IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
+                    <TextBlock Text="Modified in the last 15 days"
+                               Margin="28,-2,0,0" Opacity="0.6"
+                               Style="{StaticResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="0">
+                    <CheckBox Content="Named" IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
+                    <TextBlock Text="You assigned a name via copilot --name"
+                               Margin="28,-2,0,0" Opacity="0.6"
+                               Style="{StaticResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="0">
+                    <CheckBox Content="Heavily used" IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
+                    <TextBlock Text="20+ summary points (long-running session)"
+                               Margin="28,-2,0,0" Opacity="0.6"
+                               Style="{StaticResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="0">
+                    <CheckBox Content="Show all" IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
+                    <TextBlock Text="Override above; show every session"
+                               Margin="28,-2,0,0" Opacity="0.6"
+                               Style="{StaticResource CaptionTextBlockStyle}"/>
+                </StackPanel>
             </StackPanel>
 
-            <Button Grid.Column="1" Content="↻ Refresh" Click="OnRefreshClick"/>
+            <Button Grid.Column="1" Content="↻ Refresh" Click="OnRefreshClick" VerticalAlignment="Top"/>
         </Grid>
 
         <!-- Search -->
@@ -72,8 +95,13 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="{x:Bind Title}"
+                                       Style="{StaticResource SubtitleTextBlockStyle}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{x:Bind Cwd}"
-                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       Opacity="0.7"
+                                       Style="{StaticResource BodyTextBlockStyle}"
                                        TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{x:Bind RepoBranch}"
                                        Opacity="0.7"

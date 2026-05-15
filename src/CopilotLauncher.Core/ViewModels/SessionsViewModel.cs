@@ -144,7 +144,11 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         }).First();
     }
 
-    /// <summary>Applies the current filter chips + search to the full list.</summary>
+    /// <summary>Applies the current filter chips + search to the full list.
+    /// Filter logic is AND across checked chips: a session must satisfy every
+    /// chip the user has checked (Recent + Named + Heavy intersect, not union).
+    /// "Show all" is a single override that bypasses the other chips entirely.
+    /// </summary>
     public void ApplyFilters()
     {
         Visible.Clear();
@@ -155,9 +159,23 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
             return;
         }
 
-        var rows = _showAll
-            ? _all.AsEnumerable()
-            : _all.Where(MatchesAnyChip);
+        IEnumerable<CopilotSession> rows;
+        if (_showAll)
+        {
+            rows = _all;
+        }
+        else if (!_showRecent && !_showNamed && !_showHeavy)
+        {
+            // No chips checked + Show all off: user explicitly hid everything.
+            rows = Array.Empty<CopilotSession>();
+            StatusMessage = "No filters checked. Toggle a chip above (Recent / Named / Heavily used) or check Show all.";
+            OnPropertyChanged(nameof(VisibleCount));
+            return;
+        }
+        else
+        {
+            rows = _all.Where(MatchesAllCheckedChips);
+        }
 
         if (!string.IsNullOrWhiteSpace(_searchText))
             rows = rows.Where(s => MatchesSearch(s, _searchText));
@@ -171,14 +189,14 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(VisibleCount));
     }
 
-    private bool MatchesAnyChip(CopilotSession s)
+    private bool MatchesAllCheckedChips(CopilotSession s)
     {
         var settings = _settings.Current.SessionListing;
         var recentCutoff = DateTime.UtcNow.AddDays(-Math.Max(1, settings.RecentWindowDays));
-        if (_showRecent && s.LastModified.ToUniversalTime() >= recentCutoff) return true;
-        if (_showNamed && s.UserNamed) return true;
-        if (_showHeavy && s.SummaryCount >= settings.HeavyUseSummaryThreshold) return true;
-        return false;
+        if (_showRecent && s.LastModified.ToUniversalTime() < recentCutoff) return false;
+        if (_showNamed  && !s.UserNamed) return false;
+        if (_showHeavy  && s.SummaryCount < settings.HeavyUseSummaryThreshold) return false;
+        return true;
     }
 
     private static bool MatchesSearch(CopilotSession s, string q)
@@ -204,7 +222,14 @@ public sealed class SessionRow
 {
     public required string SessionId { get; init; }
     public required string ShortId { get; init; }
+
+    /// <summary>Bold title at the top of the card. Falls back gracefully when the
+    /// session has no user-given name: cwd-leaf or short id.</summary>
+    public required string Title { get; init; }
+
+    /// <summary>Full working directory path; subtitle under the title.</summary>
     public required string Cwd { get; init; }
+
     public required string RepoBranch { get; init; }
     public required string LastOpenedDisplay { get; init; }
     public required string Tags { get; init; }
@@ -215,14 +240,32 @@ public sealed class SessionRow
     {
         var ago = HumanizeRelative(s.LastModified);
         var tags = new List<string>();
-        if (s.UserNamed) tags.Add("named");
         if (s.SummaryCount >= 20) tags.Add($"heavy: {s.SummaryCount} summaries");
+        else if (s.SummaryCount > 0) tags.Add($"{s.SummaryCount} summaries");
         if (s.SizeBytes > 0) tags.Add(FormatBytes(s.SizeBytes));
+
+        // Title preference: user-given name > cwd leaf > short id.
+        string title;
+        if (s.UserNamed && !string.IsNullOrWhiteSpace(s.Name))
+        {
+            title = s.Name!;
+        }
+        else if (!string.IsNullOrWhiteSpace(s.Cwd))
+        {
+            try { title = Path.GetFileName(s.Cwd!.TrimEnd('\\', '/')) ?? s.Cwd!; }
+            catch { title = s.Cwd!; }
+            if (string.IsNullOrWhiteSpace(title)) title = s.Cwd!;
+        }
+        else
+        {
+            title = s.Id.Length >= 8 ? s.Id[..8] + "…" : s.Id;
+        }
 
         return new SessionRow
         {
             SessionId = s.Id,
             ShortId = s.Id.Length >= 8 ? s.Id[..8] : s.Id,
+            Title = title,
             Cwd = string.IsNullOrEmpty(s.Cwd) ? "(unknown working dir)" : s.Cwd,
             RepoBranch = string.IsNullOrEmpty(s.Repository)
                 ? "(no git repo)"
