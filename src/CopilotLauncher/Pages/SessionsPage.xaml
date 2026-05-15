@@ -127,10 +127,12 @@
                                        TextTrimming="CharacterEllipsis"
                                        Visibility="{x:Bind HasUserName, Converter={StaticResource BoolToVisibility}}"/>
 
-                            <!-- Auto-generated name: regular weight, with caption -->
+                            <!-- Auto-generated name: regular weight, muted (secondary) text color
+                                 with caption underneath; the muted color signals "unofficial". -->
                             <TextBlock Text="{x:Bind Title}"
                                        Style="{StaticResource SubtitleTextBlockStyle}"
                                        FontWeight="Normal"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextTrimming="CharacterEllipsis"
                                        Visibility="{x:Bind HasAutoName, Converter={StaticResource BoolToVisibility}}"/>
                             <TextBlock Text="{x:Bind AutoNameDescription}"

@@ -6,9 +6,11 @@ namespace CopilotLauncher;
 
 public partial class App : Application
 {
-    private Window? _mainWindow;
-
     public static IServiceProvider Services { get; private set; } = null!;
+
+    /// <summary>The single main window. Null until OnLaunched fires.
+    /// Used by file/folder pickers etc. that need the parent HWND.</summary>
+    public Window? MainWindowOrNull { get; private set; }
 
     public App()
     {
@@ -20,7 +22,7 @@ public partial class App : Application
     {
         var services = new ServiceCollection();
 
-        // All singletons — these services hold cached state (settings, discovered
+        // All singletons — services hold cached state (settings, discovered
         // sessions, terminal list) that should survive page navigation.
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<ISessionDiscoveryService, SessionDiscoveryService>();
@@ -36,8 +38,28 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _mainWindow = new MainWindow();
-        _mainWindow.Activate();
+        MainWindowOrNull = new MainWindow();
+        MainWindowOrNull.Activate();
+
+        // Phase 4: silently repair any sessions with dangling tool_use events
+        // in the background so --resume works on next launch. Skips active
+        // (locked) sessions; backs up before mutating. Best-effort — failures
+        // don't bubble up to the user.
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                var settings = Services.GetRequiredService<ISettingsService>();
+                if (!settings.Current.Repair.AutoRepairDanglingToolUse) return;
+                var repair = Services.GetRequiredService<ISessionRepairService>();
+                repair.RepairAll();
+            }
+            catch
+            {
+                // Logging service lands in Phase 5; for now swallow silently.
+            }
+        });
     }
 }
+
 

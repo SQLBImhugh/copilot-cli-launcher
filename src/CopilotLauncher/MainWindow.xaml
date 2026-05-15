@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:pages="using:CopilotLauncher.Pages"
-    Title="Copilot Launcher">
+    Title="Copilot CLI Launcher">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -24,7 +24,7 @@
                 <ColumnDefinition Width="138"/>  <!-- system caption buttons -->
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
-                       Text="Copilot Launcher"
+                       Text="Copilot CLI Launcher"
                        VerticalAlignment="Center"
                        Margin="16,0,0,0"
                        Style="{StaticResource CaptionTextBlockStyle}"
