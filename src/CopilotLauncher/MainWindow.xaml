@@ -64,6 +64,16 @@
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
 
+            <!-- Visually separate the auto-rendered Settings item (driven by
+                 IsSettingsVisible above) from the main Briefing item with a
+                 thin partial horizontal line. FooterMenuItems renders just
+                 above the auto-Settings entry; a NavigationViewItemSeparator
+                 here gives us the divider without losing the built-in Settings
+                 affordance. -->
+            <muxc:NavigationView.FooterMenuItems>
+                <muxc:NavigationViewItemSeparator/>
+            </muxc:NavigationView.FooterMenuItems>
+
             <Frame x:Name="ContentFrame" />
         </muxc:NavigationView>
     </Grid>
