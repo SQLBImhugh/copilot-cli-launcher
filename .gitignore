@@ -21,3 +21,9 @@ Thumbs.db
 *.swo
 .vscode/
 .idea/
+
+
+# MSIX packaging staging + artifacts
+build/
+dist/*.msix
+*.pfx
