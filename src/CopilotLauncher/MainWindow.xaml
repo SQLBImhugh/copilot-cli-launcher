@@ -7,7 +7,7 @@
     xmlns:pages="using:CopilotLauncher.Pages"
     Title="Copilot CLI Launcher">
 
-    <Grid>
+    <Grid x:Name="WindowRoot">
         <Grid.RowDefinitions>
             <RowDefinition Height="32"/>
             <RowDefinition Height="*"/>

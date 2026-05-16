@@ -31,15 +31,14 @@ public sealed partial class MainWindow : Window
             // ApplicationIcon) still drives Explorer + pinned-taskbar visuals.
         }
 
-        // Apply Mica backdrop where supported (Windows 11). Falls back gracefully on Win10.
-        try
-        {
-            SystemBackdrop = new MicaBackdrop();
-        }
-        catch
-        {
-            // Mica not supported (Windows 10) — leave default chrome.
-        }
+        // Backdrop is now driven by ThemeManager.ApplyBackdrop(this, theme)
+        // (called from App.OnLaunched after the saved theme is loaded). Mica
+        // is the wrong default for a custom-color theme like Copilot CLI
+        // because Mica is *translucent* and samples the desktop wallpaper —
+        // ApplicationPageBackgroundThemeBrush gets ignored, which is why the
+        // window stayed bluish even with our brush overrides applied. The
+        // theme manager flips between Mica (built-in themes) and a solid
+        // backdrop (copilotCli) on demand.
 
         // Extend the app content into the title-bar area so the bar's
         // background becomes the same Mica/app surface as the rest of the
@@ -140,6 +139,46 @@ public sealed partial class MainWindow : Window
                 NavView.SelectedItem = nvi;
                 return;
             }
+        }
+    }
+
+    /// <summary>
+    /// Apply the right system backdrop + root background for a given theme.
+    /// Mica is translucent and samples the desktop wallpaper, so it ignores
+    /// any ApplicationPageBackgroundThemeBrush override. For our custom
+    /// "copilotCli" palette we therefore disable Mica and paint the root
+    /// grid with the dark Copilot CLI banner background; for the built-in
+    /// system / light / dark themes we keep Mica so the app still feels
+    /// native on Windows 11.
+    /// </summary>
+    public void ApplyBackdrop(string theme)
+    {
+        var wantMica = !string.Equals(theme, "copilotCli", StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            if (wantMica)
+            {
+                SystemBackdrop ??= new MicaBackdrop();
+                WindowRoot.Background = null;  // let Mica show through
+            }
+            else
+            {
+                SystemBackdrop = null;
+                // Use a ThemeResource so any future palette tweak (or a
+                // theme switch back to dark/light) auto-updates this brush.
+                // ThemeManager replaces SolidBackgroundFillColorBaseBrush on
+                // Application.Resources to #171717 when copilotCli is active.
+                if (Microsoft.UI.Xaml.Application.Current.Resources["SolidBackgroundFillColorBaseBrush"]
+                    is Microsoft.UI.Xaml.Media.Brush bg)
+                {
+                    WindowRoot.Background = bg;
+                }
+            }
+        }
+        catch
+        {
+            // Backdrop changes are non-critical — fall back to whatever
+            // Windows decided to render.
         }
     }
 }

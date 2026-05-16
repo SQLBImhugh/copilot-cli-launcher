@@ -127,6 +127,13 @@ public static class ThemeManager
             root.RequestedTheme = bounce;
             root.RequestedTheme = target;
         }
+
+        // Backdrop policy: Mica is translucent (samples the desktop
+        // wallpaper) so it ignores the page-background brush we just
+        // set. For copilotCli we disable Mica and paint the root grid
+        // with #171717; for the built-in themes we restore Mica.
+        if (window is CopilotLauncher.MainWindow main)
+            main.ApplyBackdrop(theme);
     }
 }
 
