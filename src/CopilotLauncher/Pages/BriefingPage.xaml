@@ -49,7 +49,7 @@
                     <Border Padding="16,12"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
+                            BorderThickness="{ThemeResource CardBorderThickness}"
                             CornerRadius="8">
                         <StackPanel Spacing="6">
                             <StackPanel Orientation="Horizontal" Spacing="12">

@@ -129,7 +129,7 @@
                     <Grid Padding="16,14"
                           Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                          BorderThickness="1"
+                          BorderThickness="{ThemeResource CardBorderThickness}"
                           CornerRadius="8"
                           ColumnSpacing="16">
                         <Grid.ColumnDefinitions>

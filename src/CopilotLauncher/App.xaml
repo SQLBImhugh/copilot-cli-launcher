@@ -10,6 +10,10 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
             <helpers:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <!-- Default card border thickness (1px). The Copilot CLI theme bumps
+                 this to 2px via ThemeManager so the bright pink stroke is more
+                 visible against the dark backdrop. -->
+            <Thickness x:Key="CardBorderThickness">1</Thickness>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -11,49 +11,63 @@ namespace CopilotLauncher.Helpers;
 ///   "light"      — force Fluent light
 ///   "dark"       — force Fluent dark
 ///   "copilotCli" — Fluent dark + cyan/pink/green palette overrides (default)
+///                  Also swaps in the VT323 pixel font, bumps card borders to
+///                  2px, and recolors toggle/checkbox accents from cyan to
+///                  green to match the GitHub Copilot CLI banner mascot.
 ///
 /// Implementation note: in WinUI 3 Windows App SDK 1.6, MergedDictionaries
 /// added at runtime do NOT reliably trigger {ThemeResource} re-resolution
-/// even with a RequestedTheme bounce. The brushes that controls already
-/// resolved on first paint stay stale, so only some surfaces re-color.
+/// even with a RequestedTheme bounce. The brushes/values that controls
+/// already resolved on first paint stay stale, so only some surfaces re-color.
 ///
-/// Instead we directly set/remove individual brush keys on
+/// Instead we directly set/remove individual keys on
 /// Application.Current.Resources. WinUI re-evaluates {ThemeResource}
 /// references against the live Resources dictionary on RequestedTheme
 /// change, and a Light↔Dark bounce is enough to force every existing
-/// control to pick up the new brushes.
+/// control to pick up the new values.
+///
+/// HighContrast is intentionally not customised; when the OS reports HC
+/// the user sees the standard Fluent HC palette regardless of which theme
+/// they picked here. (See winui-design code-review note #1.)
 /// </summary>
 public static class ThemeManager
 {
+    private static readonly FontFamily PixelFont =
+        new("ms-appx:///Assets/Fonts/VT323-Regular.ttf#VT323");
+
     /// <summary>Sampled from the GitHub Copilot CLI welcome banner.
     /// Cyan = primary accent; pink = secondary stroke/attention;
-    /// green = success; near-black surfaces; white text.</summary>
+    /// green = success / toggle "on"; very-near-black surfaces; white text.</summary>
     private static readonly (string Key, Color Color)[] CopilotPalette =
     {
-        // Page / window backgrounds
-        ("ApplicationPageBackgroundThemeBrush",  Color.FromArgb(0xFF, 0x17, 0x17, 0x17)),
-        ("SolidBackgroundFillColorBaseBrush",    Color.FromArgb(0xFF, 0x17, 0x17, 0x17)),
-        ("SolidBackgroundFillColorSecondaryBrush", Color.FromArgb(0xFF, 0x1B, 0x1B, 0x1B)),
-        ("SolidBackgroundFillColorTertiaryBrush", Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F)),
-        ("LayerFillColorDefaultBrush",           Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F)),
-        ("LayerOnAcrylicFillColorDefaultBrush",  Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F)),
-        // Card surfaces
-        ("CardBackgroundFillColorDefaultBrush",  Color.FromArgb(0xFF, 0x1B, 0x1B, 0x1B)),
-        ("CardBackgroundFillColorSecondaryBrush", Color.FromArgb(0xFF, 0x22, 0x22, 0x22)),
-        ("CardStrokeColorDefaultBrush",          Color.FromArgb(0xFF, 0x3A, 0x26, 0x40)),
-        ("CardStrokeColorDefaultSolidBrush",     Color.FromArgb(0xFF, 0x3A, 0x26, 0x40)),
+        // Page / window backgrounds — much darker than before but not full black.
+        // SolidBackgroundFillColorBaseBrush is what MainWindow.WindowRoot.Background
+        // binds to via ApplyBackdrop; everything else stacks slightly lighter.
+        ("ApplicationPageBackgroundThemeBrush",  Color.FromArgb(0xFF, 0x0A, 0x0A, 0x0A)),
+        ("SolidBackgroundFillColorBaseBrush",    Color.FromArgb(0xFF, 0x0A, 0x0A, 0x0A)),
+        ("SolidBackgroundFillColorSecondaryBrush", Color.FromArgb(0xFF, 0x10, 0x10, 0x10)),
+        ("SolidBackgroundFillColorTertiaryBrush", Color.FromArgb(0xFF, 0x15, 0x15, 0x15)),
+        ("LayerFillColorDefaultBrush",           Color.FromArgb(0xFF, 0x12, 0x12, 0x12)),
+        ("LayerOnAcrylicFillColorDefaultBrush",  Color.FromArgb(0xFF, 0x12, 0x12, 0x12)),
+        // Card surfaces — slightly elevated above the page so they read as cards
+        ("CardBackgroundFillColorDefaultBrush",  Color.FromArgb(0xFF, 0x12, 0x12, 0x12)),
+        ("CardBackgroundFillColorSecondaryBrush", Color.FromArgb(0xFF, 0x18, 0x18, 0x18)),
+        // Bright pink card outline (was a muted mauve so the boxes barely
+        // showed); paired with CardBorderThickness=2 below.
+        ("CardStrokeColorDefaultBrush",          Color.FromArgb(0xFF, 0xCC, 0x66, 0xCC)),
+        ("CardStrokeColorDefaultSolidBrush",     Color.FromArgb(0xFF, 0xCC, 0x66, 0xCC)),
         // Subtle fills
         ("SubtleFillColorTransparentBrush",      Color.FromArgb(0x00, 0x00, 0x00, 0x00)),
         ("SubtleFillColorSecondaryBrush",        Color.FromArgb(0x1F, 0xCC, 0x66, 0xCC)),
-        ("SubtleFillColorTertiaryBrush",         Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F)),
-        ("SubtleFillColorDisabledBrush",         Color.FromArgb(0xFF, 0x1A, 0x1A, 0x1A)),
+        ("SubtleFillColorTertiaryBrush",         Color.FromArgb(0xFF, 0x12, 0x12, 0x12)),
+        ("SubtleFillColorDisabledBrush",         Color.FromArgb(0xFF, 0x10, 0x10, 0x10)),
         // Control fills (Button/ComboBox/TextBox)
-        ("ControlFillColorDefaultBrush",         Color.FromArgb(0xFF, 0x22, 0x22, 0x22)),
-        ("ControlFillColorSecondaryBrush",       Color.FromArgb(0xFF, 0x2A, 0x2A, 0x2A)),
-        ("ControlFillColorTertiaryBrush",        Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F)),
-        ("ControlStrokeColorDefaultBrush",       Color.FromArgb(0xFF, 0x3A, 0x26, 0x40)),
-        ("ControlStrokeColorSecondaryBrush",     Color.FromArgb(0xFF, 0x3A, 0x26, 0x40)),
-        // Accent (cyan)
+        ("ControlFillColorDefaultBrush",         Color.FromArgb(0xFF, 0x18, 0x18, 0x18)),
+        ("ControlFillColorSecondaryBrush",       Color.FromArgb(0xFF, 0x22, 0x22, 0x22)),
+        ("ControlFillColorTertiaryBrush",        Color.FromArgb(0xFF, 0x14, 0x14, 0x14)),
+        ("ControlStrokeColorDefaultBrush",       Color.FromArgb(0xFF, 0xCC, 0x66, 0xCC)),
+        ("ControlStrokeColorSecondaryBrush",     Color.FromArgb(0xFF, 0xCC, 0x66, 0xCC)),
+        // Accent (cyan) — primary-button + focus-ring color
         ("AccentFillColorDefaultBrush",          Color.FromArgb(0xFF, 0x00, 0x99, 0xCC)),
         ("AccentFillColorSecondaryBrush",        Color.FromArgb(0xFF, 0x0A, 0xAF, 0xE0)),
         ("AccentFillColorTertiaryBrush",         Color.FromArgb(0xFF, 0x00, 0x7A, 0xA8)),
@@ -71,18 +85,42 @@ public static class ThemeManager
         ("TextOnAccentFillColorDisabledBrush",   Color.FromArgb(0xFF, 0xA0, 0xA0, 0xA0)),
         // Focus
         ("FocusStrokeColorOuterBrush",           Color.FromArgb(0xFF, 0x0A, 0xAF, 0xE0)),
-        ("FocusStrokeColorInnerBrush",           Color.FromArgb(0xFF, 0x17, 0x17, 0x17)),
+        ("FocusStrokeColorInnerBrush",           Color.FromArgb(0xFF, 0x0A, 0x0A, 0x0A)),
         // System status (chips / badges)
         ("SystemFillColorSuccessBrush",          Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
         ("SystemFillColorAttentionBrush",        Color.FromArgb(0xFF, 0xCC, 0x66, 0xCC)),
         ("SystemFillColorCautionBrush",          Color.FromArgb(0xFF, 0xF2, 0xC9, 0x4C)),
         ("SystemFillColorCriticalBrush",         Color.FromArgb(0xFF, 0xE0, 0x61, 0x7A)),
         ("SystemFillColorNeutralBrush",          Color.FromArgb(0xFF, 0x9A, 0x9A, 0x9A)),
-        ("SystemFillColorSolidNeutralBrush",     Color.FromArgb(0xFF, 0x2A, 0x2A, 0x2A)),
+        ("SystemFillColorSolidNeutralBrush",     Color.FromArgb(0xFF, 0x22, 0x22, 0x22)),
         ("SystemFillColorSuccessBackgroundBrush", Color.FromArgb(0x40, 0x30, 0xC8, 0x68)),
         ("SystemFillColorAttentionBackgroundBrush", Color.FromArgb(0x40, 0xCC, 0x66, 0xCC)),
         ("SystemFillColorCautionBackgroundBrush", Color.FromArgb(0x40, 0xF2, 0xC9, 0x4C)),
         ("SystemFillColorCriticalBackgroundBrush", Color.FromArgb(0x40, 0xE0, 0x61, 0x7A)),
+        // Toggle switch — green "on" state to match the green pixels in the
+        // Copilot CLI mascot. Cyan accent stays for buttons/focus rings;
+        // these toggle-specific keys keep that separation.
+        ("ToggleSwitchFillOn",                   Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("ToggleSwitchFillOnPointerOver",        Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("ToggleSwitchFillOnPressed",            Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        ("ToggleSwitchStrokeOn",                 Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("ToggleSwitchStrokeOnPointerOver",      Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("ToggleSwitchStrokeOnPressed",          Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        ("ToggleSwitchKnobFillOn",               Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+        ("ToggleSwitchKnobFillOnPointerOver",    Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+        ("ToggleSwitchKnobFillOnPressed",        Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+        // CheckBox — green checked state
+        ("CheckBoxBackgroundChecked",            Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("CheckBoxBackgroundCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("CheckBoxBackgroundCheckedPressed",     Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        ("CheckBoxBorderBrushChecked",           Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("CheckBoxBorderBrushCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("CheckBoxBorderBrushCheckedPressed",    Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        ("CheckBoxCheckBackgroundFillChecked",   Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("CheckBoxCheckBackgroundFillCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("CheckBoxCheckBackgroundFillCheckedPressed", Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        ("CheckBoxCheckBackgroundStrokeChecked", Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("CheckBoxCheckGlyphForegroundChecked",  Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
     };
 
     public static void Apply(string theme, Window? window)
@@ -103,11 +141,29 @@ public static class ThemeManager
             }
             else
             {
-                // Remove our override so the underlying ThemeDictionary
-                // brush (Fluent Light or Dark) takes over again.
                 if (app.Resources.ContainsKey(key))
                     app.Resources.Remove(key);
             }
+        }
+
+        // Pixel font + thicker card borders for the Copilot CLI palette.
+        // ContentControlThemeFontFamily is what every built-in Fluent text
+        // style references, so swapping it propagates to BodyTextBlockStyle,
+        // SubtitleTextBlockStyle, etc. without touching any page XAML.
+        if (wantPalette)
+        {
+            app.Resources["ContentControlThemeFontFamily"] = PixelFont;
+            app.Resources["CardBorderThickness"] = new Thickness(2);
+        }
+        else
+        {
+            // Removing forces fallback to whatever XamlControlsResources defines
+            // (Segoe UI Variable Text + 1px). Default CardBorderThickness=1 is
+            // also defined in App.xaml so the lookup never fails.
+            if (app.Resources.ContainsKey("ContentControlThemeFontFamily"))
+                app.Resources.Remove("ContentControlThemeFontFamily");
+            if (app.Resources.ContainsKey("CardBorderThickness"))
+                app.Resources["CardBorderThickness"] = new Thickness(1);
         }
 
         if (window?.Content is FrameworkElement root)
@@ -121,8 +177,7 @@ public static class ThemeManager
             };
 
             // Force a Light↔Dark bounce so every {ThemeResource} marker on
-            // every loaded element invalidates and re-resolves. Just setting
-            // RequestedTheme to its current value is a no-op.
+            // every loaded element invalidates and re-resolves.
             var bounce = target == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
             root.RequestedTheme = bounce;
             root.RequestedTheme = target;
@@ -131,9 +186,8 @@ public static class ThemeManager
         // Backdrop policy: Mica is translucent (samples the desktop
         // wallpaper) so it ignores the page-background brush we just
         // set. For copilotCli we disable Mica and paint the root grid
-        // with #171717; for the built-in themes we restore Mica.
+        // with the dark brush; for the built-in themes we restore Mica.
         if (window is CopilotLauncher.MainWindow main)
             main.ApplyBackdrop(theme);
     }
 }
-

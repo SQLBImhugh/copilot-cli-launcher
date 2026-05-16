@@ -11,7 +11,7 @@
             <!-- Terminal -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Terminal" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock Text="The terminal that wraps copilot when you click Resume or Launch."
@@ -24,7 +24,7 @@
             <!-- Sessions Resume defaults -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Sessions Resume defaults" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock Text="Used when you click ▶ Resume on a session card. Saved Shortcuts use their own per-shortcut config instead."
@@ -44,7 +44,7 @@
             <!-- AI Summary -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="AI Summary" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock Text="Default agents.md context file used to tailor Copilot's summary on version bumps. Each Shortcut can override this with its own context file."
@@ -68,7 +68,7 @@
             <!-- Briefings -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Briefings" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <ToggleSwitch Header="Show briefing on Copilot CLI version bumps"

@@ -110,7 +110,7 @@
         <Border Grid.Row="2"
                 Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
+                BorderThickness="{ThemeResource CardBorderThickness}"
                 CornerRadius="6"
                 Padding="12">
             <StackPanel Spacing="4">
