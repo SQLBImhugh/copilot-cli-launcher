@@ -71,6 +71,18 @@ public sealed class SettingsService : ISettingsService
         // an old/hand-edited settings.json. Property initializers handle the
         // missing-key case; this handles the explicit-null case.
         Current.Normalize();
+
+        // One-time migration: anyone still carrying the old default window
+        // size (1280x800) gets bumped to the current default. Without this,
+        // updating AppSettings's defaults has no effect on existing installs
+        // (their settings.json already has the old default written out).
+        if (Current.LauncherBehavior.LastNormalWindowWidth == 1280
+            && Current.LauncherBehavior.LastNormalWindowHeight == 800)
+        {
+            Current.LauncherBehavior.LastNormalWindowWidth = 1180;
+            Current.LauncherBehavior.LastNormalWindowHeight = 1040;
+            Save();
+        }
     }
 
     public void Save()

@@ -63,11 +63,22 @@ public partial class App : Application
             // Also kick the MainWindow into compact layout (resize + hide nav)
             // before first paint if the saved state was compact.
             if (compact && MainWindowOrNull is MainWindow mw)
+            {
                 mw.ApplyCompactMode(true, persist: false);
+            }
+            else if (MainWindowOrNull is MainWindow nm)
+            {
+                // Apply the user's last non-compact window size so resizes
+                // survive across launches. Done BEFORE Activate so there's
+                // no visible resize from the WinUI default 800x600.
+                nm.ApplyNormalSize(
+                    settings.Current.LauncherBehavior.LastNormalWindowWidth,
+                    settings.Current.LauncherBehavior.LastNormalWindowHeight);
+            }
         }
         catch
         {
-            // Theme is non-critical — fall back to system default.
+            // Theme / size is non-critical — fall back to system default.
         }
 
         MainWindowOrNull.Activate();

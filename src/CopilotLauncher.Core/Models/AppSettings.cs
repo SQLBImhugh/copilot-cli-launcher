@@ -113,9 +113,11 @@ public sealed class LauncherBehaviorSettings
     /// <summary>True if the user toggled into the compact-mini view.</summary>
     public bool CompactMode { get; set; }
     /// <summary>Window width in effective pixels last time the app was in
-    /// non-compact mode. Used to restore when leaving compact.</summary>
-    public int LastNormalWindowWidth { get; set; } = 1280;
-    public int LastNormalWindowHeight { get; set; } = 800;
+    /// non-compact mode. Used to restore when leaving compact, and applied
+    /// on startup so resizes survive across launches. Default is the
+    /// "Sessions overview at portrait scale" sizing the user picked.</summary>
+    public int LastNormalWindowWidth { get; set; } = 1180;
+    public int LastNormalWindowHeight { get; set; } = 1040;
 }
 
 public sealed class StorageSettings

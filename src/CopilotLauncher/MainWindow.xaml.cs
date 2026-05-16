@@ -308,6 +308,41 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
+    /// <summary>Apply the saved non-compact window size at startup. Called
+    /// from App.OnLaunched. Also wires AppWindow.Changed so subsequent user
+    /// resizes are persisted (only when not in compact mode — the compact
+    /// 320x640 size is intentionally hard-coded and not user-controlled).</summary>
+    public void ApplyNormalSize(int effectiveWidth, int effectiveHeight)
+    {
+        ResizeWindow(effectiveWidth, effectiveHeight);
+
+        // Persist size on resize. Debounce isn't strictly necessary because
+        // settings.Save is already debounced via SettingsViewModel — but
+        // here we just write directly. AppWindow.Changed fires for every
+        // resize/move event, so guard against compact mode + only update
+        // when actually resized (not just moved).
+        if (AppWindow is null) return;
+        AppWindow.Changed += (sender, args) =>
+        {
+            if (!args.DidSizeChange) return;
+            try
+            {
+                var settings = App.Services.GetRequiredService<ISettingsService>();
+                var behavior = settings.Current.LauncherBehavior;
+                if (behavior.CompactMode) return;  // 320x640 compact size shouldn't override the saved normal size
+
+                var scale = Content?.XamlRoot?.RasterizationScale ?? 1.0;
+                var w = (int)Math.Round(sender.Size.Width  / scale);
+                var h = (int)Math.Round(sender.Size.Height / scale);
+                if (w == behavior.LastNormalWindowWidth && h == behavior.LastNormalWindowHeight) return;
+                behavior.LastNormalWindowWidth = w;
+                behavior.LastNormalWindowHeight = h;
+                settings.Save();
+            }
+            catch { }
+        };
+    }
+
     private void UpdateCompactGlyph(bool compact)
     {
         // E73F = MiniExpand-style icon; E740 = FullScreen "expand back out"
