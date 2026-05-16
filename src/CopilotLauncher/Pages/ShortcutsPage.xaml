@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="Shortcuts" Style="{StaticResource TitleLargeTextBlockStyle}"/>
+            <TextBlock Text="Shortcuts" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
             <TextBlock Text="One-click reusable shortcutes. Configure them in the New Shortcut tab; they'll appear here."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
         </StackPanel>

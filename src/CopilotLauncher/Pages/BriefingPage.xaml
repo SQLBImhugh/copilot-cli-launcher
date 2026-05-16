@@ -15,7 +15,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="Briefing" Style="{StaticResource TitleLargeTextBlockStyle}"/>
+            <TextBlock Text="Briefing" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
             <TextBlock Text="Changelog briefings appear here when Copilot CLI updates. Click 'Check now' to force an update check immediately."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap"/>
         </StackPanel>

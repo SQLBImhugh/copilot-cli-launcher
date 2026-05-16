@@ -14,7 +14,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="New Shortcut" Style="{StaticResource TitleLargeTextBlockStyle}"/>
+            <TextBlock Text="New Shortcut" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
             <TextBlock Text="Build a reusable Copilot CLI launch shortcut. Live preview shows the exact command line that will run."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
         </StackPanel>

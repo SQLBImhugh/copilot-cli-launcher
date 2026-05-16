@@ -6,14 +6,14 @@
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
     <ScrollViewer>
         <StackPanel Padding="32,24" Spacing="14" MaxWidth="900" HorizontalAlignment="Left">
-            <TextBlock Text="Settings" Style="{StaticResource TitleLargeTextBlockStyle}"/>
+            <TextBlock Text="Settings" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
 
             <!-- Terminal -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="Terminal" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="Terminal" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
                     <TextBlock Text="The terminal that wraps copilot when you click Resume or Launch."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}"/>
                     <ComboBox x:Name="TerminalCombo"
@@ -29,7 +29,7 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="Sessions Resume defaults" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="Sessions Resume defaults" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
                     <TextBlock Text="Used when you click ▶ Resume on a session card. Saved Shortcuts use their own per-shortcut config instead."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                     <ToggleSwitch Header="AI summary on resume"
@@ -54,7 +54,7 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="AI Summary" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="AI Summary" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
                     <TextBlock Text="Default agents.md context file used to tailor Copilot's summary on version bumps. Each Shortcut can override this with its own context file."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                     <ToggleSwitch Header="Generate AI summary on version bump"
@@ -84,7 +84,7 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="Briefings" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="Briefings" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
                     <ToggleSwitch Header="Show briefing on Copilot CLI version bumps"
                                   AutomationProperties.AutomationId="SettingsShowVersionBumpBriefingToggle"
                                   IsOn="{x:Bind ViewModel.ShowVersionBumpBriefing, Mode=TwoWay}"/>

@@ -16,6 +16,12 @@
                  size; ThemeManager bumps this in copilotCli mode so the label
                  text reads at the same scale as the cards around it. -->
             <x:Double x:Key="FilterCheckBoxFontSize">14</x:Double>
+            <!-- Heading font family — applied inline on page titles + Settings
+                 section subheadings. ThemeManager swaps this to the VT323
+                 pixel font in copilotCli mode; everywhere else (including
+                 body / control text in copilotCli) stays in the standard
+                 Fluent UI font (or Consolas in copilotCli mode). -->
+            <FontFamily x:Key="HeadingFontFamily">Segoe UI Variable Display, Segoe UI Variable Text, Segoe UI</FontFamily>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -20,7 +20,7 @@
 
         <!-- Title -->
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="Sessions" Style="{StaticResource TitleLargeTextBlockStyle}"/>
+            <TextBlock Text="Sessions" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
             <TextBlock Text="Resume an existing Copilot session or save it as a launch shortcut."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
         </StackPanel>

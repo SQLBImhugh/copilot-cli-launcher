@@ -32,23 +32,20 @@ namespace CopilotLauncher.Helpers;
 /// </summary>
 public static class ThemeManager
 {
-    // VT323 with multi-step fallback chain. WinUI's font resolver walks
-    // left-to-right; if VT323 is missing a glyph (e.g. some Unicode symbols)
-    // it falls back to Cascadia Mono, which is the default Windows Terminal
-    // font on Windows 11 — which the user calls out as "the font used in the
-    // CLI". Anywhere our pixel font doesn't cover, we end up in the CLI
-    // monospace font instead of the wildly-different Segoe UI Variable.
+    // VT323 — pure pixel font, used ONLY on headings (page titles + Settings
+    // section subheadings). The user's preferred copilotCli-mode body /
+    // control text is the CLI font (Cascadia Mono / Consolas), not pixel art,
+    // because pixel-font body text is hard to read.
     private static readonly FontFamily PixelFont =
-        new("ms-appx:///Assets/Fonts/VT323-Regular.ttf#VT323, Cascadia Mono, Cascadia Code, Consolas");
+        new("ms-appx:///Assets/Fonts/VT323-Regular.ttf#VT323, Cascadia Mono, Consolas");
 
-    /// <summary>Cascadia Mono on its own for surfaces that explicitly want
-    /// the CLI / terminal feel without the pixel art (e.g. markdown body
-    /// text inside Briefing entries).</summary>
+    /// <summary>The "CLI font" — Cascadia Mono / Consolas, monospace, what
+    /// every body / control / nav surface uses in copilotCli mode. Public
+    /// so the WinUI side (e.g. MarkdownTextBlock) can pick the right body
+    /// font for the active theme.</summary>
     private static readonly FontFamily CliMonoFont =
         new("Cascadia Mono, Cascadia Code, Consolas, Courier New");
 
-    /// <summary>Public so the WinUI side (e.g. MarkdownTextBlock) can pick
-    /// the right body-text font for the active theme.</summary>
     public static FontFamily GetActiveBodyFontFamily()
     {
         var app = Application.Current;
@@ -134,6 +131,18 @@ public static class ThemeManager
         ("CheckBoxCheckBackgroundStrokeCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
         ("CheckBoxCheckBackgroundStrokeCheckedPressed", Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
         ("CheckBoxCheckGlyphForegroundChecked",  Color.FromArgb(0xFF, 0x00, 0x00, 0x00)),
+        // ToggleSwitch — green "on" state (round pills now match the green
+        // square checkboxes; user wanted both binary controls to read the
+        // same way). Knob stays white so it pops against the green track.
+        ("ToggleSwitchFillOn",                   Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("ToggleSwitchFillOnPointerOver",        Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("ToggleSwitchFillOnPressed",            Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        ("ToggleSwitchStrokeOn",                 Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("ToggleSwitchStrokeOnPointerOver",      Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("ToggleSwitchStrokeOnPressed",          Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        ("ToggleSwitchKnobFillOn",               Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+        ("ToggleSwitchKnobFillOnPointerOver",    Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+        ("ToggleSwitchKnobFillOnPressed",        Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
     };
 
     public static void Apply(string theme, Window? window)
@@ -169,32 +178,38 @@ public static class ThemeManager
         //     so MarkdownTextBlock and similar surfaces can opt into the CLI
         //     font without the pixel-art shape
         // Font sizes bumped because VT323 reads small at default 14px.
+        // FONT POLICY in copilotCli mode:
+        //   - Pixel font (VT323) is used ONLY on page titles + Settings
+        //     section subheadings, via the HeadingFontFamily theme resource
+        //     bound inline by those TextBlocks. Pixel-art body text is hard
+        //     to read so we deliberately keep it off everything else.
+        //   - Body / control / nav text uses the CLI font (Cascadia Mono /
+        //     Consolas) by overriding ContentControlThemeFontFamily and
+        //     XamlAutoFontFamily — that covers Button, ComboBox, TextBox,
+        //     CheckBox, ToggleSwitch, NavigationViewItem, and most other
+        //     surfaces.
+        //   - Sizes bumped because Cascadia Mono at 14px still feels small
+        //     against the bright pink card borders.
         if (wantPalette)
         {
-            app.Resources["ContentControlThemeFontFamily"] = PixelFont;
-            app.Resources["XamlAutoFontFamily"] = PixelFont;
+            app.Resources["HeadingFontFamily"] = PixelFont;
+            app.Resources["ContentControlThemeFontFamily"] = CliMonoFont;
+            app.Resources["XamlAutoFontFamily"] = CliMonoFont;
             app.Resources["CliMonoFontFamily"] = CliMonoFont;
-            // FontSize overrides. WinUI built-in styles reference different
-            // resource keys depending on which control they style:
-            //   ContentControlThemeFontSize  — Button, Hyperlink, etc.
-            //   ControlContentThemeFontSize  — CheckBox, RadioButton content
-            //   NavigationViewItemFontSize   — NavigationViewItem
-            // Plus our own FilterCheckBoxFontSize for the inline-bumped
-            // filter row on Sessions. Bumping all four keeps every "control
-            // text" surface in sync at ~22px when the pixel font is active
-            // (VT323 reads notably small at the Fluent default 14px).
-            app.Resources["ContentControlThemeFontSize"] = 22.0;
-            app.Resources["ControlContentThemeFontSize"] = 22.0;
-            app.Resources["NavigationViewItemFontSize"] = 20.0;
-            app.Resources["FilterCheckBoxFontSize"] = 22.0;
+            app.Resources["ContentControlThemeFontSize"] = 16.0;
+            app.Resources["ControlContentThemeFontSize"] = 16.0;
+            app.Resources["NavigationViewItemFontSize"] = 16.0;
+            app.Resources["FilterCheckBoxFontSize"] = 16.0;
             app.Resources["CardBorderThickness"] = new Thickness(2);
         }
         else
         {
             // Removing forces fallback to whatever XamlControlsResources defines
-            // (Segoe UI Variable Text + 14px + 1px). Default CardBorderThickness=1
-            // and FilterCheckBoxFontSize=14 are also defined in App.xaml so the
-            // lookup never fails.
+            // (Segoe UI Variable Text + 14px + 1px). HeadingFontFamily,
+            // CardBorderThickness, FilterCheckBoxFontSize all have non-pixel
+            // defaults in App.xaml so the lookup never fails.
+            if (app.Resources.ContainsKey("HeadingFontFamily"))
+                app.Resources.Remove("HeadingFontFamily");
             if (app.Resources.ContainsKey("ContentControlThemeFontFamily"))
                 app.Resources.Remove("ContentControlThemeFontFamily");
             if (app.Resources.ContainsKey("XamlAutoFontFamily"))
