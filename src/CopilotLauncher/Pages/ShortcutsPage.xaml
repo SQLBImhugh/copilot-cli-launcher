@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:CopilotLauncher.Models"
+    xmlns:controls="using:CopilotLauncher.Controls"
     FontFamily="{ThemeResource BodyFontFamily}">
 
     <Grid Padding="{ThemeResource PagePadding}" RowSpacing="16">
@@ -15,7 +16,7 @@
 
         <StackPanel Grid.Row="0" Spacing="4">
             <TextBlock Text="Shortcuts" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource PageTitleFontSize}"/>
-            <TextBlock Text="One-click reusable shortcutes. Configure them in the New Shortcut tab; they'll appear here."
+            <TextBlock Text="One-click reusable shortcuts. Configure them in the New Shortcut tab; they'll appear here."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
         </StackPanel>
 
@@ -35,29 +36,28 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="models:Shortcut">
-                    <Grid Padding="16,14"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                          BorderThickness="{ThemeResource CardBorderThickness}"
-                          CornerRadius="{StaticResource OverlayCornerRadius}"
-                          ColumnSpacing="16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" Spacing="4">
-                            <TextBlock Text="{x:Bind Label, Mode=OneTime}"
-                                       Style="{StaticResource SubtitleTextBlockStyle}"
-                                       FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{x:Bind WorkingDirectory, Mode=OneTime}"
-                                       Opacity="0.7"
-                                       Style="{StaticResource BodyTextBlockStyle}"
-                                       TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <!-- Card layout: title + path stack on top; action buttons
+                         below in a WrapPanel so they wrap to a second row when
+                         the card is too narrow to hold them in a single line
+                         (which happens in compact mode and on narrow window
+                         widths generally). Switching from a Grid (text | buttons)
+                         layout fixes the issue where the right-aligned button
+                         column compressed the title into a 1-char-wide column. -->
+                    <StackPanel Padding="16,14"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="{ThemeResource CardBorderThickness}"
+                                CornerRadius="{StaticResource OverlayCornerRadius}"
+                                Spacing="10">
+                        <TextBlock Text="{x:Bind Label, Mode=OneTime}"
+                                   Style="{StaticResource SubtitleTextBlockStyle}"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{x:Bind WorkingDirectory, Mode=OneTime}"
+                                   Opacity="0.7"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <controls:WrapPanel HorizontalSpacing="6" VerticalSpacing="6">
                             <Button Content="▶ Launch"
                                     AutomationProperties.AutomationId="ShortcutLaunchButton"
                                     Style="{StaticResource AccentButtonStyle}"
@@ -74,8 +74,8 @@
                                     ToolTipService.ToolTip="Delete"
                                     Tag="{x:Bind Mode=OneTime}"
                                     Click="OnDeleteClick"/>
-                        </StackPanel>
-                    </Grid>
+                        </controls:WrapPanel>
+                    </StackPanel>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
@@ -90,3 +90,4 @@
         </Border>
     </Grid>
 </Page>
+
