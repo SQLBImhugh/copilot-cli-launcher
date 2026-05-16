@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Command Palette extensions run as a WinExe COM server hosted by
+         Shmuelie.WinRTServer. They are MSIX-packaged and discovered by
+         the PT Command Palette via the AppExtension framework. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22000.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <!-- The Microsoft.CommandPalette.Extensions Toolkit DLL is compiled
+         against a newer Windows SDK projection than the .NET 8 default;
+         pinning this lets the package load without NETSDK1148. -->
+    <WindowsSdkPackageVersion>10.0.26100.84</WindowsSdkPackageVersion>
+    <RootNamespace>CopilotLauncher.CmdPal</RootNamespace>
+    <AssemblyName>CopilotLauncher.CmdPal</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64;arm64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <UseWinUI>false</UseWinUI>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Base SDK package — ships BOTH the winmd + COM projections AND the
+         higher-level Toolkit (CommandProvider / ListPage / InvokableCommand
+         / IconInfo / CommandResult helper classes) in one DLL. Simplifies a
+         lot vs hand-rolling everything. -->
+    <PackageReference Include="Microsoft.CommandPalette.Extensions" Version="0.9.260303001" />
+    <!-- Windows App SDK runtime. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
+    <!-- Out-of-process COM server helper, same pattern PT's SamplePagesExtension uses. -->
+    <PackageReference Include="Shmuelie.WinRTServer" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- All session/shortcut/launch logic reused from the main app's Core. -->
+    <ProjectReference Include="..\CopilotLauncher.Core\CopilotLauncher.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\StoreLogo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Square44x44Logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Square150x150Logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

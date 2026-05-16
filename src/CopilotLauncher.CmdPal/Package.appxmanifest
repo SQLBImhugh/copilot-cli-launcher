@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Package.appxmanifest for the Copilot CLI Launcher Command Palette extension.
+
+  Two extension declarations:
+    - windows.comServer       registers the IExtension class for out-of-process
+                              COM activation. Class ID below must match the
+                              [Guid(...)] on CopilotLauncherExtension.
+    - windows.appExtension    com.microsoft.commandpalette is the contract the
+                              PowerToys Command Palette discovers extensions
+                              under (AppExtension framework). CreateInstance
+                              ClassId must match the COM class above.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 rescap">
+
+  <Identity
+    Name="CopilotLauncher.CmdPal"
+    Publisher="CN=SQLBImhugh"
+    Version="0.1.0.0" />
+
+  <Properties>
+    <DisplayName>Copilot CLI Launcher — Command Palette</DisplayName>
+    <PublisherDisplayName>SQLBImhugh</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26200.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="App"
+      Executable="CopilotLauncher.CmdPal.exe"
+      EntryPoint="CopilotLauncher.CmdPal.Program">
+      <uap:VisualElements
+        DisplayName="Copilot CLI Launcher — Command Palette"
+        Description="Resume Copilot CLI sessions and launch saved shortcuts from the PowerToys Command Palette."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        AppListEntry="none" />
+
+      <Extensions>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer
+              Executable="CopilotLauncher.CmdPal.exe"
+              Arguments="-RegisterProcessAsComServer"
+              DisplayName="Copilot CLI Launcher Extension">
+              <com:Class
+                Id="50BE806C-4555-48BE-9D31-7E427ECA40C0"
+                DisplayName="CopilotLauncher.CmdPal" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension
+            Name="com.microsoft.commandpalette"
+            Id="CopilotLauncher"
+            PublicFolder="Public"
+            DisplayName="Copilot CLI Launcher"
+            Description="Resume Copilot CLI sessions and launch saved shortcuts from the PowerToys Command Palette.">
+            <uap3:Properties>
+              <CmdPalProvider>
+                <Activation>
+                  <CreateInstance ClassId="50BE806C-4555-48BE-9D31-7E427ECA40C0" />
+                </Activation>
+                <SupportedInterfaces>
+                  <Commands/>
+                </SupportedInterfaces>
+              </CmdPalProvider>
+            </uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
