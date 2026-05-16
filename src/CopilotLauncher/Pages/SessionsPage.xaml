@@ -54,52 +54,37 @@
             </Grid.ColumnDefinitions>
 
             <!-- WrapPanel flows left-to-right and breaks to a new row when
-                 the next filter cell would overflow. Each cell has a
-                 max-width so the wrappable caption never makes the cell
-                 obscenely wide on a wide window. -->
+                 the next filter cell would overflow. Filter descriptions live
+                 in tooltips (hover the checkbox) instead of inline captions
+                 so the row stays compact and the cells don't wrap their
+                 captions across multiple lines. -->
             <controls:WrapPanel Grid.Column="0"
-                                HorizontalSpacing="20"
+                                HorizontalSpacing="24"
                                 VerticalSpacing="8"
                                 VerticalAlignment="Top">
-                <StackPanel Spacing="0" MaxWidth="260">
-                    <CheckBox Content="Recent (15d)"
-                              AutomationProperties.AutomationId="SessionsFilterRecent"
-                              IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
-                    <TextBlock Text="Modified in the last 15 days"
-                               Margin="28,-2,0,0" Opacity="0.6"
-                               TextWrapping="Wrap"
-                               Style="{StaticResource CaptionTextBlockStyle}"/>
-                </StackPanel>
+                <CheckBox Content="Recent (15d)"
+                          AutomationProperties.AutomationId="SessionsFilterRecent"
+                          FontSize="{ThemeResource FilterCheckBoxFontSize}"
+                          ToolTipService.ToolTip="Modified in the last 15 days"
+                          IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
 
-                <StackPanel Spacing="0" MaxWidth="280">
-                    <CheckBox Content="Named"
-                              AutomationProperties.AutomationId="SessionsFilterNamed"
-                              IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
-                    <TextBlock Text="You assigned a name via copilot --name or /rename"
-                               Margin="28,-2,0,0" Opacity="0.6"
-                               TextWrapping="Wrap"
-                               Style="{StaticResource CaptionTextBlockStyle}"/>
-                </StackPanel>
+                <CheckBox Content="Named"
+                          AutomationProperties.AutomationId="SessionsFilterNamed"
+                          FontSize="{ThemeResource FilterCheckBoxFontSize}"
+                          ToolTipService.ToolTip="You assigned a name via copilot --name or /rename"
+                          IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
 
-                <StackPanel Spacing="0" MaxWidth="260">
-                    <CheckBox Content="Heavily used"
-                              AutomationProperties.AutomationId="SessionsFilterHeavy"
-                              IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
-                    <TextBlock Text="10+ summary points (long-running session)"
-                               Margin="28,-2,0,0" Opacity="0.6"
-                               TextWrapping="Wrap"
-                               Style="{StaticResource CaptionTextBlockStyle}"/>
-                </StackPanel>
+                <CheckBox Content="Heavily used"
+                          AutomationProperties.AutomationId="SessionsFilterHeavy"
+                          FontSize="{ThemeResource FilterCheckBoxFontSize}"
+                          ToolTipService.ToolTip="10+ summary points (long-running session)"
+                          IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
 
-                <StackPanel Spacing="0" MaxWidth="240">
-                    <CheckBox Content="Show all"
-                              AutomationProperties.AutomationId="SessionsFilterShowAll"
-                              IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
-                    <TextBlock Text="Override above; show every session"
-                               Margin="28,-2,0,0" Opacity="0.6"
-                               TextWrapping="Wrap"
-                               Style="{StaticResource CaptionTextBlockStyle}"/>
-                </StackPanel>
+                <CheckBox Content="Show all"
+                          AutomationProperties.AutomationId="SessionsFilterShowAll"
+                          FontSize="{ThemeResource FilterCheckBoxFontSize}"
+                          ToolTipService.ToolTip="Override above; show every session"
+                          IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
             </controls:WrapPanel>
 
             <Button Grid.Column="1"

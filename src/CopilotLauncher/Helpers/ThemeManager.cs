@@ -174,15 +174,27 @@ public static class ThemeManager
             app.Resources["ContentControlThemeFontFamily"] = PixelFont;
             app.Resources["XamlAutoFontFamily"] = PixelFont;
             app.Resources["CliMonoFontFamily"] = CliMonoFont;
-            app.Resources["ContentControlThemeFontSize"] = 18.0;
-            app.Resources["NavigationViewItemFontSize"] = 17.0;
+            // FontSize overrides. WinUI built-in styles reference different
+            // resource keys depending on which control they style:
+            //   ContentControlThemeFontSize  — Button, Hyperlink, etc.
+            //   ControlContentThemeFontSize  — CheckBox, RadioButton content
+            //   NavigationViewItemFontSize   — NavigationViewItem
+            // Plus our own FilterCheckBoxFontSize for the inline-bumped
+            // filter row on Sessions. Bumping all four keeps every "control
+            // text" surface in sync at ~22px when the pixel font is active
+            // (VT323 reads notably small at the Fluent default 14px).
+            app.Resources["ContentControlThemeFontSize"] = 22.0;
+            app.Resources["ControlContentThemeFontSize"] = 22.0;
+            app.Resources["NavigationViewItemFontSize"] = 20.0;
+            app.Resources["FilterCheckBoxFontSize"] = 22.0;
             app.Resources["CardBorderThickness"] = new Thickness(2);
         }
         else
         {
             // Removing forces fallback to whatever XamlControlsResources defines
             // (Segoe UI Variable Text + 14px + 1px). Default CardBorderThickness=1
-            // is also defined in App.xaml so the lookup never fails.
+            // and FilterCheckBoxFontSize=14 are also defined in App.xaml so the
+            // lookup never fails.
             if (app.Resources.ContainsKey("ContentControlThemeFontFamily"))
                 app.Resources.Remove("ContentControlThemeFontFamily");
             if (app.Resources.ContainsKey("XamlAutoFontFamily"))
@@ -191,8 +203,12 @@ public static class ThemeManager
                 app.Resources.Remove("CliMonoFontFamily");
             if (app.Resources.ContainsKey("ContentControlThemeFontSize"))
                 app.Resources.Remove("ContentControlThemeFontSize");
+            if (app.Resources.ContainsKey("ControlContentThemeFontSize"))
+                app.Resources.Remove("ControlContentThemeFontSize");
             if (app.Resources.ContainsKey("NavigationViewItemFontSize"))
                 app.Resources.Remove("NavigationViewItemFontSize");
+            if (app.Resources.ContainsKey("FilterCheckBoxFontSize"))
+                app.Resources["FilterCheckBoxFontSize"] = 14.0;
             if (app.Resources.ContainsKey("CardBorderThickness"))
                 app.Resources["CardBorderThickness"] = new Thickness(1);
         }

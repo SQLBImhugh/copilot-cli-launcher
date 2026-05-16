@@ -12,6 +12,10 @@
                  this to 2px via ThemeManager so the bright pink stroke is more
                  visible against the dark backdrop. -->
             <Thickness x:Key="CardBorderThickness">1</Thickness>
+            <!-- Filter checkbox label font size — defaults to the Fluent body
+                 size; ThemeManager bumps this in copilotCli mode so the label
+                 text reads at the same scale as the cards around it. -->
+            <x:Double x:Key="FilterCheckBoxFontSize">14</x:Double>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
