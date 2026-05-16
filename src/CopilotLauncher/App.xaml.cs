@@ -52,10 +52,18 @@ public partial class App : Application
 
         // Apply the user's chosen theme BEFORE Activate so the window paints
         // in the right palette on first frame instead of flashing default.
+        // ThemeManager.Apply takes the compact-mode flag too so font sizes /
+        // padding are scaled in one combined pass (no overwrite race between
+        // theme + compact applies).
         try
         {
             var settings = Services.GetRequiredService<ISettingsService>();
-            Helpers.ThemeManager.Apply(settings.Current.LauncherBehavior.Theme, MainWindowOrNull);
+            var compact = settings.Current.LauncherBehavior.CompactMode;
+            Helpers.ThemeManager.Apply(settings.Current.LauncherBehavior.Theme, MainWindowOrNull, compact);
+            // Also kick the MainWindow into compact layout (resize + hide nav)
+            // before first paint if the saved state was compact.
+            if (compact && MainWindowOrNull is MainWindow mw)
+                mw.ApplyCompactMode(true, persist: false);
         }
         catch
         {

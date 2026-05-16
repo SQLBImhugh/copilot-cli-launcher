@@ -7,7 +7,7 @@
     xmlns:controls="using:CopilotLauncher.Controls"
     FontFamily="{ThemeResource BodyFontFamily}">
 
-    <Grid Padding="32,24,32,16" RowSpacing="14">
+    <Grid Padding="{ThemeResource PagePadding}" RowSpacing="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -16,7 +16,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="Briefing" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
+            <TextBlock Text="Briefing" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource PageTitleFontSize}"/>
             <TextBlock Text="Changelog briefings appear here when Copilot CLI updates. Click 'Check now' to force an update check immediately."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap"/>
         </StackPanel>

@@ -13,27 +13,67 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Custom drag area for the title bar. ExtendsContentIntoTitleBar=true
-             means we own this 32px strip; SetTitleBar(AppTitleBar) makes the
-             whole strip a draggable region. Leave the right ~138px clear so
-             the system min/max/close buttons aren't covered (they're drawn
-             by Windows on top of our content). -->
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Background="{ThemeResource SubtleFillColorTransparentBrush}">
+        <!-- Title-bar row split into:
+             Col 0  AppTitleBar drag region (passed to SetTitleBar). Holds
+                    the title TextBlock; user can drag anywhere inside.
+             Col 1  Theme + Compact icon buttons. NOT inside the SetTitleBar
+                    element so clicks land on the buttons rather than being
+                    eaten by the title-bar drag hit-test (per rubber-duck
+                    pass — interactive controls must live OUTSIDE the
+                    SetTitleBar region in WinUI 3 1.6).
+             Col 2  138px reserved for the system min/max/close buttons that
+                    Windows draws on top of our content. -->
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="138"/>  <!-- system caption buttons -->
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="138"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0"
-                       Text="Copilot CLI Launcher"
-                       VerticalAlignment="Center"
-                       Margin="16,0,0,0"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Opacity="0.8"/>
+
+            <Grid x:Name="AppTitleBar" Grid.Column="0" Background="{ThemeResource SubtleFillColorTransparentBrush}">
+                <TextBlock Text="Copilot CLI Launcher"
+                           VerticalAlignment="Center"
+                           Margin="16,0,0,0"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Opacity="0.8"/>
+            </Grid>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
+                <Button x:Name="ThemeButton"
+                        AutomationProperties.AutomationId="TitleBarThemeButton"
+                        AutomationProperties.Name="Switch theme"
+                        ToolTipService.ToolTip="Switch theme"
+                        Background="{ThemeResource SubtleFillColorTransparentBrush}"
+                        BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
+                        Padding="10,0"
+                        VerticalAlignment="Stretch">
+                    <muxc:FontIcon Glyph="&#xE790;" FontSize="14"/>
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <muxc:RadioMenuFlyoutItem x:Name="ThemeSystemItem"  Text="Follow system" GroupName="LauncherTheme" Tag="system"     Click="OnThemeMenuItemClick"/>
+                            <muxc:RadioMenuFlyoutItem x:Name="ThemeLightItem"   Text="Light"         GroupName="LauncherTheme" Tag="light"      Click="OnThemeMenuItemClick"/>
+                            <muxc:RadioMenuFlyoutItem x:Name="ThemeDarkItem"    Text="Dark"          GroupName="LauncherTheme" Tag="dark"       Click="OnThemeMenuItemClick"/>
+                            <muxc:RadioMenuFlyoutItem x:Name="ThemeCopilotItem" Text="Copilot CLI"   GroupName="LauncherTheme" Tag="copilotCli" Click="OnThemeMenuItemClick"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+
+                <Button x:Name="CompactButton"
+                        AutomationProperties.AutomationId="TitleBarCompactButton"
+                        AutomationProperties.Name="Toggle compact mode"
+                        ToolTipService.ToolTip="Toggle compact mode"
+                        Click="OnCompactToggleClick"
+                        Background="{ThemeResource SubtleFillColorTransparentBrush}"
+                        BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
+                        Padding="10,0"
+                        VerticalAlignment="Stretch">
+                    <muxc:FontIcon x:Name="CompactGlyph" Glyph="&#xE73F;" FontSize="14"/>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <muxc:NavigationView Grid.Row="1"
             x:Name="NavView"
-            AutomationProperties.AutomationId="ShellNavigationView"
             PaneDisplayMode="Left"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="False"
@@ -64,9 +104,6 @@
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
 
-                <!-- Settings sits with the rest of the nav items now (was
-                     auto-rendered at the bottom via IsSettingsVisible) so the
-                     gear is reachable without scrolling on small heights. -->
                 <muxc:NavigationViewItem Tag="settings" Content="Settings" AutomationProperties.AutomationId="NavSettings">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE713;"/>

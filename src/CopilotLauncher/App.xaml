@@ -30,6 +30,19 @@
                  a FontFamily setter). ThemeManager swaps to Consolas in
                  copilotCli mode. -->
             <FontFamily x:Key="BodyFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+            <!-- Page title font size — defaults to the Fluent
+                 TitleLargeTextBlockStyle equivalent (40px). Compact mode
+                 swaps this to 22px so the title doesn't dominate a 300px-wide
+                 mini window. -->
+            <x:Double x:Key="PageTitleFontSize">40</x:Double>
+            <!-- Section subheading font size (Settings cards). Defaults to
+                 the SubtitleTextBlockStyle 20px; compact reduces to 14. -->
+            <x:Double x:Key="SectionTitleFontSize">20</x:Double>
+            <!-- Page padding tuple — Sessions/Shortcuts/etc use a Thickness
+                 for their root Grid Padding. ThemeManager replaces this with
+                 a tighter value in compact mode so the chrome doesn't eat
+                 the available width. -->
+            <Thickness x:Key="PagePadding">32,24,32,16</Thickness>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

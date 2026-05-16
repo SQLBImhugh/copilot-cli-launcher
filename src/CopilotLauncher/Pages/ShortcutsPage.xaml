@@ -6,7 +6,7 @@
     xmlns:models="using:CopilotLauncher.Models"
     FontFamily="{ThemeResource BodyFontFamily}">
 
-    <Grid Padding="32,24,32,16" RowSpacing="16">
+    <Grid Padding="{ThemeResource PagePadding}" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -14,7 +14,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="Shortcuts" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
+            <TextBlock Text="Shortcuts" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource PageTitleFontSize}"/>
             <TextBlock Text="One-click reusable shortcutes. Configure them in the New Shortcut tab; they'll appear here."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
         </StackPanel>

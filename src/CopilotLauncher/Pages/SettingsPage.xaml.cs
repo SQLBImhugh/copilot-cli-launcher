@@ -55,7 +55,8 @@ public sealed partial class SettingsPage : Page
         {
             try
             {
-                Helpers.ThemeManager.Apply(themeName, ((App)Application.Current).MainWindowOrNull);
+                var s = App.Services.GetRequiredService<ISettingsService>();
+                Helpers.ThemeManager.Apply(themeName, ((App)Application.Current).MainWindowOrNull, s.Current.LauncherBehavior.CompactMode);
             }
             catch { }
         };

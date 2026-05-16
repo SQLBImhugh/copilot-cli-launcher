@@ -1,27 +1,29 @@
+using System;
+using Windows.Graphics;
 using Windows.UI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using CopilotLauncher.Pages;
+using CopilotLauncher.Services;
 
 namespace CopilotLauncher;
 
 public sealed partial class MainWindow : Window
 {
+    private SizeInt32? _savedNormalSize;
+    private string? _savedNormalNavTag;
+
     public MainWindow()
     {
         InitializeComponent();
 
-        // Title-bar / taskbar / alt-tab icon. Set BEFORE Activate to avoid
-        // flashing the default WinUI placeholder icon. Path is relative to
-        // the running .exe; csproj <Content CopyToOutputDirectory> ensures
-        // the .ico ships in dist/.
         try
         {
-            var iconPath = System.IO.Path.Combine(
-                AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
             if (System.IO.File.Exists(iconPath))
                 AppWindow.SetIcon(iconPath);
         }
@@ -31,31 +33,41 @@ public sealed partial class MainWindow : Window
             // ApplicationIcon) still drives Explorer + pinned-taskbar visuals.
         }
 
-        // Backdrop is now driven by ThemeManager.ApplyBackdrop(this, theme)
-        // (called from App.OnLaunched after the saved theme is loaded). Mica
-        // is the wrong default for a custom-color theme like Copilot CLI
-        // because Mica is *translucent* and samples the desktop wallpaper —
-        // ApplicationPageBackgroundThemeBrush gets ignored, which is why the
-        // window stayed bluish even with our brush overrides applied. The
-        // theme manager flips between Mica (built-in themes) and a solid
-        // backdrop (copilotCli) on demand.
+        // Backdrop is driven by ThemeManager.ApplyBackdrop(this, theme)
+        // (called from App.OnLaunched after the saved theme is loaded).
 
-        // Extend the app content into the title-bar area so the bar's
-        // background becomes the same Mica/app surface as the rest of the
-        // window. Without this, Windows draws a default white title bar
-        // and our ButtonForegroundColor / ButtonHoverColor settings paint
-        // the buttons invisibly against the white. NavigationView's pane
-        // header naturally fills that strip, so the layout still looks fine.
         ExtendsContentIntoTitleBar = true;
+        // AppTitleBar contains ONLY non-interactive content (the title text).
+        // The Theme + Compact buttons live in a sibling Grid column outside
+        // the SetTitleBar region so their clicks reach them instead of being
+        // captured as drag input.
         SetTitleBar(AppTitleBar);
 
-        // Make the title bar follow the OS / app theme so the system buttons
-        // (min/max/close) are dark in dark mode and light in light mode.
         ApplyTitleBarTheme();
 
         // Default landing page.
         ContentFrame.Navigate(typeof(SessionsPage));
         NavView.SelectedItem = NavView.MenuItems[0];
+
+        // Sync the theme MenuFlyout's checked item with the saved setting so
+        // the radio shows the current state when the flyout is opened.
+        // Window doesn't have a Loaded event in WinUI 3, so use Activated
+        // (fires once shortly after Activate()).
+        bool synced = false;
+        Activated += (_, _) =>
+        {
+            if (synced) return;
+            synced = true;
+            SyncThemeMenuChecked();
+        };
+
+        // If SettingsPage's combo updates the theme, our title-bar radio
+        // should follow. ThemeManager.ThemeChanged fires after every Apply.
+        Helpers.ThemeManager.ThemeChanged += (_, e) => DispatcherQueue.TryEnqueue(() =>
+        {
+            SyncThemeMenuChecked();
+            UpdateCompactGlyph(e.Compact);
+        });
     }
 
     private void ApplyTitleBarTheme()
@@ -64,10 +76,6 @@ public sealed partial class MainWindow : Window
         {
             if (AppWindow?.TitleBar is not { } tb) return;
 
-            // Manually paint the system-button colors to match the current theme.
-            // (AppWindowTitleBar.PreferredTheme would do this for us, but it
-            // landed in Windows App SDK 1.7; we're on 1.6 so we color the
-            // buttons by hand. Re-applies on theme change.)
             if (Content is FrameworkElement root)
             {
                 ApplyButtonColors(tb, IsCurrentlyDark(root));
@@ -107,9 +115,6 @@ public sealed partial class MainWindow : Window
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        // Settings is now a regular MenuItem with Tag="settings" rather than
-        // the auto-rendered footer item, so we no longer need to special-case
-        // args.IsSettingsSelected — the tag-switch below handles it.
         if (args.SelectedItem is NavigationViewItem item && item.Tag is string tag)
         {
             var page = tag switch
@@ -126,8 +131,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Programmatically switch to the tab with the given Tag value
-    /// (e.g. "new" for New Shortcut). Triggers the existing SelectionChanged
-    /// handler so the Frame navigates and the nav item highlights together.</summary>
+    /// (e.g. "newshortcut" for New Shortcut). Triggers the existing
+    /// SelectionChanged handler so the Frame navigates and the nav item
+    /// highlights together.</summary>
     public void NavigateToTab(string tag)
     {
         foreach (var raw in NavView.MenuItems)
@@ -142,12 +148,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Apply the right system backdrop + root background for a given theme.
-    /// Mica is translucent and samples the desktop wallpaper, so it ignores
-    /// any ApplicationPageBackgroundThemeBrush override. For our custom
-    /// "copilotCli" palette we therefore disable Mica and paint the root
-    /// grid with the dark Copilot CLI banner background; for the built-in
-    /// system / light / dark themes we keep Mica so the app still feels
-    /// native on Windows 11.
+    /// Mica is translucent and ignores the page-background brush, so for
+    /// copilotCli we disable Mica and paint the root grid with the dark
+    /// brush; for the built-in themes we keep Mica.
     /// </summary>
     public void ApplyBackdrop(string theme)
     {
@@ -157,26 +160,158 @@ public sealed partial class MainWindow : Window
             if (wantMica)
             {
                 SystemBackdrop ??= new MicaBackdrop();
-                WindowRoot.Background = null;  // let Mica show through
+                WindowRoot.Background = null;
             }
             else
             {
                 SystemBackdrop = null;
-                // Use a ThemeResource so any future palette tweak (or a
-                // theme switch back to dark/light) auto-updates this brush.
-                // ThemeManager replaces SolidBackgroundFillColorBaseBrush on
-                // Application.Resources to #171717 when copilotCli is active.
-                if (Microsoft.UI.Xaml.Application.Current.Resources["SolidBackgroundFillColorBaseBrush"]
-                    is Microsoft.UI.Xaml.Media.Brush bg)
-                {
+                if (Application.Current.Resources["SolidBackgroundFillColorBaseBrush"] is Brush bg)
                     WindowRoot.Background = bg;
-                }
             }
         }
         catch
         {
-            // Backdrop changes are non-critical — fall back to whatever
-            // Windows decided to render.
+            // Backdrop changes are non-critical.
         }
+    }
+
+    // ---------------- Title-bar buttons: theme picker + compact toggle ----
+
+    private void OnThemeMenuItemClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Microsoft.UI.Xaml.Controls.RadioMenuFlyoutItem item) return;
+        if (item.Tag is not string tag) return;
+
+        try
+        {
+            var settings = App.Services.GetRequiredService<ISettingsService>();
+            settings.Current.LauncherBehavior.Theme = tag;
+            settings.Save();
+            Helpers.ThemeManager.Apply(tag, this, settings.Current.LauncherBehavior.CompactMode);
+        }
+        catch
+        {
+            // Theme switch is non-critical UI; swallow.
+        }
+    }
+
+    private void SyncThemeMenuChecked()
+    {
+        try
+        {
+            var settings = App.Services.GetRequiredService<ISettingsService>();
+            var theme = settings.Current.LauncherBehavior.Theme;
+            ThemeSystemItem.IsChecked  = theme == "system";
+            ThemeLightItem.IsChecked   = theme == "light";
+            ThemeDarkItem.IsChecked    = theme == "dark";
+            ThemeCopilotItem.IsChecked = theme == "copilotCli";
+        }
+        catch { }
+    }
+
+    private void OnCompactToggleClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var settings = App.Services.GetRequiredService<ISettingsService>();
+            var nowCompact = !settings.Current.LauncherBehavior.CompactMode;
+            ApplyCompactMode(nowCompact, persist: true);
+        }
+        catch
+        {
+            // Compact toggle is non-critical UI; swallow.
+        }
+    }
+
+    /// <summary>Toggle between compact and normal mode. Saves the previous
+    /// non-compact size so the restore is sensible even if the user launched
+    /// directly into compact. Called from App.OnLaunched at startup with the
+    /// saved CompactMode value.</summary>
+    public void ApplyCompactMode(bool compact, bool persist)
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var behavior = settings.Current.LauncherBehavior;
+
+        if (compact)
+        {
+            // Save current size + selected nav so we can restore on exit.
+            // Only update LastNormalWindowWidth/Height if we're transitioning
+            // FROM normal mode (not on initial launch when CompactMode was
+            // already true).
+            if (!behavior.CompactMode && AppWindow is not null)
+            {
+                _savedNormalSize = AppWindow.Size;
+                behavior.LastNormalWindowWidth  = AppWindow.Size.Width;
+                behavior.LastNormalWindowHeight = AppWindow.Size.Height;
+            }
+            if (NavView.SelectedItem is NavigationViewItem item && item.Tag is string tag)
+                _savedNormalNavTag = tag;
+
+            // Resize. Multiply by RasterizationScale so we get the requested
+            // *effective* pixel size on high-DPI displays.
+            ResizeWindow(320, 640);
+
+            // Hide the nav and pin to the Shortcuts page (the compact view's
+            // single purpose is the saved-shortcuts launcher). Frame is
+            // navigated explicitly so no SelectionChanged-no-op risk.
+            NavView.IsPaneVisible = false;
+            ContentFrame.Navigate(typeof(ShortcutsPage));
+
+            UpdateCompactGlyph(true);
+        }
+        else
+        {
+            NavView.IsPaneVisible = true;
+
+            var w = _savedNormalSize?.Width  ?? Math.Max(behavior.LastNormalWindowWidth,  640);
+            var h = _savedNormalSize?.Height ?? Math.Max(behavior.LastNormalWindowHeight, 480);
+            ResizeWindow(w, h);
+
+            // Explicit navigate + selection so the Frame and nav re-sync
+            // even when SelectedItem == savedSelection (the SelectionChanged
+            // event would otherwise be a no-op).
+            var restoreTag = _savedNormalNavTag ?? "sessions";
+            var page = restoreTag switch
+            {
+                "shortcuts"   => typeof(ShortcutsPage),
+                "newshortcut" => typeof(NewShortcutPage),
+                "briefing"    => typeof(BriefingPage),
+                "settings"    => typeof(SettingsPage),
+                _             => typeof(SessionsPage),
+            };
+            ContentFrame.Navigate(page);
+            NavigateToTab(restoreTag);
+
+            UpdateCompactGlyph(false);
+        }
+
+        behavior.CompactMode = compact;
+        if (persist) settings.Save();
+
+        // Re-apply theme so font sizes re-resolve for the new mode.
+        Helpers.ThemeManager.Apply(behavior.Theme, this, compact);
+    }
+
+    private void ResizeWindow(int effectiveWidth, int effectiveHeight)
+    {
+        if (AppWindow is null) return;
+        try
+        {
+            // AppWindow.Resize takes physical pixels. Multiply by the current
+            // rasterization scale so the resulting window is roughly the
+            // requested *effective* (XAML) pixel size on high-DPI displays.
+            var scale = Content?.XamlRoot?.RasterizationScale ?? 1.0;
+            var w = (int)Math.Round(effectiveWidth  * scale);
+            var h = (int)Math.Round(effectiveHeight * scale);
+            AppWindow.Resize(new SizeInt32(w, h));
+        }
+        catch { }
+    }
+
+    private void UpdateCompactGlyph(bool compact)
+    {
+        // E73F = MiniExpand-style icon; E740 = FullScreen "expand back out"
+        // icon. Swap so the button always shows the action it'll perform.
+        CompactGlyph.Glyph = compact ? "\uE740" : "\uE73F";
     }
 }

@@ -9,7 +9,7 @@
     xmlns:local="using:CopilotLauncher.Pages"
     FontFamily="{ThemeResource BodyFontFamily}">
 
-    <Grid Padding="32,24,32,16" RowSpacing="16">
+    <Grid Padding="{ThemeResource PagePadding}" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -21,7 +21,7 @@
 
         <!-- Title -->
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="Sessions" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}"/>
+            <TextBlock Text="Sessions" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource PageTitleFontSize}"/>
             <TextBlock Text="Resume an existing Copilot session or save it as a launch shortcut."
                        Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
         </StackPanel>

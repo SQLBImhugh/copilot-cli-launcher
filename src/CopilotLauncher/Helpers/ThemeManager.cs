@@ -148,51 +148,29 @@ public static class ThemeManager
         ("ToggleSwitchKnobFillOnPressed",        Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
     };
 
-    public static void Apply(string theme, Window? window)
+
+    /// <summary>
+    /// Apply theme + compact-mode font/size scaling. Both states must be
+    /// applied together so they don't overwrite each other's font-size
+    /// resource keys. Raises <see cref="ThemeChanged"/> after applying.
+    /// </summary>
+    public static void Apply(string theme, Window? window, bool compact = false)
     {
         var app = Application.Current;
         if (app is null) return;
 
         var wantPalette = string.Equals(theme, "copilotCli", StringComparison.OrdinalIgnoreCase);
 
-        // Replace each brush directly in Application.Resources. This is what
-        // {ThemeResource} bindings query when re-resolving, so once we bounce
-        // RequestedTheme below, every existing surface picks up the new value.
+        // Brushes (theme-only).
         foreach (var (key, color) in CopilotPalette)
         {
             if (wantPalette)
-            {
                 app.Resources[key] = new SolidColorBrush(color);
-            }
-            else
-            {
-                if (app.Resources.ContainsKey(key))
-                    app.Resources.Remove(key);
-            }
+            else if (app.Resources.ContainsKey(key))
+                app.Resources.Remove(key);
         }
 
-        // Pixel font + thicker card borders + bumped font sizes for the
-        // Copilot CLI palette. Three font-family resources are overridden:
-        //   - ContentControlThemeFontFamily — what most controls inherit
-        //   - XamlAutoFontFamily — what NavigationViewItem and a few other
-        //     legacy/system styles use; without overriding this, the nav
-        //     items stay in Segoe UI Variable
-        //   - CliMonoFontFamily (custom) — a public CascadiaMono-only resource
-        //     so MarkdownTextBlock and similar surfaces can opt into the CLI
-        //     font without the pixel-art shape
-        // Font sizes bumped because VT323 reads small at default 14px.
-        // FONT POLICY in copilotCli mode:
-        //   - Pixel font (VT323) is used ONLY on page titles + Settings
-        //     section subheadings, via the HeadingFontFamily theme resource
-        //     bound inline by those TextBlocks. Pixel-art body text is hard
-        //     to read so we deliberately keep it off everything else.
-        //   - Body / control / nav text uses the CLI font (Cascadia Mono /
-        //     Consolas) by overriding ContentControlThemeFontFamily and
-        //     XamlAutoFontFamily — that covers Button, ComboBox, TextBox,
-        //     CheckBox, ToggleSwitch, NavigationViewItem, and most other
-        //     surfaces.
-        //   - Sizes bumped because Cascadia Mono at 14px still feels small
-        //     against the bright pink card borders.
+        // Font families (theme-only).
         if (wantPalette)
         {
             app.Resources["HeadingFontFamily"] = PixelFont;
@@ -200,39 +178,38 @@ public static class ThemeManager
             app.Resources["ContentControlThemeFontFamily"] = CliMonoFont;
             app.Resources["XamlAutoFontFamily"] = CliMonoFont;
             app.Resources["CliMonoFontFamily"] = CliMonoFont;
-            app.Resources["ContentControlThemeFontSize"] = 16.0;
-            app.Resources["ControlContentThemeFontSize"] = 16.0;
-            app.Resources["NavigationViewItemFontSize"] = 16.0;
-            app.Resources["FilterCheckBoxFontSize"] = 16.0;
             app.Resources["CardBorderThickness"] = new Thickness(2);
         }
         else
         {
-            // Removing forces fallback to whatever XamlControlsResources defines
-            // (Segoe UI Variable Text + 14px + 1px). HeadingFontFamily,
-            // BodyFontFamily, CardBorderThickness, FilterCheckBoxFontSize all
-            // have non-pixel defaults in App.xaml so the lookup never fails.
-            if (app.Resources.ContainsKey("HeadingFontFamily"))
-                app.Resources.Remove("HeadingFontFamily");
-            if (app.Resources.ContainsKey("BodyFontFamily"))
-                app.Resources.Remove("BodyFontFamily");
-            if (app.Resources.ContainsKey("ContentControlThemeFontFamily"))
-                app.Resources.Remove("ContentControlThemeFontFamily");
-            if (app.Resources.ContainsKey("XamlAutoFontFamily"))
-                app.Resources.Remove("XamlAutoFontFamily");
-            if (app.Resources.ContainsKey("CliMonoFontFamily"))
-                app.Resources.Remove("CliMonoFontFamily");
-            if (app.Resources.ContainsKey("ContentControlThemeFontSize"))
-                app.Resources.Remove("ContentControlThemeFontSize");
-            if (app.Resources.ContainsKey("ControlContentThemeFontSize"))
-                app.Resources.Remove("ControlContentThemeFontSize");
-            if (app.Resources.ContainsKey("NavigationViewItemFontSize"))
-                app.Resources.Remove("NavigationViewItemFontSize");
-            if (app.Resources.ContainsKey("FilterCheckBoxFontSize"))
-                app.Resources["FilterCheckBoxFontSize"] = 14.0;
-            if (app.Resources.ContainsKey("CardBorderThickness"))
-                app.Resources["CardBorderThickness"] = new Thickness(1);
+            if (app.Resources.ContainsKey("HeadingFontFamily")) app.Resources.Remove("HeadingFontFamily");
+            if (app.Resources.ContainsKey("BodyFontFamily")) app.Resources.Remove("BodyFontFamily");
+            if (app.Resources.ContainsKey("ContentControlThemeFontFamily")) app.Resources.Remove("ContentControlThemeFontFamily");
+            if (app.Resources.ContainsKey("XamlAutoFontFamily")) app.Resources.Remove("XamlAutoFontFamily");
+            if (app.Resources.ContainsKey("CliMonoFontFamily")) app.Resources.Remove("CliMonoFontFamily");
+            if (app.Resources.ContainsKey("CardBorderThickness")) app.Resources["CardBorderThickness"] = new Thickness(1);
         }
+
+        // Font sizes + page padding — depend on BOTH theme and compact mode.
+        // Resolve target values once per (theme, compact) combination so the
+        // two modes can't conflict.
+        var (controlFs, navFs, filterFs, titleFs, sectionFs, pagePad) = (theme, compact) switch
+        {
+            ("copilotCli", true)  => (12.0, 12.0, 12.0, 18.0, 13.0, new Thickness(12, 8, 12, 8)),
+            ("copilotCli", false) => (16.0, 16.0, 16.0, 40.0, 20.0, new Thickness(32, 24, 32, 16)),
+            (_,            true)  => (12.0, 12.0, 12.0, 18.0, 13.0, new Thickness(12, 8, 12, 8)),
+            (_,            false) => (14.0, 14.0, 14.0, 40.0, 20.0, new Thickness(32, 24, 32, 16)),
+        };
+        var sizeOverridesActive = wantPalette || compact;
+        WriteOrRevert(app, "ContentControlThemeFontSize", controlFs, sizeOverridesActive);
+        WriteOrRevert(app, "ControlContentThemeFontSize", controlFs, sizeOverridesActive);
+        WriteOrRevert(app, "NavigationViewItemFontSize", navFs, sizeOverridesActive);
+        // App.xaml has explicit defaults for these so the lookup never fails;
+        // we always write our chosen value.
+        app.Resources["FilterCheckBoxFontSize"] = filterFs;
+        app.Resources["PageTitleFontSize"] = titleFs;
+        app.Resources["SectionTitleFontSize"] = sectionFs;
+        app.Resources["PagePadding"] = pagePad;
 
         if (window?.Content is FrameworkElement root)
         {
@@ -243,19 +220,34 @@ public static class ThemeManager
                 "copilotCli" => ElementTheme.Dark,
                 _            => ElementTheme.Default,
             };
-
-            // Force a Light↔Dark bounce so every {ThemeResource} marker on
-            // every loaded element invalidates and re-resolves.
+            // Light↔Dark bounce so every {ThemeResource} marker re-resolves.
             var bounce = target == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
             root.RequestedTheme = bounce;
             root.RequestedTheme = target;
         }
 
-        // Backdrop policy: Mica is translucent (samples the desktop
-        // wallpaper) so it ignores the page-background brush we just
-        // set. For copilotCli we disable Mica and paint the root grid
-        // with the dark brush; for the built-in themes we restore Mica.
         if (window is CopilotLauncher.MainWindow main)
             main.ApplyBackdrop(theme);
+
+        ThemeChanged?.Invoke(null, new ThemeAppliedEventArgs(theme, compact));
+    }
+
+    /// <summary>Raised after <see cref="Apply"/> finishes so other UI
+    /// surfaces (e.g. SettingsPage's theme combo) can re-sync.</summary>
+    public static event EventHandler<ThemeAppliedEventArgs>? ThemeChanged;
+
+    public sealed class ThemeAppliedEventArgs : EventArgs
+    {
+        public string Theme { get; }
+        public bool Compact { get; }
+        public ThemeAppliedEventArgs(string theme, bool compact) { Theme = theme; Compact = compact; }
+    }
+
+    private static void WriteOrRevert(Application app, string key, double value, bool isOverride)
+    {
+        if (isOverride)
+            app.Resources[key] = value;
+        else if (app.Resources.ContainsKey(key))
+            app.Resources.Remove(key);
     }
 }

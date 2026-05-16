@@ -110,6 +110,12 @@ public sealed class LauncherBehaviorSettings
     public bool SystemTrayIconEnabled { get; set; } = true;
     public string Theme { get; set; } = "copilotCli";   // system | light | dark | copilotCli (default)
     public string WindowTitlePattern { get; set; } = "Copilot Launcher";
+    /// <summary>True if the user toggled into the compact-mini view.</summary>
+    public bool CompactMode { get; set; }
+    /// <summary>Window width in effective pixels last time the app was in
+    /// non-compact mode. Used to restore when leaving compact.</summary>
+    public int LastNormalWindowWidth { get; set; } = 1280;
+    public int LastNormalWindowHeight { get; set; } = 800;
 }
 
 public sealed class StorageSettings
