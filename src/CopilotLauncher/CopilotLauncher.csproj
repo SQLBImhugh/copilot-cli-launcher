@@ -40,6 +40,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- App icon shipped to output so MainWindow.AppWindow.SetIcon and
+         TrayIconService.TryLoadApplicationIcon (both look for
+         "Assets/AppIcon.ico" relative to the .exe) can find it at runtime.
+         The same .ico is also embedded in the .exe via <ApplicationIcon>
+         above, which is what Explorer / taskbar pinning use. -->
+    <Content Include="Assets\AppIcon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\AppIcon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />

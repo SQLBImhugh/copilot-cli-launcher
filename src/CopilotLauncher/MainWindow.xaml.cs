@@ -14,6 +14,23 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
+        // Title-bar / taskbar / alt-tab icon. Set BEFORE Activate to avoid
+        // flashing the default WinUI placeholder icon. Path is relative to
+        // the running .exe; csproj <Content CopyToOutputDirectory> ensures
+        // the .ico ships in dist/.
+        try
+        {
+            var iconPath = System.IO.Path.Combine(
+                AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+            if (System.IO.File.Exists(iconPath))
+                AppWindow.SetIcon(iconPath);
+        }
+        catch
+        {
+            // SetIcon is non-critical — the embedded icon (via csproj
+            // ApplicationIcon) still drives Explorer + pinned-taskbar visuals.
+        }
+
         // Apply Mica backdrop where supported (Windows 11). Falls back gracefully on Win10.
         try
         {

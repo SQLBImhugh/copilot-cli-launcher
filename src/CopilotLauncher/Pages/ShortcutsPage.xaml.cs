@@ -56,7 +56,11 @@ public sealed partial class ShortcutsPage : Page
             if (file is null) return;
 
             var plan = _exporter.BuildPlan(entry);
-            LnkWriter.Write(plan, file.Path);
+            // Brand exported shortcuts with the launcher's own icon (the
+            // .exe embeds AppIcon.ico via csproj <ApplicationIcon>) instead
+            // of the underlying terminal exe's icon.
+            var launcherExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            LnkWriter.Write(plan, file.Path, launcherExe);
         }
         catch (Exception ex)
         {

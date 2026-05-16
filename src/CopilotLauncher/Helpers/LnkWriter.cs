@@ -11,7 +11,13 @@ namespace CopilotLauncher.Helpers;
 /// </summary>
 public static class LnkWriter
 {
-    public static void Write(ShortcutExportPlan plan, string outputPath)
+    /// <summary>
+    /// Writes the .lnk. If <paramref name="iconOverride"/> is supplied it
+    /// wins over <see cref="ShortcutExportPlan.IconLocation"/>; that lets
+    /// callers brand all exported shortcuts with the launcher's own icon
+    /// instead of the terminal exe's icon (which is the plan default).
+    /// </summary>
+    public static void Write(ShortcutExportPlan plan, string outputPath, string? iconOverride = null)
     {
         var shellType = Type.GetTypeFromProgID("WScript.Shell")
             ?? throw new InvalidOperationException("WScript.Shell COM type not registered (Windows only).");
@@ -25,8 +31,9 @@ public static class LnkWriter
                 sc.Arguments = plan.Arguments;
                 sc.WorkingDirectory = plan.WorkingDirectory;
                 sc.Description = plan.Description;
-                if (!string.IsNullOrEmpty(plan.IconLocation))
-                    sc.IconLocation = plan.IconLocation;
+                var icon = !string.IsNullOrEmpty(iconOverride) ? iconOverride : plan.IconLocation;
+                if (!string.IsNullOrEmpty(icon))
+                    sc.IconLocation = icon;
                 sc.Save();
             }
             finally
