@@ -107,12 +107,9 @@ public sealed partial class MainWindow : Window
 
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (args.IsSettingsSelected)
-        {
-            ContentFrame.Navigate(typeof(SettingsPage));
-            return;
-        }
-
+        // Settings is now a regular MenuItem with Tag="settings" rather than
+        // the auto-rendered footer item, so we no longer need to special-case
+        // args.IsSettingsSelected — the tag-switch below handles it.
         if (args.SelectedItem is NavigationViewItem item && item.Tag is string tag)
         {
             var page = tag switch
@@ -121,6 +118,7 @@ public sealed partial class MainWindow : Window
                 "shortcuts"   => typeof(ShortcutsPage),
                 "newshortcut" => typeof(NewShortcutPage),
                 "briefing"    => typeof(BriefingPage),
+                "settings"    => typeof(SettingsPage),
                 _             => typeof(SessionsPage),
             };
             ContentFrame.Navigate(page);

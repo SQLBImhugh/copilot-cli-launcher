@@ -97,19 +97,12 @@ public static class ThemeManager
         ("SystemFillColorAttentionBackgroundBrush", Color.FromArgb(0x40, 0xCC, 0x66, 0xCC)),
         ("SystemFillColorCautionBackgroundBrush", Color.FromArgb(0x40, 0xF2, 0xC9, 0x4C)),
         ("SystemFillColorCriticalBackgroundBrush", Color.FromArgb(0x40, 0xE0, 0x61, 0x7A)),
-        // Toggle switch — green "on" state to match the green pixels in the
-        // Copilot CLI mascot. Cyan accent stays for buttons/focus rings;
-        // these toggle-specific keys keep that separation.
-        ("ToggleSwitchFillOn",                   Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
-        ("ToggleSwitchFillOnPointerOver",        Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
-        ("ToggleSwitchFillOnPressed",            Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
-        ("ToggleSwitchStrokeOn",                 Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
-        ("ToggleSwitchStrokeOnPointerOver",      Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
-        ("ToggleSwitchStrokeOnPressed",          Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
-        ("ToggleSwitchKnobFillOn",               Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
-        ("ToggleSwitchKnobFillOnPointerOver",    Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
-        ("ToggleSwitchKnobFillOnPressed",        Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
-        // CheckBox — green checked state
+        // CheckBox — green checked state with BLACK glyph (high contrast on
+        // bright green; previously was white but the user wanted black).
+        // Toggle switches intentionally NOT recolored — only "square"
+        // checkboxes are green; the round toggle pills stay on the cyan
+        // AccentFillColor* path so the two binary controls remain visually
+        // distinct.
         ("CheckBoxBackgroundChecked",            Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
         ("CheckBoxBackgroundCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
         ("CheckBoxBackgroundCheckedPressed",     Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
@@ -120,7 +113,7 @@ public static class ThemeManager
         ("CheckBoxCheckBackgroundFillCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
         ("CheckBoxCheckBackgroundFillCheckedPressed", Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
         ("CheckBoxCheckBackgroundStrokeChecked", Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
-        ("CheckBoxCheckGlyphForegroundChecked",  Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+        ("CheckBoxCheckGlyphForegroundChecked",  Color.FromArgb(0xFF, 0x00, 0x00, 0x00)),
     };
 
     public static void Apply(string theme, Window? window)
@@ -146,22 +139,28 @@ public static class ThemeManager
             }
         }
 
-        // Pixel font + thicker card borders for the Copilot CLI palette.
-        // ContentControlThemeFontFamily is what every built-in Fluent text
-        // style references, so swapping it propagates to BodyTextBlockStyle,
-        // SubtitleTextBlockStyle, etc. without touching any page XAML.
+        // Pixel font + thicker card borders + bumped font size for the Copilot
+        // CLI palette. ContentControlThemeFontFamily is what every built-in
+        // Fluent text style references, so swapping it propagates to
+        // BodyTextBlockStyle, SubtitleTextBlockStyle, etc. without touching
+        // any page XAML. Pixel fonts read small at the default 14px so we
+        // bump the base content size to 17px in copilotCli mode (everything
+        // built on the type ramp scales with it).
         if (wantPalette)
         {
             app.Resources["ContentControlThemeFontFamily"] = PixelFont;
+            app.Resources["ContentControlThemeFontSize"] = 17.0;
             app.Resources["CardBorderThickness"] = new Thickness(2);
         }
         else
         {
             // Removing forces fallback to whatever XamlControlsResources defines
-            // (Segoe UI Variable Text + 1px). Default CardBorderThickness=1 is
-            // also defined in App.xaml so the lookup never fails.
+            // (Segoe UI Variable Text + 14px + 1px). Default CardBorderThickness=1
+            // is also defined in App.xaml so the lookup never fails.
             if (app.Resources.ContainsKey("ContentControlThemeFontFamily"))
                 app.Resources.Remove("ContentControlThemeFontFamily");
+            if (app.Resources.ContainsKey("ContentControlThemeFontSize"))
+                app.Resources.Remove("ContentControlThemeFontSize");
             if (app.Resources.ContainsKey("CardBorderThickness"))
                 app.Resources["CardBorderThickness"] = new Thickness(1);
         }

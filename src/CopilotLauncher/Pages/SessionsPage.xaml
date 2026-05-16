@@ -4,7 +4,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:CopilotLauncher.ViewModels"
-    xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:controls="using:CopilotLauncher.Controls">
 
     <Grid Padding="32,24,32,16" RowSpacing="16">
         <Grid.RowDefinitions>
@@ -46,35 +47,46 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="20" VerticalAlignment="Top">
-                <StackPanel Spacing="0">
+            <!-- WrapPanel flows left-to-right and breaks to a new row when
+                 the next filter cell would overflow. Each cell has a
+                 max-width so the wrappable caption never makes the cell
+                 obscenely wide on a wide window. -->
+            <controls:WrapPanel Grid.Column="0"
+                                HorizontalSpacing="20"
+                                VerticalSpacing="8"
+                                VerticalAlignment="Top">
+                <StackPanel Spacing="0" MaxWidth="260">
                     <CheckBox Content="Recent (15d)" IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
                     <TextBlock Text="Modified in the last 15 days"
                                Margin="28,-2,0,0" Opacity="0.6"
+                               TextWrapping="Wrap"
                                Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
 
-                <StackPanel Spacing="0">
+                <StackPanel Spacing="0" MaxWidth="280">
                     <CheckBox Content="Named" IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
                     <TextBlock Text="You assigned a name via copilot --name or /rename"
                                Margin="28,-2,0,0" Opacity="0.6"
+                               TextWrapping="Wrap"
                                Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
 
-                <StackPanel Spacing="0">
+                <StackPanel Spacing="0" MaxWidth="260">
                     <CheckBox Content="Heavily used" IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
                     <TextBlock Text="10+ summary points (long-running session)"
                                Margin="28,-2,0,0" Opacity="0.6"
+                               TextWrapping="Wrap"
                                Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
 
-                <StackPanel Spacing="0">
+                <StackPanel Spacing="0" MaxWidth="240">
                     <CheckBox Content="Show all" IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
                     <TextBlock Text="Override above; show every session"
                                Margin="28,-2,0,0" Opacity="0.6"
+                               TextWrapping="Wrap"
                                Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
-            </StackPanel>
+            </controls:WrapPanel>
 
             <Button Grid.Column="1" Content="↻ Refresh" Click="OnRefreshClick" VerticalAlignment="Top"/>
         </Grid>
