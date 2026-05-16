@@ -60,18 +60,18 @@
                             <Button Content="▶ Launch"
                                     AutomationProperties.AutomationId="ShortcutLaunchButton"
                                     Style="{StaticResource AccentButtonStyle}"
-                                    Tag="{x:Bind Mode=OneWay}"
+                                    Tag="{x:Bind Mode=OneTime}"
                                     Click="OnLaunchClick"/>
                             <Button Content="↧ .lnk"
                                     AutomationProperties.AutomationId="ShortcutExportLnkButton"
                                     ToolTipService.ToolTip="Export as Windows shortcut (.lnk)"
-                                    Tag="{x:Bind Mode=OneWay}"
+                                    Tag="{x:Bind Mode=OneTime}"
                                     Click="OnExportLnkClick"/>
                             <Button Content="🗑"
                                     AutomationProperties.AutomationId="ShortcutDeleteButton"
                                     AutomationProperties.Name="Delete shortcut"
                                     ToolTipService.ToolTip="Delete"
-                                    Tag="{x:Bind Mode=OneWay}"
+                                    Tag="{x:Bind Mode=OneTime}"
                                     Click="OnDeleteClick"/>
                         </StackPanel>
                     </Grid>

@@ -32,8 +32,32 @@ namespace CopilotLauncher.Helpers;
 /// </summary>
 public static class ThemeManager
 {
+    // VT323 with multi-step fallback chain. WinUI's font resolver walks
+    // left-to-right; if VT323 is missing a glyph (e.g. some Unicode symbols)
+    // it falls back to Cascadia Mono, which is the default Windows Terminal
+    // font on Windows 11 — which the user calls out as "the font used in the
+    // CLI". Anywhere our pixel font doesn't cover, we end up in the CLI
+    // monospace font instead of the wildly-different Segoe UI Variable.
     private static readonly FontFamily PixelFont =
-        new("ms-appx:///Assets/Fonts/VT323-Regular.ttf#VT323");
+        new("ms-appx:///Assets/Fonts/VT323-Regular.ttf#VT323, Cascadia Mono, Cascadia Code, Consolas");
+
+    /// <summary>Cascadia Mono on its own for surfaces that explicitly want
+    /// the CLI / terminal feel without the pixel art (e.g. markdown body
+    /// text inside Briefing entries).</summary>
+    private static readonly FontFamily CliMonoFont =
+        new("Cascadia Mono, Cascadia Code, Consolas, Courier New");
+
+    /// <summary>Public so the WinUI side (e.g. MarkdownTextBlock) can pick
+    /// the right body-text font for the active theme.</summary>
+    public static FontFamily GetActiveBodyFontFamily()
+    {
+        var app = Application.Current;
+        if (app?.Resources is null) return new FontFamily("Segoe UI Variable Text");
+        if (app.Resources.TryGetValue("ContentControlThemeFontFamily", out var resolved)
+            && resolved is FontFamily ff)
+            return ff;
+        return new FontFamily("Segoe UI Variable Text");
+    }
 
     /// <summary>Sampled from the GitHub Copilot CLI welcome banner.
     /// Cyan = primary accent; pink = secondary stroke/attention;
@@ -97,22 +121,18 @@ public static class ThemeManager
         ("SystemFillColorAttentionBackgroundBrush", Color.FromArgb(0x40, 0xCC, 0x66, 0xCC)),
         ("SystemFillColorCautionBackgroundBrush", Color.FromArgb(0x40, 0xF2, 0xC9, 0x4C)),
         ("SystemFillColorCriticalBackgroundBrush", Color.FromArgb(0x40, 0xE0, 0x61, 0x7A)),
-        // CheckBox — green checked state with BLACK glyph (high contrast on
-        // bright green; previously was white but the user wanted black).
-        // Toggle switches intentionally NOT recolored — only "square"
-        // checkboxes are green; the round toggle pills stay on the cyan
-        // AccentFillColor* path so the two binary controls remain visually
-        // distinct.
-        ("CheckBoxBackgroundChecked",            Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
-        ("CheckBoxBackgroundCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
-        ("CheckBoxBackgroundCheckedPressed",     Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
-        ("CheckBoxBorderBrushChecked",           Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
-        ("CheckBoxBorderBrushCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
-        ("CheckBoxBorderBrushCheckedPressed",    Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
+        // CheckBox — green INNER square + INNER glyph only (the prior
+        // overrides also colored the OUTER container which made the whole
+        // CheckBox row green; we only want the small box itself green).
+        // CheckBoxBackgroundChecked / CheckBoxBorderBrushChecked are NOT
+        // overridden here so the outer container background stays
+        // transparent / inherits from the surrounding surface.
         ("CheckBoxCheckBackgroundFillChecked",   Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
         ("CheckBoxCheckBackgroundFillCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
         ("CheckBoxCheckBackgroundFillCheckedPressed", Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
         ("CheckBoxCheckBackgroundStrokeChecked", Color.FromArgb(0xFF, 0x30, 0xC8, 0x68)),
+        ("CheckBoxCheckBackgroundStrokeCheckedPointerOver", Color.FromArgb(0xFF, 0x3F, 0xD8, 0x77)),
+        ("CheckBoxCheckBackgroundStrokeCheckedPressed", Color.FromArgb(0xFF, 0x28, 0xB0, 0x5A)),
         ("CheckBoxCheckGlyphForegroundChecked",  Color.FromArgb(0xFF, 0x00, 0x00, 0x00)),
     };
 
@@ -139,17 +159,23 @@ public static class ThemeManager
             }
         }
 
-        // Pixel font + thicker card borders + bumped font size for the Copilot
-        // CLI palette. ContentControlThemeFontFamily is what every built-in
-        // Fluent text style references, so swapping it propagates to
-        // BodyTextBlockStyle, SubtitleTextBlockStyle, etc. without touching
-        // any page XAML. Pixel fonts read small at the default 14px so we
-        // bump the base content size to 17px in copilotCli mode (everything
-        // built on the type ramp scales with it).
+        // Pixel font + thicker card borders + bumped font sizes for the
+        // Copilot CLI palette. Three font-family resources are overridden:
+        //   - ContentControlThemeFontFamily — what most controls inherit
+        //   - XamlAutoFontFamily — what NavigationViewItem and a few other
+        //     legacy/system styles use; without overriding this, the nav
+        //     items stay in Segoe UI Variable
+        //   - CliMonoFontFamily (custom) — a public CascadiaMono-only resource
+        //     so MarkdownTextBlock and similar surfaces can opt into the CLI
+        //     font without the pixel-art shape
+        // Font sizes bumped because VT323 reads small at default 14px.
         if (wantPalette)
         {
             app.Resources["ContentControlThemeFontFamily"] = PixelFont;
-            app.Resources["ContentControlThemeFontSize"] = 17.0;
+            app.Resources["XamlAutoFontFamily"] = PixelFont;
+            app.Resources["CliMonoFontFamily"] = CliMonoFont;
+            app.Resources["ContentControlThemeFontSize"] = 18.0;
+            app.Resources["NavigationViewItemFontSize"] = 17.0;
             app.Resources["CardBorderThickness"] = new Thickness(2);
         }
         else
@@ -159,8 +185,14 @@ public static class ThemeManager
             // is also defined in App.xaml so the lookup never fails.
             if (app.Resources.ContainsKey("ContentControlThemeFontFamily"))
                 app.Resources.Remove("ContentControlThemeFontFamily");
+            if (app.Resources.ContainsKey("XamlAutoFontFamily"))
+                app.Resources.Remove("XamlAutoFontFamily");
+            if (app.Resources.ContainsKey("CliMonoFontFamily"))
+                app.Resources.Remove("CliMonoFontFamily");
             if (app.Resources.ContainsKey("ContentControlThemeFontSize"))
                 app.Resources.Remove("ContentControlThemeFontSize");
+            if (app.Resources.ContainsKey("NavigationViewItemFontSize"))
+                app.Resources.Remove("NavigationViewItemFontSize");
             if (app.Resources.ContainsKey("CardBorderThickness"))
                 app.Resources["CardBorderThickness"] = new Thickness(1);
         }

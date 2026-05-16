@@ -10,8 +10,12 @@ namespace CopilotLauncher.Controls
 {
 public sealed class MarkdownTextBlock : UserControl
 {
-    private static readonly FontFamily DefaultFontFamily = new("Segoe UI");
-    private static readonly FontFamily MonospaceFontFamily = new("Consolas");
+    // Defaults used when no theme override is in play. ThemeManager populates
+    // ContentControlThemeFontFamily on Application.Resources for our themed
+    // body text and CliMonoFontFamily for code blocks; we look those up at
+    // render time so the markdown follows the active palette.
+    private static readonly FontFamily DefaultFontFamily = new("Segoe UI Variable Text");
+    private static readonly FontFamily MonospaceFontFamily = new("Cascadia Mono, Consolas");
 
     private readonly RichTextBlock _richTextBlock;
     private string _sourceMarkdown = string.Empty;
@@ -20,12 +24,28 @@ public sealed class MarkdownTextBlock : UserControl
     {
         _richTextBlock = new RichTextBlock
         {
-            FontFamily = DefaultFontFamily,
+            FontFamily = ResolveBodyFont(),
             IsTextSelectionEnabled = true,
             TextWrapping = TextWrapping.Wrap
         };
 
         Content = _richTextBlock;
+    }
+
+    private static FontFamily ResolveBodyFont()
+    {
+        var app = Application.Current;
+        if (app?.Resources is null) return DefaultFontFamily;
+        return app.Resources.TryGetValue("ContentControlThemeFontFamily", out var v) && v is FontFamily ff
+            ? ff : DefaultFontFamily;
+    }
+
+    private static FontFamily ResolveCodeFont()
+    {
+        var app = Application.Current;
+        if (app?.Resources is null) return MonospaceFontFamily;
+        return app.Resources.TryGetValue("CliMonoFontFamily", out var v) && v is FontFamily ff
+            ? ff : MonospaceFontFamily;
     }
 
     public static readonly DependencyProperty MarkdownProperty = DependencyProperty.Register(
@@ -56,6 +76,9 @@ public sealed class MarkdownTextBlock : UserControl
         {
             Content = _richTextBlock;
             _richTextBlock.Blocks.Clear();
+            // Re-resolve in case the user toggled themes after the control
+            // was constructed (the resource value moves with the theme).
+            _richTextBlock.FontFamily = ResolveBodyFont();
 
             if (string.IsNullOrWhiteSpace(_sourceMarkdown))
             {
@@ -152,13 +175,13 @@ public sealed class MarkdownTextBlock : UserControl
     {
         var paragraph = new Paragraph
         {
-            FontFamily = MonospaceFontFamily,
+            FontFamily = ResolveCodeFont(),
             Margin = new Thickness(8, 4, 0, 8)
         };
 
         paragraph.Inlines.Add(new Run
         {
-            FontFamily = MonospaceFontFamily,
+            FontFamily = ResolveCodeFont(),
             Text = codeBlock.Lines.ToString() ?? string.Empty
         });
 
@@ -306,12 +329,12 @@ public sealed class MarkdownTextBlock : UserControl
     {
         var span = new Span
         {
-            FontFamily = MonospaceFontFamily
+            FontFamily = ResolveCodeFont()
         };
 
         span.Inlines.Add(new Run
         {
-            FontFamily = MonospaceFontFamily,
+            FontFamily = ResolveCodeFont(),
             Text = codeInline.Content ?? string.Empty
         });
 
