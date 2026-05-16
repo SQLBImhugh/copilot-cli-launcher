@@ -138,6 +138,17 @@
                         </ComboBox>
                     </StackPanel>
                     <ToggleSwitch Header="Start with Windows" IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}"/>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Theme" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <ComboBox x:Name="ThemeCombo" SelectionChanged="OnThemeChanged" MinWidth="220">
+                            <ComboBoxItem Tag="system" Content="Follow system"/>
+                            <ComboBoxItem Tag="light" Content="Light"/>
+                            <ComboBoxItem Tag="dark" Content="Dark"/>
+                            <ComboBoxItem Tag="copilotCli" Content="Copilot CLI (cyan / pink / dark)"/>
+                        </ComboBox>
+                        <TextBlock Text="Copilot CLI palette: cyan #0099CC, pink #CC66CC, green #30C868 — sampled from the GitHub Copilot CLI welcome banner."
+                                   Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
+                    </StackPanel>
                 </StackPanel>
             </muxc:Expander>
 

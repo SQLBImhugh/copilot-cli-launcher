@@ -92,11 +92,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
     // Launcher behavior
     public string AfterLaunch { get => Settings.LauncherBehavior.AfterLaunch; set { Settings.LauncherBehavior.AfterLaunch = value; OnPropertyChanged(); ScheduleSave(); } }
     public bool StartWithWindows { get => Settings.LauncherBehavior.StartWithWindows; set { Settings.LauncherBehavior.StartWithWindows = value; OnPropertyChanged(); ScheduleSave(); StartWithWindowsChanged?.Invoke(this, value); } }
-    public string Theme { get => Settings.LauncherBehavior.Theme; set { Settings.LauncherBehavior.Theme = value; OnPropertyChanged(); ScheduleSave(); } }
+    public string Theme { get => Settings.LauncherBehavior.Theme; set { if (Settings.LauncherBehavior.Theme != value) { Settings.LauncherBehavior.Theme = value; OnPropertyChanged(); ScheduleSave(); ThemeChanged?.Invoke(this, value); } } }
 
     /// <summary>Raised when StartWithWindows toggles. Consumed by SettingsPage to call
     /// the platform-specific registry sync (which lives in the WinUI app project).</summary>
     public event EventHandler<bool>? StartWithWindowsChanged;
+
+    /// <summary>Raised when the user picks a different launcher theme. WinUI
+    /// side hooks this to call ThemeManager.Apply on the main window.</summary>
+    public event EventHandler<string>? ThemeChanged;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>

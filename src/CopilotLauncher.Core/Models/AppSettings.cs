@@ -108,7 +108,7 @@ public sealed class LauncherBehaviorSettings
     public bool StartWithWindows { get; set; }
     public bool StartMinimized { get; set; }
     public bool SystemTrayIconEnabled { get; set; } = true;
-    public string Theme { get; set; } = "system";
+    public string Theme { get; set; } = "system";   // system | light | dark | copilotCli
     public string WindowTitlePattern { get; set; } = "Copilot Launcher";
 }
 

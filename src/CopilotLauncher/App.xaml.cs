@@ -49,6 +49,19 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MainWindowOrNull = new MainWindow();
+
+        // Apply the user's chosen theme BEFORE Activate so the window paints
+        // in the right palette on first frame instead of flashing default.
+        try
+        {
+            var settings = Services.GetRequiredService<ISettingsService>();
+            Helpers.ThemeManager.Apply(settings.Current.LauncherBehavior.Theme, MainWindowOrNull);
+        }
+        catch
+        {
+            // Theme is non-critical — fall back to system default.
+        }
+
         MainWindowOrNull.Activate();
 
         var mainWindow = MainWindowOrNull;

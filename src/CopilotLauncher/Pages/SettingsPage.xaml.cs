@@ -32,6 +32,7 @@ public sealed partial class SettingsPage : Page
         PopulateTerminals();
         SyncCombo(UpdateFreqCombo, ViewModel.AutoUpdateFrequency);
         SyncCombo(AfterLaunchCombo, ViewModel.AfterLaunch);
+        SyncCombo(ThemeCombo, ViewModel.Theme);
 
         // Wire the autostart registry write to the toggle. The Core VM raises an
         // event because Microsoft.Win32.Registry isn't available in netstandard
@@ -43,6 +44,18 @@ public sealed partial class SettingsPage : Page
                 var exe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
                 if (!string.IsNullOrEmpty(exe))
                     Helpers.AutostartRegistry.Sync(enabled, exe);
+            }
+            catch { }
+        };
+
+        // Live-apply theme changes against the main window. ThemeManager
+        // handles palette merge/unmerge + bouncing RequestedTheme so any
+        // {ThemeResource} bindings in the visual tree re-resolve.
+        ViewModel.ThemeChanged += (_, themeName) =>
+        {
+            try
+            {
+                Helpers.ThemeManager.Apply(themeName, ((App)Application.Current).MainWindowOrNull);
             }
             catch { }
         };
@@ -122,6 +135,13 @@ public sealed partial class SettingsPage : Page
         if (_initializing) return;
         if (AfterLaunchCombo.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag)
             ViewModel.AfterLaunch = tag;
+    }
+
+    private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializing) return;
+        if (ThemeCombo.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag)
+            ViewModel.Theme = tag;
     }
 
     private void OnSliderChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
