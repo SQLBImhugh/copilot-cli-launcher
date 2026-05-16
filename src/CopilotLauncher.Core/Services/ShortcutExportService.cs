@@ -46,13 +46,14 @@ public sealed class ShortcutExportService : IShortcutExportService
 
     public ShortcutExportPlan BuildPlan(Shortcut shortcut)
     {
-        if (string.IsNullOrWhiteSpace(shortcut.WorkingDirectory))
-            throw new ArgumentException("Shortcut.WorkingDirectory is required.", nameof(shortcut));
+        var validatedWorkingDirectory = PathValidator.ValidateWorkingDirectory(shortcut.WorkingDirectory);
+        if (validatedWorkingDirectory is null)
+            throw new InvalidOperationException($"Working directory does not exist or is invalid: {shortcut.WorkingDirectory}");
 
         var terminal = ResolveTerminal(shortcut.TerminalOverride);
         var cmd = _launch.Build(new LaunchRequest
         {
-            WorkingDirectory = shortcut.WorkingDirectory,
+            WorkingDirectory = validatedWorkingDirectory,
             ResumeTarget = shortcut.ResumeTarget,
             EnableAISummary = shortcut.EnableAISummary,
             EnableAllowAll = shortcut.EnableAllowAll,

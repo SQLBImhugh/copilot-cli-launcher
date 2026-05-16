@@ -40,6 +40,28 @@ public class SessionsViewModelTests
         Assert.Equal("abc12345-0000-0000-0000-000000000000", captured.ResumeTarget);
     }
 
+    [Fact]
+    public async Task RefreshAsync_DoesNotThrow_WhenSessionRootMissing()
+    {
+        var missingRoot = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid(), "missing");
+        var viewModel = new SessionsViewModel(NewDiscovery(missingRoot), new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings());
+
+        var ex = await Record.ExceptionAsync(() => viewModel.RefreshAsync());
+
+        Assert.Null(ex);
+        Assert.Equal(0, viewModel.TotalCount);
+        Assert.Empty(viewModel.Visible);
+        Assert.Contains("No sessions found", viewModel.StatusMessage);
+    }
+
+    private static SessionDiscoveryService NewDiscovery(string root)
+    {
+        var ctor = typeof(SessionDiscoveryService)
+            .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+                            null, new[] { typeof(string) }, null);
+        return (SessionDiscoveryService)ctor!.Invoke(new object[] { root });
+    }
+
     private sealed class FakeLaunch : ILaunchService
     {
         private readonly Action<LaunchRequest> _onSpawn;

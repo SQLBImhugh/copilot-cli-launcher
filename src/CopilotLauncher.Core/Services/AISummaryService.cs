@@ -118,14 +118,22 @@ public sealed class AISummaryService : IAISummaryService
             ?? primary;
     }
 
-    private static async Task<string?> TryReadRepositoryContextAsync(string? path, CancellationToken ct)
+    internal static async Task<string?> TryReadRepositoryContextAsync(string? path, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (string.IsNullOrWhiteSpace(path))
             return null;
 
         try
         {
-            var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            var full = Path.GetFullPath(path);
+            if (!File.Exists(full))
+                return null;
+
+            var ext = Path.GetExtension(full).ToLowerInvariant();
+            if (ext is not ".md" and not ".txt")
+                return null;
+
+            var text = await File.ReadAllTextAsync(full, ct).ConfigureAwait(false);
             return text.Length <= AISummaryPromptBuilder.RepositoryContextLimit ? text : null;
         }
         catch

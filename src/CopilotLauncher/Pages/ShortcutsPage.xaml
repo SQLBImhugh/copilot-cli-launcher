@@ -19,11 +19,12 @@
         </StackPanel>
 
         <ListView Grid.Row="1"
+                  AutomationProperties.AutomationId="ShortcutsList"
                   ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
                   SelectionMode="None"
                   IsItemClickEnabled="False"
                   Padding="0"
-                  Background="Transparent">
+                  Background="{ThemeResource SubtleFillColorTransparentBrush}">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -37,7 +38,7 @@
                           Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                           BorderThickness="{ThemeResource CardBorderThickness}"
-                          CornerRadius="8"
+                          CornerRadius="{StaticResource OverlayCornerRadius}"
                           ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -45,11 +46,11 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Spacing="4">
-                            <TextBlock Text="{x:Bind Label}"
+                            <TextBlock Text="{x:Bind Label, Mode=OneTime}"
                                        Style="{StaticResource SubtitleTextBlockStyle}"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{x:Bind WorkingDirectory}"
+                            <TextBlock Text="{x:Bind WorkingDirectory, Mode=OneTime}"
                                        Opacity="0.7"
                                        Style="{StaticResource BodyTextBlockStyle}"
                                        TextTrimming="CharacterEllipsis"/>
@@ -57,16 +58,20 @@
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <Button Content="▶ Launch"
+                                    AutomationProperties.AutomationId="ShortcutLaunchButton"
                                     Style="{StaticResource AccentButtonStyle}"
-                                    Tag="{x:Bind}"
+                                    Tag="{x:Bind Mode=OneWay}"
                                     Click="OnLaunchClick"/>
                             <Button Content="↧ .lnk"
+                                    AutomationProperties.AutomationId="ShortcutExportLnkButton"
                                     ToolTipService.ToolTip="Export as Windows shortcut (.lnk)"
-                                    Tag="{x:Bind}"
+                                    Tag="{x:Bind Mode=OneWay}"
                                     Click="OnExportLnkClick"/>
                             <Button Content="🗑"
+                                    AutomationProperties.AutomationId="ShortcutDeleteButton"
+                                    AutomationProperties.Name="Delete shortcut"
                                     ToolTipService.ToolTip="Delete"
-                                    Tag="{x:Bind}"
+                                    Tag="{x:Bind Mode=OneWay}"
                                     Click="OnDeleteClick"/>
                         </StackPanel>
                     </Grid>
@@ -76,7 +81,7 @@
 
         <Border Grid.Row="2"
                 Background="{ThemeResource SubtleFillColorTertiaryBrush}"
-                CornerRadius="6"
+                CornerRadius="{StaticResource ControlCornerRadius}"
                 Padding="12,6">
             <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
                        Style="{StaticResource CaptionTextBlockStyle}"

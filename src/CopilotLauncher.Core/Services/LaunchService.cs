@@ -95,7 +95,19 @@ public sealed class LaunchService : ILaunchService
 
     public Process Spawn(LaunchRequest request)
     {
-        var cmd = Build(request);
+        var validatedWorkingDirectory = PathValidator.ValidateWorkingDirectory(request.WorkingDirectory);
+        if (validatedWorkingDirectory is null)
+            throw new InvalidOperationException($"Working directory does not exist or is invalid: {request.WorkingDirectory}");
+
+        var cmd = Build(new LaunchRequest
+        {
+            WorkingDirectory = validatedWorkingDirectory,
+            ResumeTarget = request.ResumeTarget,
+            EnableAISummary = request.EnableAISummary,
+            EnableAllowAll = request.EnableAllowAll,
+            ExtraCopilotArgs = request.ExtraCopilotArgs,
+            Terminal = request.Terminal,
+        });
         var psi = new ProcessStartInfo
         {
             FileName = cmd.FileName,

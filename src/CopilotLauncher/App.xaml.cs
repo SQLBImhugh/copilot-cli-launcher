@@ -117,7 +117,7 @@ public partial class App : Application
         // in the background so --resume works on next launch. Skips active
         // (locked) sessions; backs up before mutating. Best-effort — failures
         // don't bubble up to the user.
-        _ = System.Threading.Tasks.Task.Run(() =>
+        _ = System.Threading.Tasks.Task.Run(async () =>
         {
             try
             {
@@ -127,7 +127,9 @@ public partial class App : Application
 
                 // Apply known-bug workarounds (e.g. issue #3298 win32 keep-alive).
                 // Reads its own toggle internally; safe to call unconditionally.
-                Services.GetRequiredService<IKnownBugWorkaroundService>().ApplyAll();
+                // Async because the version probe spawns `copilot --version`
+                // with a 5s timeout — we don't want to block the startup task.
+                await Services.GetRequiredService<IKnownBugWorkaroundService>().ApplyAllAsync().ConfigureAwait(false);
 
                 // Sync the Start with Windows registry entry to whatever is
                 // currently saved in settings. Idempotent.

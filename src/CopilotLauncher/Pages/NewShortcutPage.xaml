@@ -27,7 +27,8 @@
                     <TextBlock Text="Label" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                     <TextBlock Text="Short name for this shortcut. Becomes the row title in Shortcuts and the .lnk filename if you export one."
                                Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                    <TextBox Text="{x:Bind ViewModel.Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBox AutomationProperties.AutomationId="NewShortcutLabelTextBox"
+                             Text="{x:Bind ViewModel.Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              PlaceholderText="e.g. FabricPOCPortal"/>
                 </StackPanel>
 
@@ -42,9 +43,13 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0"
+                                 AutomationProperties.AutomationId="NewShortcutWorkingDirTextBox"
                                  Text="{x:Bind ViewModel.WorkingDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="C:\code\my-project"/>
-                        <Button Grid.Column="1" Content="Browse…" Click="OnBrowseFolderClick"/>
+                        <Button Grid.Column="1"
+                                Content="Browse…"
+                                AutomationProperties.AutomationId="NewShortcutBrowseFolderButton"
+                                Click="OnBrowseFolderClick"/>
                     </Grid>
                 </StackPanel>
 
@@ -53,18 +58,21 @@
                     <TextBlock Text="Resume target" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                     <TextBlock Text="Optional. A session name (e.g. 'MyApp-Main') or session id. Empty = fresh session each launch."
                                Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                    <TextBox Text="{x:Bind ViewModel.ResumeTarget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBox AutomationProperties.AutomationId="NewShortcutResumeTargetTextBox"
+                             Text="{x:Bind ViewModel.ResumeTarget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              PlaceholderText="(blank for fresh session)"/>
                 </StackPanel>
 
                 <!-- Toggles -->
                 <StackPanel Spacing="6">
                     <ToggleSwitch Header="AI summary on launch"
+                                  AutomationProperties.AutomationId="NewShortcutAISummaryToggle"
                                   OffContent="Off — plain changelog briefing only"
                                   OnContent="On — Copilot writes a contextual summary on version bumps (one premium request)"
                                   IsOn="{x:Bind ViewModel.EnableAISummary, Mode=TwoWay}"/>
 
                     <ToggleSwitch Header="Pass --allow-all to copilot"
+                                  AutomationProperties.AutomationId="NewShortcutAllowAllToggle"
                                   OffContent="Off — confirm each tool call"
                                   OnContent="On — auto-approve every tool call (use with care)"
                                   IsOn="{x:Bind ViewModel.EnableAllowAll, Mode=TwoWay}"/>
@@ -75,7 +83,8 @@
                     <TextBlock Text="Extra copilot args" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                     <TextBlock Text="Optional. Verbatim flags appended to the copilot command, e.g. '--max-autopilot-continues 100'. Quoted values preserved."
                                Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                    <TextBox Text="{x:Bind ViewModel.ExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBox AutomationProperties.AutomationId="NewShortcutExtraArgsTextBox"
+                             Text="{x:Bind ViewModel.ExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              PlaceholderText="(blank for none)"/>
                 </StackPanel>
 
@@ -84,7 +93,10 @@
                     <TextBlock Text="Terminal" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                     <TextBlock Text="Override the default terminal from Settings just for this shortcut."
                                Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                    <ComboBox x:Name="TerminalCombo" SelectionChanged="OnTerminalChanged" MinWidth="320"/>
+                    <ComboBox x:Name="TerminalCombo"
+                              AutomationProperties.AutomationId="NewShortcutTerminalCombo"
+                              SelectionChanged="OnTerminalChanged"
+                              MinWidth="320"/>
                 </StackPanel>
 
                 <!-- AGENTS.md override -->
@@ -98,9 +110,13 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0"
+                                 AutomationProperties.AutomationId="NewShortcutAgentsContextOverrideTextBox"
                                  Text="{x:Bind ViewModel.AgentsContextOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="(blank — inherit global)"/>
-                        <Button Grid.Column="1" Content="Browse…" Click="OnBrowseAgentsClick"/>
+                        <Button Grid.Column="1"
+                                Content="Browse…"
+                                AutomationProperties.AutomationId="NewShortcutBrowseAgentsButton"
+                                Click="OnBrowseAgentsClick"/>
                     </Grid>
                 </StackPanel>
             </StackPanel>
@@ -111,7 +127,7 @@
                 Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="{ThemeResource CardBorderThickness}"
-                CornerRadius="6"
+                CornerRadius="{StaticResource ControlCornerRadius}"
                 Padding="12">
             <StackPanel Spacing="4">
                 <TextBlock Text="Command preview" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
@@ -124,9 +140,15 @@
 
         <!-- Action buttons -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-            <Button Content="Reset" Click="OnResetClick"/>
-            <Button Content="Save" Click="OnSaveClick" IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"/>
+            <Button Content="Reset"
+                    AutomationProperties.AutomationId="NewShortcutResetButton"
+                    Click="OnResetClick"/>
+            <Button Content="Save"
+                    AutomationProperties.AutomationId="NewShortcutSaveButton"
+                    Click="OnSaveClick"
+                    IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"/>
             <Button Content="Save &amp; Launch"
+                    AutomationProperties.AutomationId="NewShortcutSaveAndLaunchButton"
                     Style="{StaticResource AccentButtonStyle}"
                     Click="OnSaveAndLaunchClick"
                     IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"/>
@@ -134,7 +156,7 @@
 
         <Border Grid.Row="4"
                 Background="{ThemeResource SubtleFillColorTertiaryBrush}"
-                CornerRadius="6"
+                CornerRadius="{StaticResource ControlCornerRadius}"
                 Padding="12,6">
             <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
                        Style="{StaticResource CaptionTextBlockStyle}"

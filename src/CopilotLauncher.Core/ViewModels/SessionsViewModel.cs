@@ -18,6 +18,7 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     private readonly ILaunchService _launch;
     private readonly ISettingsService _settings;
     private readonly IAfterLaunchAction _afterLaunch;
+    private Func<Action, Task>? _marshalToUi;
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
 
@@ -88,28 +89,47 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         ITerminalDiscoveryService terminals,
         ILaunchService launch,
         ISettingsService settings,
-        IAfterLaunchAction? afterLaunch = null)
+        IAfterLaunchAction? afterLaunch = null,
+        Func<Action, Task>? marshalToUi = null)
     {
         _discovery = discovery;
         _terminals = terminals;
         _launch = launch;
         _settings = settings;
         _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
+        _marshalToUi = marshalToUi ?? (SynchronizationContext.Current is not null ? CreateUiMarshaller(SynchronizationContext.Current) : null);
     }
 
     /// <summary>Re-scan disk + apply current filters. Safe to call repeatedly.</summary>
-    public void Refresh()
+    [Obsolete("Use RefreshAsync instead. This method now schedules a background refresh and returns immediately.")]
+    public void Refresh() => _ = RefreshAsync();
+
+    /// <summary>Re-scan disk off the UI thread and then apply the current filters.</summary>
+    public async Task RefreshAsync(CancellationToken ct = default)
     {
+        var marshalToUi = GetUiMarshaller();
+
         try
         {
-            _all = _discovery.Enumerate().ToList();
-            TotalCount = _all.Count;
-            ApplyFilters();
-            OnPropertyChanged(nameof(TotalCount));
+            await marshalToUi(() => StatusMessage = "Loading sessions…").ConfigureAwait(false);
+            var discovered = await Task.Run(() => _discovery.Enumerate().ToList(), ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+
+            await marshalToUi(() =>
+            {
+                _all = discovered;
+                TotalCount = _all.Count;
+                ApplyFilters();
+                OnPropertyChanged(nameof(TotalCount));
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            await marshalToUi(() => StatusMessage = "Session refresh canceled.").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Failed to scan sessions: {ex.Message}";
+            await marshalToUi(() => StatusMessage = $"Failed to scan sessions: {ex.Message}").ConfigureAwait(false);
         }
     }
 
@@ -243,6 +263,42 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         if (_showNamed  && !s.UserNamed) return false;
         if (_showHeavy  && s.SummaryCount < settings.HeavyUseSummaryThreshold) return false;
         return true;
+    }
+
+    private Func<Action, Task> GetUiMarshaller()
+    {
+        _marshalToUi ??= CreateUiMarshaller(SynchronizationContext.Current);
+        return _marshalToUi;
+    }
+
+    private static Func<Action, Task> CreateUiMarshaller(SynchronizationContext? syncContext)
+    {
+        if (syncContext is null)
+        {
+            return action =>
+            {
+                action();
+                return Task.CompletedTask;
+            };
+        }
+
+        return action =>
+        {
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            syncContext.Post(_ =>
+            {
+                try
+                {
+                    action();
+                    tcs.SetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            }, null);
+            return tcs.Task;
+        };
     }
 
     private static bool MatchesSearch(CopilotSession s, string q)

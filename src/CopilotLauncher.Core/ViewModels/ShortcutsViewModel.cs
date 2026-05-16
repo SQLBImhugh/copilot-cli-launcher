@@ -25,7 +25,7 @@ public sealed class ShortcutsViewModel : INotifyPropertyChanged
     public string StatusMessage
     {
         get => _statusMessage;
-        private set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
+        set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
     }
 
     public ShortcutsViewModel(

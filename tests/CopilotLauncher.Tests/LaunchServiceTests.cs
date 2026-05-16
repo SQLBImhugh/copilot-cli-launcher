@@ -94,6 +94,17 @@ public class LaunchServiceTests
     }
 
     [Fact]
+    public void Spawn_Throws_WhenWorkingDirectoryMissingOnDisk()
+    {
+        var svc = NewSvc(CmdResolver);
+        var missing = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid(), "missing");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => svc.Spawn(new LaunchRequest { WorkingDirectory = missing }));
+
+        Assert.Equal($"Working directory does not exist or is invalid: {missing}", ex.Message);
+    }
+
+    [Fact]
     public void Build_ArgumentString_IsQuotedCorrectly()
     {
         var svc = NewSvc(CmdResolver);

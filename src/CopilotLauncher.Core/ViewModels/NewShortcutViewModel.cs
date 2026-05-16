@@ -155,11 +155,22 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
             StatusMessage = "Label and working directory are required.";
             return null;
         }
+
+        var validatedWorkingDirectory = PathValidator.ValidateWorkingDirectory(_workingDirectory);
+        if (validatedWorkingDirectory is null)
+        {
+            StatusMessage = "Working directory does not exist.";
+            return null;
+        }
+
+        if (!string.Equals(_workingDirectory, validatedWorkingDirectory, StringComparison.Ordinal))
+            WorkingDirectory = validatedWorkingDirectory;
+
         var entry = new Shortcut
         {
             Id = Guid.NewGuid().ToString(),
             Label = _label.Trim(),
-            WorkingDirectory = _workingDirectory.Trim(),
+            WorkingDirectory = validatedWorkingDirectory,
             ResumeTarget = string.IsNullOrWhiteSpace(_resumeTarget) ? null : _resumeTarget.Trim(),
             EnableAISummary = _enableAISummary,
             EnableAllowAll = _enableAllowAll,

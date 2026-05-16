@@ -64,11 +64,7 @@ public sealed partial class ShortcutsPage : Page
         }
         catch (Exception ex)
         {
-            // Failure shows up in the page status; ViewModel doesn't expose
-            // a setter for arbitrary text yet so we use the launch path's
-            // status field instead.
-            ViewModel.GetType().GetProperty("StatusMessage")
-                ?.SetValue(ViewModel, $"Export failed: {ex.Message}");
+            ViewModel.StatusMessage = $"Export failed: {ex.Message}";
         }
     }
 }

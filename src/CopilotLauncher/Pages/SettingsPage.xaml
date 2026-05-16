@@ -11,12 +11,15 @@
             <!-- Terminal -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Terminal" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock Text="The terminal that wraps copilot when you click Resume or Launch."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}"/>
-                    <ComboBox x:Name="TerminalCombo" SelectionChanged="OnTerminalSelectionChanged" MinWidth="320"/>
+                    <ComboBox x:Name="TerminalCombo"
+                              AutomationProperties.AutomationId="SettingsTerminalCombo"
+                              SelectionChanged="OnTerminalSelectionChanged"
+                              MinWidth="320"/>
                     <TextBlock x:Name="TerminalDetail" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
             </Border>
@@ -24,19 +27,24 @@
             <!-- Sessions Resume defaults -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Sessions Resume defaults" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock Text="Used when you click ▶ Resume on a session card. Saved Shortcuts use their own per-shortcut config instead."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
-                    <ToggleSwitch Header="AI summary on resume" IsOn="{x:Bind ViewModel.ResumeAISummary, Mode=TwoWay}"/>
-                    <ToggleSwitch Header="Pass --allow-all" IsOn="{x:Bind ViewModel.ResumeAllowAll, Mode=TwoWay}"/>
+                    <ToggleSwitch Header="AI summary on resume"
+                                  AutomationProperties.AutomationId="SettingsResumeAISummaryToggle"
+                                  IsOn="{x:Bind ViewModel.ResumeAISummary, Mode=TwoWay}"/>
+                    <ToggleSwitch Header="Pass --allow-all"
+                                  AutomationProperties.AutomationId="SettingsResumeAllowAllToggle"
+                                  IsOn="{x:Bind ViewModel.ResumeAllowAll, Mode=TwoWay}"/>
                     <StackPanel Spacing="4">
                         <TextBlock Text="Extra copilot args"
                                    Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Text="e.g. --max-autopilot-continues 100"
                                    Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}"/>
-                        <TextBox Text="{x:Bind ViewModel.ResumeExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBox AutomationProperties.AutomationId="SettingsResumeExtraArgsTextBox"
+                                 Text="{x:Bind ViewModel.ResumeExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -44,12 +52,13 @@
             <!-- AI Summary -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="AI Summary" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock Text="Default agents.md context file used to tailor Copilot's summary on version bumps. Each Shortcut can override this with its own context file."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                     <ToggleSwitch Header="Generate AI summary on version bump"
+                                  AutomationProperties.AutomationId="SettingsAISummaryOnBumpToggle"
                                   IsOn="{x:Bind ViewModel.AISummaryOnBump, Mode=TwoWay}"/>
                     <Grid ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
@@ -58,9 +67,14 @@
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0"
                                  Header="Default agents.md path"
+                                 AutomationProperties.AutomationId="SettingsAgentsContextFilePathTextBox"
                                  Text="{x:Bind ViewModel.AgentsContextFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="(none — bundled default will be used)"/>
-                        <Button Grid.Column="1" Content="Browse…" VerticalAlignment="Bottom" Click="OnBrowseAgentsClick"/>
+                        <Button Grid.Column="1"
+                                Content="Browse…"
+                                AutomationProperties.AutomationId="SettingsBrowseAgentsButton"
+                                VerticalAlignment="Bottom"
+                                Click="OnBrowseAgentsClick"/>
                     </Grid>
                 </StackPanel>
             </Border>
@@ -68,16 +82,21 @@
             <!-- Briefings -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="8" Padding="16">
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Briefings" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <ToggleSwitch Header="Show briefing on Copilot CLI version bumps"
+                                  AutomationProperties.AutomationId="SettingsShowVersionBumpBriefingToggle"
                                   IsOn="{x:Bind ViewModel.ShowVersionBumpBriefing, Mode=TwoWay}"/>
                     <ToggleSwitch Header="Append to rolling briefing-history.log"
+                                  AutomationProperties.AutomationId="SettingsAppendToHistoryLogToggle"
                                   IsOn="{x:Bind ViewModel.AppendToHistoryLog, Mode=TwoWay}"/>
                     <StackPanel Spacing="4">
                         <TextBlock Text="Auto-update frequency" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <ComboBox x:Name="UpdateFreqCombo" SelectionChanged="OnUpdateFreqChanged" MinWidth="220">
+                        <ComboBox x:Name="UpdateFreqCombo"
+                                  AutomationProperties.AutomationId="SettingsAutoUpdateFreqCombo"
+                                  SelectionChanged="OnUpdateFreqChanged"
+                                  MinWidth="220">
                             <ComboBoxItem Tag="everyLaunch" Content="Every launch"/>
                             <ComboBoxItem Tag="daily" Content="Once per day"/>
                             <ComboBoxItem Tag="weekly" Content="Once per week"/>
@@ -88,13 +107,21 @@
             </Border>
 
             <!-- Session listing -->
-            <muxc:Expander Header="Session listing" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="8">
+            <muxc:Expander Header="Session listing"
+                           AutomationProperties.AutomationId="SettingsSessionListingExpander"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Stretch"
+                           CornerRadius="{StaticResource OverlayCornerRadius}">
                 <StackPanel Spacing="10" Padding="8,4">
                     <TextBlock Text="How sessions on the Sessions tab are filtered + grouped."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}"/>
                     <StackPanel Spacing="4">
                         <TextBlock Text="Recent window (days)" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <Slider x:Name="RecentSlider" Minimum="1" Maximum="90" StepFrequency="1"
+                        <Slider x:Name="RecentSlider"
+                                AutomationProperties.AutomationId="SettingsRecentWindowSlider"
+                                Minimum="1"
+                                Maximum="90"
+                                StepFrequency="1"
                                 Value="{x:Bind ViewModel.RecentWindowDays, Mode=TwoWay}"
                                 ValueChanged="OnSliderChanged"/>
                         <TextBlock Text="{x:Bind ViewModel.RecentWindowDays, Mode=OneWay}" Opacity="0.6"
@@ -102,45 +129,68 @@
                     </StackPanel>
                     <StackPanel Spacing="4">
                         <TextBlock Text="Heavily-used threshold (summary count)" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <Slider x:Name="HeavySlider" Minimum="1" Maximum="200" StepFrequency="1"
+                        <Slider x:Name="HeavySlider"
+                                AutomationProperties.AutomationId="SettingsHeavyThresholdSlider"
+                                Minimum="1"
+                                Maximum="200"
+                                StepFrequency="1"
                                 Value="{x:Bind ViewModel.HeavyUseSummaryThreshold, Mode=TwoWay}"
                                 ValueChanged="OnSliderChanged"/>
                         <TextBlock Text="{x:Bind ViewModel.HeavyUseSummaryThreshold, Mode=OneWay}" Opacity="0.6"
                                    Style="{StaticResource CaptionTextBlockStyle}"/>
                     </StackPanel>
                     <ToggleSwitch Header="Show full session id (instead of truncated to 8 chars)"
+                                  AutomationProperties.AutomationId="SettingsShowFullSessionIdToggle"
                                   IsOn="{x:Bind ViewModel.ShowFullSessionId, Mode=TwoWay}"/>
                 </StackPanel>
             </muxc:Expander>
 
             <!-- Repair & workarounds -->
-            <muxc:Expander Header="Repair &amp; workarounds" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="8">
+            <muxc:Expander Header="Repair &amp; workarounds"
+                           AutomationProperties.AutomationId="SettingsRepairWorkaroundsExpander"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Stretch"
+                           CornerRadius="{StaticResource OverlayCornerRadius}">
                 <StackPanel Spacing="10" Padding="8,4">
                     <ToggleSwitch Header="Auto-repair dangling tool_use events on app start"
+                                  AutomationProperties.AutomationId="SettingsAutoRepairDanglingToggle"
                                   OffContent="Off — sessions with interrupted tool calls may fail on --resume"
                                   OnContent="On — silently fix dangling events at startup (default, recommended)"
                                   IsOn="{x:Bind ViewModel.AutoRepairDanglingToolUse, Mode=TwoWay}"/>
                     <ToggleSwitch Header="Apply Win32 keep-alive workaround (issue #3298)"
+                                  AutomationProperties.AutomationId="SettingsApplyWin32WorkaroundToggle"
                                   IsOn="{x:Bind ViewModel.ApplyWin32KeepAliveWorkaround, Mode=TwoWay}"/>
                 </StackPanel>
             </muxc:Expander>
 
             <!-- Launcher behavior -->
-            <muxc:Expander Header="Launcher behavior" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="8">
+            <muxc:Expander Header="Launcher behavior"
+                           AutomationProperties.AutomationId="SettingsLauncherBehaviorExpander"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Stretch"
+                           CornerRadius="{StaticResource OverlayCornerRadius}">
                 <StackPanel Spacing="10" Padding="8,4">
                     <StackPanel Spacing="4">
                         <TextBlock Text="After launching a session" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <ComboBox x:Name="AfterLaunchCombo" SelectionChanged="OnAfterLaunchChanged" MinWidth="220">
+                        <ComboBox x:Name="AfterLaunchCombo"
+                                  AutomationProperties.AutomationId="SettingsAfterLaunchCombo"
+                                  SelectionChanged="OnAfterLaunchChanged"
+                                  MinWidth="220">
                             <ComboBoxItem Tag="stayOpen" Content="Stay open"/>
                             <ComboBoxItem Tag="minimize" Content="Minimize to taskbar"/>
                             <ComboBoxItem Tag="hideToTray" Content="Hide to system tray"/>
                             <ComboBoxItem Tag="close" Content="Close"/>
                         </ComboBox>
                     </StackPanel>
-                    <ToggleSwitch Header="Start with Windows" IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}"/>
+                    <ToggleSwitch Header="Start with Windows"
+                                  AutomationProperties.AutomationId="SettingsStartWithWindowsToggle"
+                                  IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}"/>
                     <StackPanel Spacing="4">
                         <TextBlock Text="Theme" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <ComboBox x:Name="ThemeCombo" SelectionChanged="OnThemeChanged" MinWidth="220">
+                        <ComboBox x:Name="ThemeCombo"
+                                  AutomationProperties.AutomationId="SettingsThemeCombo"
+                                  SelectionChanged="OnThemeChanged"
+                                  MinWidth="220">
                             <ComboBoxItem Tag="system" Content="Follow system"/>
                             <ComboBoxItem Tag="light" Content="Light"/>
                             <ComboBoxItem Tag="dark" Content="Dark"/>
@@ -153,19 +203,30 @@
             </muxc:Expander>
 
             <!-- Storage -->
-            <muxc:Expander Header="Storage" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="8">
+            <muxc:Expander Header="Storage"
+                           AutomationProperties.AutomationId="SettingsStorageExpander"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Stretch"
+                           CornerRadius="{StaticResource OverlayCornerRadius}">
                 <StackPanel Spacing="8" Padding="8,4">
                     <TextBlock x:Name="AppDataPathLabel" Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap"/>
-                    <Button Content="Open app data folder" Click="OnOpenAppDataClick"/>
+                    <Button Content="Open app data folder"
+                            AutomationProperties.AutomationId="SettingsOpenAppDataButton"
+                            Click="OnOpenAppDataClick"/>
                 </StackPanel>
             </muxc:Expander>
 
             <!-- About -->
-            <muxc:Expander Header="About" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="8">
+            <muxc:Expander Header="About"
+                           AutomationProperties.AutomationId="SettingsAboutExpander"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Stretch"
+                           CornerRadius="{StaticResource OverlayCornerRadius}">
                 <StackPanel Spacing="6" Padding="8,4">
                     <TextBlock x:Name="VersionLabel" Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
                     <TextBlock Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}">
-                        <Hyperlink NavigateUri="https://github.com/SQLBImhugh/copilot-cli-launcher">Source on GitHub</Hyperlink>
+                        <Hyperlink AutomationProperties.AutomationId="SettingsSourceLinkHyperlink"
+                                   NavigateUri="https://github.com/SQLBImhugh/copilot-cli-launcher">Source on GitHub</Hyperlink>
                     </TextBlock>
                 </StackPanel>
             </muxc:Expander>

@@ -18,7 +18,14 @@ public interface IKnownBugWorkaroundService
     /// without mutating anything. Best-effort: failures are logged but
     /// don't block app startup.
     /// </summary>
+    [Obsolete("Use ApplyAllAsync instead.")]
     IReadOnlyList<WorkaroundResult> ApplyAll();
+
+    /// <summary>
+    /// Async version of <see cref="ApplyAll"/>. Prefer this so startup work
+    /// doesn't block while shelling out to the Copilot CLI.
+    /// </summary>
+    Task<IReadOnlyList<WorkaroundResult>> ApplyAllAsync(CancellationToken ct = default);
 }
 
 public sealed class KnownBugWorkaroundService : IKnownBugWorkaroundService
@@ -64,7 +71,10 @@ module.exports = nativeBinding
         _settings = settings;
     }
 
-    public IReadOnlyList<WorkaroundResult> ApplyAll()
+    [Obsolete("Use ApplyAllAsync instead.")]
+    public IReadOnlyList<WorkaroundResult> ApplyAll() => ApplyAllAsync().GetAwaiter().GetResult();
+
+    public async Task<IReadOnlyList<WorkaroundResult>> ApplyAllAsync(CancellationToken ct = default)
     {
         var results = new List<WorkaroundResult>();
         if (!_settings.Current.Repair.ApplyWin32KeepAliveWorkaround)
@@ -75,7 +85,7 @@ module.exports = nativeBinding
 
         try
         {
-            results.Add(ApplyWin32KeepAliveLoader());
+            results.Add(await ApplyWin32KeepAliveLoaderAsync(ct).ConfigureAwait(false));
         }
         catch (Exception ex)
         {
@@ -89,12 +99,12 @@ module.exports = nativeBinding
         return results;
     }
 
-    private WorkaroundResult ApplyWin32KeepAliveLoader()
+    private async Task<WorkaroundResult> ApplyWin32KeepAliveLoaderAsync(CancellationToken ct = default)
     {
         // Find installed copilot version. Cheapest path: spawn `copilot --version`
         // and parse. We don't reuse UpdateCheckService because that does a full
         // network update; this should be local-only and fast.
-        var version = TryGetCopilotVersion();
+        var version = await TryGetCopilotVersionAsync(ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(version))
             return new WorkaroundResult { Name = "win32-keep-alive", Applied = false, Detail = "copilot version not detectable" };
 
@@ -118,7 +128,7 @@ module.exports = nativeBinding
         return new WorkaroundResult { Name = "win32-keep-alive", Applied = true, Detail = $"wrote loader to {loaderPath}" };
     }
 
-    private static string? TryGetCopilotVersion()
+    private static async Task<string?> TryGetCopilotVersionAsync(CancellationToken ct = default)
     {
         try
         {
@@ -138,18 +148,48 @@ module.exports = nativeBinding
 
             using var proc = Process.Start(psi);
             if (proc is null) return null;
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
-            var stderrTask = proc.StandardError.ReadToEndAsync();
-            if (!proc.WaitForExit(5000)) { try { proc.Kill(); } catch { } return null; }
-            var stdout = stdoutTask.GetAwaiter().GetResult();
-            _ = stderrTask.GetAwaiter().GetResult();
 
-            var m = Regex.Match(stdout, @"(?<v>\d+\.\d+\.\d+)");
-            return m.Success ? m.Groups["v"].Value : null;
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+            try
+            {
+                var stdoutTask = proc.StandardOutput.ReadToEndAsync(cts.Token);
+                var stderrTask = proc.StandardError.ReadToEndAsync(cts.Token);
+                await proc.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+                var stdout = (await stdoutTask.ConfigureAwait(false)).Trim();
+                _ = await stderrTask.ConfigureAwait(false);
+
+                var m = Regex.Match(stdout, @"(?<v>\d+\.\d+\.\d+)");
+                return m.Success ? m.Groups["v"].Value : null;
+            }
+            catch (OperationCanceledException)
+            {
+                TryKill(proc);
+                return null;
+            }
+            catch
+            {
+                TryKill(proc);
+                return null;
+            }
         }
         catch
         {
             return null;
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best effort only.
         }
     }
 }

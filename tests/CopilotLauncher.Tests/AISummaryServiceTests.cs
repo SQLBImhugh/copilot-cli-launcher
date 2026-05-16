@@ -52,6 +52,34 @@ public class AISummaryServiceTests
         Assert.False(service.IsEnabled);
     }
 
+    [Fact]
+    public async Task TryReadRepositoryContextAsync_RejectsUnsupportedExtensions_FromEnabledBriefingContext()
+    {
+        var settings = new FakeSettings();
+        settings.Current.Briefings.AISummaryOnBump = true;
+        var service = new AISummaryService(settings);
+        var contextPath = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid() + ".exe");
+        await File.WriteAllTextAsync(contextPath, "Launcher repo context");
+
+        try
+        {
+            settings.Current.Briefings.AgentsContextFilePath = contextPath;
+
+            Assert.True(service.IsEnabled);
+
+            var repoContext = await AISummaryService.TryReadRepositoryContextAsync(settings.Current.Briefings.AgentsContextFilePath, CancellationToken.None);
+            var prompt = AISummaryPromptBuilder.Build("1.0.0", "1.1.0", "Fixed bugs", repoContext);
+
+            Assert.Null(repoContext);
+            Assert.DoesNotContain("Repository context:", prompt);
+        }
+        finally
+        {
+            try { File.Delete(contextPath); }
+            catch { /* best effort */ }
+        }
+    }
+
     private sealed class FakeSettings : ISettingsService
     {
         public string AppDataDirectory => Path.GetTempPath();

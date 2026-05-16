@@ -13,19 +13,42 @@ public sealed partial class SessionsPage : Page
     private readonly IMigrationService _migration;
     private LegacyDetectionResult? _legacyDetection;
 
+    public static Visibility BoolToVisibility(bool value) =>
+        value ? Visibility.Visible : Visibility.Collapsed;
+
     public SessionsPage()
     {
+        // Provide a UI marshaller so the off-thread Refresh can mutate the
+        // Visible ObservableCollection from the WinUI dispatcher. Without this
+        // the ObservableCollection would throw on cross-thread Add/Clear.
+        var dq = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        Func<Action, System.Threading.Tasks.Task> marshal = action =>
+        {
+            var tcs = new System.Threading.Tasks.TaskCompletionSource();
+            if (!dq.TryEnqueue(() =>
+            {
+                try { action(); tcs.TrySetResult(); }
+                catch (Exception ex) { tcs.TrySetException(ex); }
+            }))
+            {
+                action();
+                tcs.TrySetResult();
+            }
+            return tcs.Task;
+        };
+
         ViewModel = new SessionsViewModel(
             App.Services.GetRequiredService<ISessionDiscoveryService>(),
             App.Services.GetRequiredService<ITerminalDiscoveryService>(),
             App.Services.GetRequiredService<ILaunchService>(),
             App.Services.GetRequiredService<ISettingsService>(),
-            App.Services.GetRequiredService<IAfterLaunchAction>());
+            App.Services.GetRequiredService<IAfterLaunchAction>(),
+            marshal);
         _migration = App.Services.GetRequiredService<IMigrationService>();
         InitializeComponent();
-        Loaded += (_, _) =>
+        Loaded += async (_, _) =>
         {
-            ViewModel.Refresh();
+            await ViewModel.RefreshAsync();
             CheckForLegacyInstall();
         };
     }
@@ -59,7 +82,7 @@ public sealed partial class SessionsPage : Page
         ViewModel.StatusMessage = "Migration skipped — won't ask again.";
     }
 
-    private void OnRefreshClick(object sender, RoutedEventArgs e) => ViewModel.Refresh();
+    private async void OnRefreshClick(object sender, RoutedEventArgs e) => await ViewModel.RefreshAsync();
 
     private void OnResumeClick(object sender, RoutedEventArgs e)
     {

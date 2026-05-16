@@ -21,22 +21,28 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <Button x:Name="CheckNowButton" Click="OnCheckNowClick" IsEnabled="True">
+            <Button x:Name="CheckNowButton"
+                    AutomationProperties.AutomationId="BriefingCheckNowButton"
+                    Click="OnCheckNowClick"
+                    IsEnabled="True">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <TextBlock Text="↻"/>
                     <TextBlock Text="Check now"/>
                 </StackPanel>
             </Button>
             <ProgressRing x:Name="CheckSpinner" IsActive="False" Width="16" Height="16"/>
-            <Button Content="Clear history" Click="OnClearClick"/>
+            <Button Content="Clear history"
+                    AutomationProperties.AutomationId="BriefingClearHistoryButton"
+                    Click="OnClearClick"/>
         </StackPanel>
 
         <ListView Grid.Row="2"
+                  AutomationProperties.AutomationId="BriefingList"
                   ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
                   SelectionMode="None"
                   IsItemClickEnabled="False"
                   Padding="0"
-                  Background="Transparent">
+                  Background="{ThemeResource SubtleFillColorTransparentBrush}">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -50,22 +56,22 @@
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             BorderThickness="{ThemeResource CardBorderThickness}"
-                            CornerRadius="8">
+                            CornerRadius="{StaticResource OverlayCornerRadius}">
                         <StackPanel Spacing="6">
                             <StackPanel Orientation="Horizontal" Spacing="12">
-                                <TextBlock Text="{x:Bind FromVersion}"
+                                <TextBlock Text="{x:Bind FromVersion, Mode=OneTime}"
                                            Style="{StaticResource SubtitleTextBlockStyle}"
                                            Opacity="0.7"/>
                                 <TextBlock Text="→" Style="{StaticResource SubtitleTextBlockStyle}" Opacity="0.5"/>
-                                <TextBlock Text="{x:Bind ToVersion}"
+                                <TextBlock Text="{x:Bind ToVersion, Mode=OneTime}"
                                            Style="{StaticResource SubtitleTextBlockStyle}"
                                            FontWeight="SemiBold"/>
-                                <TextBlock Text="{x:Bind Source}"
+                                <TextBlock Text="{x:Bind Source, Mode=OneTime}"
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Opacity="0.6"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
-                            <controls:MarkdownTextBlock Markdown="{x:Bind Body}"
+                            <controls:MarkdownTextBlock Markdown="{x:Bind Body, Mode=OneTime}"
                                                         Margin="0,4,0,0"
                                                         Opacity="0.85"/>
                         </StackPanel>
@@ -76,7 +82,7 @@
 
         <Border Grid.Row="3"
                 Background="{ThemeResource SubtleFillColorTertiaryBrush}"
-                CornerRadius="6"
+                CornerRadius="{StaticResource ControlCornerRadius}"
                 Padding="12,6">
             <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
                        Style="{StaticResource CaptionTextBlockStyle}"

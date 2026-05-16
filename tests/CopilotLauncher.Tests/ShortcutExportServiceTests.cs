@@ -10,25 +10,37 @@ public class ShortcutExportServiceTests
     public void BuildPlan_ProducesQuotedArguments_AndMatchingFields()
     {
         var (svc, _) = MakeServices();
-        var shortcut = new Shortcut
+        var root = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
+        var workingDirectory = Path.Combine(root, "myapp");
+        Directory.CreateDirectory(workingDirectory);
+
+        try
         {
-            Id = Guid.NewGuid().ToString(),
-            Label = "MyApp",
-            WorkingDirectory = @"C:\code\myapp",
-            ResumeTarget = "MyApp-Main",
-            EnableAllowAll = true,
-            ExtraCopilotArgs = "--max-autopilot-continues 100",
-        };
+            var shortcut = new Shortcut
+            {
+                Id = Guid.NewGuid().ToString(),
+                Label = "MyApp",
+                WorkingDirectory = workingDirectory,
+                ResumeTarget = "MyApp-Main",
+                EnableAllowAll = true,
+                ExtraCopilotArgs = "--max-autopilot-continues 100",
+            };
 
-        var plan = svc.BuildPlan(shortcut);
+            var plan = svc.BuildPlan(shortcut);
 
-        Assert.Equal(@"C:\npm\copilot.cmd", plan.TargetPath);
-        Assert.Equal(@"C:\code\myapp", plan.WorkingDirectory);
-        Assert.Contains("--allow-all", plan.Arguments);
-        Assert.Contains("--resume=MyApp-Main", plan.Arguments);
-        Assert.Contains("--max-autopilot-continues", plan.Arguments);
-        Assert.Contains("100", plan.Arguments);
-        Assert.Contains("MyApp", plan.Description);
+            Assert.Equal(@"C:\npm\copilot.cmd", plan.TargetPath);
+            Assert.Equal(Path.GetFullPath(workingDirectory), plan.WorkingDirectory);
+            Assert.Contains("--allow-all", plan.Arguments);
+            Assert.Contains("--resume=MyApp-Main", plan.Arguments);
+            Assert.Contains("--max-autopilot-continues", plan.Arguments);
+            Assert.Contains("100", plan.Arguments);
+            Assert.Contains("MyApp", plan.Description);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); }
+            catch { /* best effort */ }
+        }
     }
 
     [Fact]
@@ -36,7 +48,20 @@ public class ShortcutExportServiceTests
     {
         var (svc, _) = MakeServices();
         var shortcut = new Shortcut { Id = "x", Label = "x", WorkingDirectory = "" };
-        Assert.Throws<ArgumentException>(() => svc.BuildPlan(shortcut));
+        var ex = Assert.Throws<InvalidOperationException>(() => svc.BuildPlan(shortcut));
+        Assert.Equal("Working directory does not exist or is invalid: ", ex.Message);
+    }
+
+    [Fact]
+    public void BuildPlan_Throws_WhenWorkingDirectoryMissingOnDisk()
+    {
+        var (svc, _) = MakeServices();
+        var missing = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid(), "missing");
+        var shortcut = new Shortcut { Id = "x", Label = "x", WorkingDirectory = missing };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => svc.BuildPlan(shortcut));
+
+        Assert.Equal($"Working directory does not exist or is invalid: {missing}", ex.Message);
     }
 
     private static (ShortcutExportService svc, FakeSettings settings) MakeServices()

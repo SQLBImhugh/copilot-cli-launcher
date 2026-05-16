@@ -18,7 +18,7 @@
              whole strip a draggable region. Leave the right ~138px clear so
              the system min/max/close buttons aren't covered (they're drawn
              by Windows on top of our content). -->
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Background="Transparent">
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Background="{ThemeResource SubtleFillColorTransparentBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="138"/>  <!-- system caption buttons -->
@@ -33,31 +33,32 @@
 
         <muxc:NavigationView Grid.Row="1"
             x:Name="NavView"
+            AutomationProperties.AutomationId="ShellNavigationView"
             PaneDisplayMode="Left"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="False"
             SelectionChanged="NavView_SelectionChanged">
 
             <muxc:NavigationView.MenuItems>
-                <muxc:NavigationViewItem Tag="sessions" Content="Sessions">
+                <muxc:NavigationViewItem Tag="sessions" Content="Sessions" AutomationProperties.AutomationId="NavSessions">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE823;"/>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
 
-                <muxc:NavigationViewItem Tag="shortcuts" Content="Shortcuts">
+                <muxc:NavigationViewItem Tag="shortcuts" Content="Shortcuts" AutomationProperties.AutomationId="NavShortcuts">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE734;"/>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
 
-                <muxc:NavigationViewItem Tag="newshortcut" Content="New Shortcut">
+                <muxc:NavigationViewItem Tag="newshortcut" Content="New Shortcut" AutomationProperties.AutomationId="NavNewShortcut">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE710;"/>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
 
-                <muxc:NavigationViewItem Tag="briefing" Content="Briefing">
+                <muxc:NavigationViewItem Tag="briefing" Content="Briefing" AutomationProperties.AutomationId="NavBriefing">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE7C3;"/>
                     </muxc:NavigationViewItem.Icon>
@@ -66,7 +67,7 @@
                 <!-- Settings sits with the rest of the nav items now (was
                      auto-rendered at the bottom via IsSettingsVisible) so the
                      gear is reachable without scrolling on small heights. -->
-                <muxc:NavigationViewItem Tag="settings" Content="Settings">
+                <muxc:NavigationViewItem Tag="settings" Content="Settings" AutomationProperties.AutomationId="NavSettings">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE713;"/>
                     </muxc:NavigationViewItem.Icon>

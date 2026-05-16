@@ -5,7 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:CopilotLauncher.ViewModels"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
-    xmlns:controls="using:CopilotLauncher.Controls">
+    xmlns:controls="using:CopilotLauncher.Controls"
+    xmlns:local="using:CopilotLauncher.Pages">
 
     <Grid Padding="32,24,32,16" RowSpacing="16">
         <Grid.RowDefinitions>
@@ -27,15 +28,20 @@
         <!-- Migration InfoBar (visible only when a legacy install is detected) -->
         <muxc:InfoBar Grid.Row="1"
                       x:Name="MigrationBar"
+                      AutomationProperties.AutomationId="SessionsMigrationInfoBar"
                       IsOpen="False"
                       Severity="Informational"
                       Title="Legacy PowerShell launcher detected">
             <muxc:InfoBar.ActionButton>
-                <Button Content="Import settings" Click="OnImportLegacyClick"/>
+                <Button Content="Import settings"
+                        AutomationProperties.AutomationId="MigrationImportButton"
+                        Click="OnImportLegacyClick"/>
             </muxc:InfoBar.ActionButton>
             <muxc:InfoBar.Content>
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,4">
-                    <Button Content="Skip" Click="OnSkipLegacyClick"/>
+                    <Button Content="Skip"
+                            AutomationProperties.AutomationId="MigrationSkipButton"
+                            Click="OnSkipLegacyClick"/>
                 </StackPanel>
             </muxc:InfoBar.Content>
         </muxc:InfoBar>
@@ -56,7 +62,9 @@
                                 VerticalSpacing="8"
                                 VerticalAlignment="Top">
                 <StackPanel Spacing="0" MaxWidth="260">
-                    <CheckBox Content="Recent (15d)" IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
+                    <CheckBox Content="Recent (15d)"
+                              AutomationProperties.AutomationId="SessionsFilterRecent"
+                              IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
                     <TextBlock Text="Modified in the last 15 days"
                                Margin="28,-2,0,0" Opacity="0.6"
                                TextWrapping="Wrap"
@@ -64,7 +72,9 @@
                 </StackPanel>
 
                 <StackPanel Spacing="0" MaxWidth="280">
-                    <CheckBox Content="Named" IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
+                    <CheckBox Content="Named"
+                              AutomationProperties.AutomationId="SessionsFilterNamed"
+                              IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
                     <TextBlock Text="You assigned a name via copilot --name or /rename"
                                Margin="28,-2,0,0" Opacity="0.6"
                                TextWrapping="Wrap"
@@ -72,7 +82,9 @@
                 </StackPanel>
 
                 <StackPanel Spacing="0" MaxWidth="260">
-                    <CheckBox Content="Heavily used" IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
+                    <CheckBox Content="Heavily used"
+                              AutomationProperties.AutomationId="SessionsFilterHeavy"
+                              IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
                     <TextBlock Text="10+ summary points (long-running session)"
                                Margin="28,-2,0,0" Opacity="0.6"
                                TextWrapping="Wrap"
@@ -80,7 +92,9 @@
                 </StackPanel>
 
                 <StackPanel Spacing="0" MaxWidth="240">
-                    <CheckBox Content="Show all" IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
+                    <CheckBox Content="Show all"
+                              AutomationProperties.AutomationId="SessionsFilterShowAll"
+                              IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
                     <TextBlock Text="Override above; show every session"
                                Margin="28,-2,0,0" Opacity="0.6"
                                TextWrapping="Wrap"
@@ -88,7 +102,11 @@
                 </StackPanel>
             </controls:WrapPanel>
 
-            <Button Grid.Column="1" Content="↻ Refresh" Click="OnRefreshClick" VerticalAlignment="Top"/>
+            <Button Grid.Column="1"
+                    Content="↻ Refresh"
+                    AutomationProperties.AutomationId="SessionsRefreshButton"
+                    Click="OnRefreshClick"
+                    VerticalAlignment="Top"/>
         </Grid>
 
         <!-- Search + Sort row -->
@@ -101,13 +119,18 @@
             </Grid.ColumnDefinitions>
 
             <AutoSuggestBox Grid.Column="0"
+                            AutomationProperties.AutomationId="SessionsSearchBox"
                             QueryIcon="Find"
                             PlaceholderText="Filter by path, repo, branch, or session id…"
                             Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
             <TextBlock Grid.Column="1" Text="Sort by:" VerticalAlignment="Center" Opacity="0.7"/>
 
-            <ComboBox Grid.Column="2" x:Name="SortCombo" SelectionChanged="OnSortChanged" MinWidth="160">
+            <ComboBox Grid.Column="2"
+                      x:Name="SortCombo"
+                      AutomationProperties.AutomationId="SessionsSortCombo"
+                      SelectionChanged="OnSortChanged"
+                      MinWidth="160">
                 <ComboBoxItem Tag="LastModified" Content="Last modified" IsSelected="True"/>
                 <ComboBoxItem Tag="Name"         Content="Name"/>
                 <ComboBoxItem Tag="Cwd"          Content="Working directory"/>
@@ -116,7 +139,10 @@
                 <ComboBoxItem Tag="Size"         Content="Size on disk"/>
             </ComboBox>
 
-            <Button Grid.Column="3" Click="OnToggleSortDirection"
+            <Button Grid.Column="3"
+                    AutomationProperties.AutomationId="SessionsSortDirectionButton"
+                    AutomationProperties.Name="Toggle sort direction"
+                    Click="OnToggleSortDirection"
                     ToolTipService.ToolTip="Reverse sort order">
                 <FontIcon x:Name="SortDirectionGlyph" Glyph="&#xE74B;" FontSize="14"/>
             </Button>
@@ -124,11 +150,12 @@
 
         <!-- Session list -->
         <ListView Grid.Row="4"
+                  AutomationProperties.AutomationId="SessionsList"
                   ItemsSource="{x:Bind ViewModel.Visible, Mode=OneWay}"
                   SelectionMode="None"
                   IsItemClickEnabled="False"
                   Padding="0"
-                  Background="Transparent">
+                  Background="{ThemeResource SubtleFillColorTransparentBrush}">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -142,7 +169,7 @@
                           Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                           BorderThickness="{ThemeResource CardBorderThickness}"
-                          CornerRadius="8"
+                          CornerRadius="{StaticResource OverlayCornerRadius}"
                           ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -151,50 +178,52 @@
 
                         <StackPanel Grid.Column="0" Spacing="4">
                             <!-- User-named session: bold subtitle -->
-                            <TextBlock Text="{x:Bind Title}"
+                            <TextBlock Text="{x:Bind Title, Mode=OneTime}"
                                        Style="{StaticResource SubtitleTextBlockStyle}"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"
-                                       Visibility="{x:Bind HasUserName, Converter={StaticResource BoolToVisibility}}"/>
+                                       Visibility="{x:Bind local:SessionsPage.BoolToVisibility(HasUserName), Mode=OneTime}"/>
 
                             <!-- Auto-generated name: regular weight, muted (secondary) text color
                                  with caption underneath; the muted color signals "unofficial". -->
-                            <TextBlock Text="{x:Bind Title}"
+                            <TextBlock Text="{x:Bind Title, Mode=OneTime}"
                                        Style="{StaticResource SubtitleTextBlockStyle}"
                                        FontWeight="Normal"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextTrimming="CharacterEllipsis"
-                                       Visibility="{x:Bind HasAutoName, Converter={StaticResource BoolToVisibility}}"/>
-                            <TextBlock Text="{x:Bind AutoNameDescription}"
+                                       Visibility="{x:Bind local:SessionsPage.BoolToVisibility(HasAutoName), Mode=OneTime}"/>
+                            <TextBlock Text="{x:Bind AutoNameDescription, Mode=OneTime}"
                                        Style="{StaticResource CaptionTextBlockStyle}"
                                        Opacity="0.55"
                                        FontStyle="Italic"
                                        Margin="0,-2,0,0"
-                                       Visibility="{x:Bind HasAutoName, Converter={StaticResource BoolToVisibility}}"/>
+                                       Visibility="{x:Bind local:SessionsPage.BoolToVisibility(HasAutoName), Mode=OneTime}"/>
 
-                            <TextBlock Text="{x:Bind Cwd}"
-                                       Opacity="{x:Bind CwdOpacity}"
+                            <TextBlock Text="{x:Bind Cwd, Mode=OneTime}"
+                                       Opacity="{x:Bind CwdOpacity, Mode=OneTime}"
                                        Style="{StaticResource BodyTextBlockStyle}"
                                        TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{x:Bind RepoBranch}"
+                            <TextBlock Text="{x:Bind RepoBranch, Mode=OneTime}"
                                        Opacity="0.7"
                                        Style="{StaticResource CaptionTextBlockStyle}"/>
-                            <TextBlock Text="{x:Bind Tags}"
+                            <TextBlock Text="{x:Bind Tags, Mode=OneTime}"
                                        Opacity="0.7"
                                        Style="{StaticResource CaptionTextBlockStyle}"/>
-                            <TextBlock Text="{x:Bind LastOpenedDisplay}"
+                            <TextBlock Text="{x:Bind LastOpenedDisplay, Mode=OneTime}"
                                        Opacity="0.5"
                                        Style="{StaticResource CaptionTextBlockStyle}"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="6" VerticalAlignment="Center" HorizontalAlignment="Right">
                             <Button Content="▶ Resume"
+                                    AutomationProperties.AutomationId="SessionResumeButton"
                                     Style="{StaticResource AccentButtonStyle}"
-                                    Tag="{x:Bind}"
+                                    Tag="{x:Bind Mode=OneTime}"
                                     Click="OnResumeClick"
                                     HorizontalAlignment="Stretch"/>
                             <Button Content="Save as shortcut…"
-                                    Tag="{x:Bind}"
+                                    AutomationProperties.AutomationId="SessionSaveAsShortcutButton"
+                                    Tag="{x:Bind Mode=OneTime}"
                                     Click="OnSaveAsLaunchClick"
                                     HorizontalAlignment="Stretch"/>
                         </StackPanel>
@@ -206,7 +235,7 @@
         <!-- Status bar -->
         <Border Grid.Row="5"
                 Background="{ThemeResource SubtleFillColorTertiaryBrush}"
-                CornerRadius="6"
+                CornerRadius="{StaticResource ControlCornerRadius}"
                 Padding="12,6">
             <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
                        Style="{StaticResource CaptionTextBlockStyle}"

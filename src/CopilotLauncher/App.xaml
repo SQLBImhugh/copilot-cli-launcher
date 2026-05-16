@@ -2,14 +2,12 @@
 <Application
     x:Class="CopilotLauncher.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:helpers="using:CopilotLauncher.Helpers">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
-            <helpers:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
             <!-- Default card border thickness (1px). The Copilot CLI theme bumps
                  this to 2px via ThemeManager so the bright pink stroke is more
                  visible against the dark backdrop. -->
