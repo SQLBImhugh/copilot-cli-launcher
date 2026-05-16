@@ -22,6 +22,14 @@
                  body / control text in copilotCli) stays in the standard
                  Fluent UI font (or Consolas in copilotCli mode). -->
             <FontFamily x:Key="HeadingFontFamily">Segoe UI Variable Display, Segoe UI Variable Text, Segoe UI</FontFamily>
+            <!-- Body font family — applied via FontFamily="{ThemeResource ...}"
+                 on each Page root + MainWindow root grid so it propagates by
+                 visual-tree inheritance to every TextBlock that doesn't set
+                 its own FontFamily (which is most of them — Fluent's
+                 BodyTextBlockStyle / SubtitleTextBlockStyle / etc. don't set
+                 a FontFamily setter). ThemeManager swaps to Consolas in
+                 copilotCli mode. -->
+            <FontFamily x:Key="BodyFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

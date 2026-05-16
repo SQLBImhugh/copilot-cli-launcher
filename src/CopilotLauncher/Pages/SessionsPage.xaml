@@ -6,7 +6,8 @@
     xmlns:vm="using:CopilotLauncher.ViewModels"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:controls="using:CopilotLauncher.Controls"
-    xmlns:local="using:CopilotLauncher.Pages">
+    xmlns:local="using:CopilotLauncher.Pages"
+    FontFamily="{ThemeResource BodyFontFamily}">
 
     <Grid Padding="32,24,32,16" RowSpacing="16">
         <Grid.RowDefinitions>

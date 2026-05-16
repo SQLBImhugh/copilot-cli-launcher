@@ -34,17 +34,20 @@ public static class ThemeManager
 {
     // VT323 — pure pixel font, used ONLY on headings (page titles + Settings
     // section subheadings). The user's preferred copilotCli-mode body /
-    // control text is the CLI font (Cascadia Mono / Consolas), not pixel art,
-    // because pixel-font body text is hard to read.
+    // control text is the CLI font (Consolas), not pixel art, because
+    // pixel-font body text is hard to read.
+    //
+    // Fallback chain dropped Cascadia Mono / Code per user feedback — those
+    // looked too clean / modern; Consolas matches the classic terminal feel
+    // and ships with every Windows install.
     private static readonly FontFamily PixelFont =
-        new("ms-appx:///Assets/Fonts/VT323-Regular.ttf#VT323, Cascadia Mono, Consolas");
+        new("ms-appx:///Assets/Fonts/VT323-Regular.ttf#VT323, Consolas");
 
-    /// <summary>The "CLI font" — Cascadia Mono / Consolas, monospace, what
-    /// every body / control / nav surface uses in copilotCli mode. Public
-    /// so the WinUI side (e.g. MarkdownTextBlock) can pick the right body
-    /// font for the active theme.</summary>
+    /// <summary>Plain Consolas — used for body / control / nav surfaces in
+    /// copilotCli mode. Public so MarkdownTextBlock and similar can resolve
+    /// the right body font for the active theme.</summary>
     private static readonly FontFamily CliMonoFont =
-        new("Cascadia Mono, Cascadia Code, Consolas, Courier New");
+        new("Consolas, Courier New");
 
     public static FontFamily GetActiveBodyFontFamily()
     {
@@ -193,6 +196,7 @@ public static class ThemeManager
         if (wantPalette)
         {
             app.Resources["HeadingFontFamily"] = PixelFont;
+            app.Resources["BodyFontFamily"] = CliMonoFont;
             app.Resources["ContentControlThemeFontFamily"] = CliMonoFont;
             app.Resources["XamlAutoFontFamily"] = CliMonoFont;
             app.Resources["CliMonoFontFamily"] = CliMonoFont;
@@ -206,10 +210,12 @@ public static class ThemeManager
         {
             // Removing forces fallback to whatever XamlControlsResources defines
             // (Segoe UI Variable Text + 14px + 1px). HeadingFontFamily,
-            // CardBorderThickness, FilterCheckBoxFontSize all have non-pixel
-            // defaults in App.xaml so the lookup never fails.
+            // BodyFontFamily, CardBorderThickness, FilterCheckBoxFontSize all
+            // have non-pixel defaults in App.xaml so the lookup never fails.
             if (app.Resources.ContainsKey("HeadingFontFamily"))
                 app.Resources.Remove("HeadingFontFamily");
+            if (app.Resources.ContainsKey("BodyFontFamily"))
+                app.Resources.Remove("BodyFontFamily");
             if (app.Resources.ContainsKey("ContentControlThemeFontFamily"))
                 app.Resources.Remove("ContentControlThemeFontFamily");
             if (app.Resources.ContainsKey("XamlAutoFontFamily"))
