@@ -65,24 +65,28 @@
                                 VerticalAlignment="Top">
                 <CheckBox Content="Recent (15d)"
                           AutomationProperties.AutomationId="SessionsFilterRecent"
+                          MinWidth="0"
                           FontSize="{ThemeResource FilterCheckBoxFontSize}"
                           ToolTipService.ToolTip="Modified in the last 15 days"
                           IsChecked="{x:Bind ViewModel.ShowRecent, Mode=TwoWay}"/>
 
                 <CheckBox Content="Named"
                           AutomationProperties.AutomationId="SessionsFilterNamed"
+                          MinWidth="0"
                           FontSize="{ThemeResource FilterCheckBoxFontSize}"
                           ToolTipService.ToolTip="You assigned a name via copilot --name or /rename"
                           IsChecked="{x:Bind ViewModel.ShowNamed, Mode=TwoWay}"/>
 
                 <CheckBox Content="Heavily used"
                           AutomationProperties.AutomationId="SessionsFilterHeavy"
+                          MinWidth="0"
                           FontSize="{ThemeResource FilterCheckBoxFontSize}"
                           ToolTipService.ToolTip="10+ summary points (long-running session)"
                           IsChecked="{x:Bind ViewModel.ShowHeavy, Mode=TwoWay}"/>
 
                 <CheckBox Content="Show all"
                           AutomationProperties.AutomationId="SessionsFilterShowAll"
+                          MinWidth="0"
                           FontSize="{ThemeResource FilterCheckBoxFontSize}"
                           ToolTipService.ToolTip="Override above; show every session"
                           IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
