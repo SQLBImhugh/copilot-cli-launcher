@@ -15,8 +15,13 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x64;arm64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
-    <WindowsPackageType>None</WindowsPackageType>
-    <EnableMsixTooling>false</EnableMsixTooling>
+    <!-- Packaged MSIX — required for the Windows AppExtension framework
+         to discover this as a Command Palette extension. (The main app
+         is WindowsPackageType=None / unpackaged; this project is the
+         opposite by design.) -->
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <UseWinUI>false</UseWinUI>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -43,6 +48,19 @@
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
+
+  <!-- Activates the Single-project MSIX Packaging Tools so VS Solution
+       Explorer surfaces the right-click "Deploy" + "Package and Publish"
+       menu items. Without this capability, our csproj looks to VS like a
+       plain net10.0-windows console project, which is why Deploy was
+       missing from the context menu. -->
+  <ItemGroup Condition="'$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
 
   <ItemGroup>
     <Content Include="Assets\StoreLogo.png">
