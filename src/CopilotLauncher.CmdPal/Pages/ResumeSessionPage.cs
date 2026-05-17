@@ -78,7 +78,11 @@ public sealed partial class ResumeSessionPage : DynamicListPage
             Title = GetSessionTitle(session),
             Subtitle = string.IsNullOrWhiteSpace(session.Cwd) ? session.Id : session.Cwd!,
             Section = string.IsNullOrWhiteSpace(session.Name) ? "Unnamed" : "Named",
-            Icon = new IconInfo("\uE7C3"),
+            // App's pixel-art mascot — distinctive vs the generic Segoe Fluent
+            // Document glyph (\uE7C3) we used to use, which looked like a
+            // plain "file shortcut" and confused users about what these
+            // entries represent.
+            Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png"),
             MoreCommands = new IContextItem[]
             {
                 new CommandContextItem(new OpenInExplorerCommand(session.Cwd))

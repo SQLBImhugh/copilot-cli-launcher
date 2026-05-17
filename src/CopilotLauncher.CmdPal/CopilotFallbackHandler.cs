@@ -32,7 +32,10 @@ public sealed partial class CopilotFallbackHandler : FallbackCommandItem
         _terminals = terminals;
         _settings = settings;
 
-        Icon = new IconInfo("\uE7C3");
+        // App's pixel-art mascot — distinctive vs the generic Document glyph
+        // (\uE7C3) we used to use which made fallback results look like
+        // plain file shortcuts.
+        Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png");
         Title = string.Empty;
         Subtitle = string.Empty;
     }
