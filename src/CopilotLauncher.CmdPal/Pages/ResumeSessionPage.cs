@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using CopilotLauncher.CmdPal.Commands;
+using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -12,7 +13,7 @@ namespace CopilotLauncher.CmdPal.Pages;
 /// Selecting an item runs <see cref="ResumeSessionCommand"/> which spawns
 /// `copilot --resume=&lt;id&gt;` in the user's preferred terminal.
 /// </summary>
-public sealed partial class ResumeSessionPage : ListPage
+public sealed partial class ResumeSessionPage : DynamicListPage
 {
     private readonly ISessionDiscoveryService _discovery;
     private readonly ILaunchService _launch;
@@ -36,35 +37,84 @@ public sealed partial class ResumeSessionPage : ListPage
         Icon = new IconInfo("\uE823"); // Segoe Fluent History
     }
 
+    public override void UpdateSearchText(string oldSearch, string newSearch)
+    {
+        if (!string.Equals(oldSearch, newSearch, StringComparison.Ordinal))
+        {
+            RaiseItemsChanged();
+        }
+    }
+
     public override IListItem[] GetItems()
     {
         try
         {
-            var sessions = _discovery.Enumerate()
-                .OrderByDescending(s => s.LastModified)
-                .Take(100)
-                .ToList();
-
-            return sessions.Select(s =>
-            {
-                var name = !string.IsNullOrWhiteSpace(s.Name)
-                    ? s.Name!
-                    : (s.Id.Length > 8 ? s.Id[..8] : s.Id);
-                var sub = string.IsNullOrEmpty(s.Cwd) ? s.Id : s.Cwd;
-
-                return new ListItem(new ResumeSessionCommand(_launch, _terminals, _settings, s))
-                {
-                    Title = name,
-                    Subtitle = sub!,
-                    Section = string.IsNullOrWhiteSpace(s.Name) ? "Unnamed" : "Named",
-                    Icon = new IconInfo("\uE7C3"),
-                };
-            }).ToArray<IListItem>();
+            return FilterSessions(SearchText)
+                .Select(BuildItem)
+                .ToArray<IListItem>();
         }
         catch
         {
             return Array.Empty<IListItem>();
         }
     }
+
+    private IEnumerable<CopilotSession> FilterSessions(string? searchText)
+    {
+        var query = searchText?.Trim() ?? string.Empty;
+        return _discovery.Enumerate()
+            .Select(session => new { Session = session, Rank = GetMatchRank(session, query) })
+            .Where(match => match.Rank is not null)
+            .OrderBy(match => match.Rank)
+            .ThenByDescending(match => match.Session.LastModified)
+            .Take(50)
+            .Select(match => match.Session);
+    }
+
+    private ListItem BuildItem(CopilotSession session)
+    {
+        return new ListItem(new ResumeSessionCommand(_launch, _terminals, _settings, session))
+        {
+            Title = GetSessionTitle(session),
+            Subtitle = string.IsNullOrWhiteSpace(session.Cwd) ? session.Id : session.Cwd!,
+            Section = string.IsNullOrWhiteSpace(session.Name) ? "Unnamed" : "Named",
+            Icon = new IconInfo("\uE7C3"),
+            MoreCommands = new IContextItem[]
+            {
+                new CommandContextItem(new OpenInExplorerCommand(session.Cwd))
+                {
+                    Title = "Open in Explorer",
+                },
+                new CommandContextItem(new CopyTextCommand(session.Id))
+                {
+                    Title = "Copy session id",
+                },
+                new CommandContextItem(new CopyTextCommand($"copilot --resume={session.Id}"))
+                {
+                    Title = "Copy resume command",
+                },
+            },
+        };
+    }
+
+    private static int? GetMatchRank(CopilotSession session, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return 0;
+        if (Contains(session.Name, query)) return 0;
+        if (Contains(session.Cwd, query)) return 1;
+        if (Contains(session.Repository, query)) return 2;
+        if (Contains(session.Branch, query)) return 3;
+        if (Contains(session.Id, query)) return 4;
+        return null;
+    }
+
+    private static bool Contains(string? value, string query) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+
+    private static string GetSessionTitle(CopilotSession session) =>
+        !string.IsNullOrWhiteSpace(session.Name)
+            ? session.Name!
+            : (session.Id.Length > 8 ? session.Id[..8] : session.Id);
 }
 

@@ -1,5 +1,4 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CopilotLauncher.Helpers;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
@@ -11,7 +10,7 @@ namespace CopilotLauncher.ViewModels;
 /// command-line preview, and persists the result via <see cref="IShortcutsService"/>
 /// (with optional immediate spawn through <see cref="ILaunchService"/>).
 /// </summary>
-public sealed class NewShortcutViewModel : INotifyPropertyChanged
+public sealed partial class NewShortcutViewModel : ObservableObject
 {
     private readonly IShortcutsService _store;
     private readonly ILaunchService _launch;
@@ -37,12 +36,22 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
     private string _label = string.Empty;
     private string _workingDirectory;
     private string _resumeTarget = string.Empty;
+
+    [ObservableProperty]
     private bool _enableAISummary;
+
+    [ObservableProperty]
     private bool _enableAllowAll;
+
     private string _extraArgs;
     private string _terminalOverride = string.Empty;
     private string _agentsContextOverride = string.Empty;
     private string _statusMessage = string.Empty;
+    private string _commandPreview = string.Empty;
+
+    partial void OnEnableAISummaryChanged(bool value) => RecalcPreview();
+
+    partial void OnEnableAllowAllChanged(bool value) => RecalcPreview();
 
     public string Label
     {
@@ -60,18 +69,6 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
     {
         get => _resumeTarget;
         set { if (_resumeTarget != value) { _resumeTarget = value ?? string.Empty; OnPropertyChanged(); RecalcPreview(); } }
-    }
-
-    public bool EnableAISummary
-    {
-        get => _enableAISummary;
-        set { if (_enableAISummary != value) { _enableAISummary = value; OnPropertyChanged(); RecalcPreview(); } }
-    }
-
-    public bool EnableAllowAll
-    {
-        get => _enableAllowAll;
-        set { if (_enableAllowAll != value) { _enableAllowAll = value; OnPropertyChanged(); RecalcPreview(); } }
     }
 
     public string ExtraArgs
@@ -101,14 +98,13 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
     public string StatusMessage
     {
         get => _statusMessage;
-        private set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
+        private set => SetProperty(ref _statusMessage, value);
     }
 
-    private string _commandPreview = string.Empty;
     public string CommandPreview
     {
         get => _commandPreview;
-        private set { if (_commandPreview != value) { _commandPreview = value; OnPropertyChanged(); } }
+        private set => SetProperty(ref _commandPreview, value);
     }
 
     public bool CanSave => !string.IsNullOrWhiteSpace(_label) && !string.IsNullOrWhiteSpace(_workingDirectory);
@@ -172,8 +168,8 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
             Label = _label.Trim(),
             WorkingDirectory = validatedWorkingDirectory,
             ResumeTarget = string.IsNullOrWhiteSpace(_resumeTarget) ? null : _resumeTarget.Trim(),
-            EnableAISummary = _enableAISummary,
-            EnableAllowAll = _enableAllowAll,
+            EnableAISummary = this.EnableAISummary,
+            EnableAllowAll = this.EnableAllowAll,
             ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs.Trim(),
             TerminalOverride = string.IsNullOrEmpty(_terminalOverride) || _terminalOverride == "auto" ? null : _terminalOverride,
             AgentsContextOverride = string.IsNullOrWhiteSpace(_agentsContextOverride) ? null : _agentsContextOverride.Trim(),
@@ -228,8 +224,8 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
     {
         WorkingDirectory = _workingDirectory,
         ResumeTarget = string.IsNullOrWhiteSpace(_resumeTarget) ? null : _resumeTarget,
-        EnableAISummary = _enableAISummary,
-        EnableAllowAll = _enableAllowAll,
+        EnableAISummary = this.EnableAISummary,
+        EnableAllowAll = this.EnableAllowAll,
         ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs,
         Terminal = terminal,
     };
@@ -250,11 +246,11 @@ public sealed class NewShortcutViewModel : INotifyPropertyChanged
         }
         return discovered.OrderBy(t => t.Id switch
         {
-            "wt" => 0, "pwsh" => 1, "powershell" => 2, "cmd" => 3, _ => 4
+            "wt" => 0,
+            "pwsh" => 1,
+            "powershell" => 2,
+            "cmd" => 3,
+            _ => 4
         }).First();
     }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

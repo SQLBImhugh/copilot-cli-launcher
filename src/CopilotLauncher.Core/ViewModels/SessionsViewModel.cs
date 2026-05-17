@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 
@@ -11,7 +10,7 @@ namespace CopilotLauncher.ViewModels;
 /// search, and surfaces commands to Resume / Reveal / Repair. Lives in Core
 /// so its filtering logic is unit-testable.
 /// </summary>
-public sealed class SessionsViewModel : INotifyPropertyChanged
+public sealed partial class SessionsViewModel : ObservableObject
 {
     private readonly ISessionDiscoveryService _discovery;
     private readonly ITerminalDiscoveryService _terminals;
@@ -22,65 +21,38 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
 
-    public int TotalCount { get; private set; }
+    private int _totalCount;
+    public int TotalCount { get => _totalCount; private set => _totalCount = value; }
+
     public int VisibleCount => Visible.Count;
 
+    [ObservableProperty]
     private bool _showRecent = true;
+
+    [ObservableProperty]
     private bool _showNamed = true;
+
+    [ObservableProperty]
     private bool _showHeavy = true;
-    private bool _showAll = false;
+
+    [ObservableProperty]
+    private bool _showAll;
+
     private string _searchText = string.Empty;
-    private string _statusMessage = "Loading sessions…";
-    private SessionSortField _sortField = SessionSortField.LastModified;
-    private bool _sortDescending = true;
-
-    public bool ShowRecent
-    {
-        get => _showRecent;
-        set { if (_showRecent != value) { _showRecent = value; OnPropertyChanged(); ApplyFilters(); } }
-    }
-
-    public bool ShowNamed
-    {
-        get => _showNamed;
-        set { if (_showNamed != value) { _showNamed = value; OnPropertyChanged(); ApplyFilters(); } }
-    }
-
-    public bool ShowHeavy
-    {
-        get => _showHeavy;
-        set { if (_showHeavy != value) { _showHeavy = value; OnPropertyChanged(); ApplyFilters(); } }
-    }
-
-    public bool ShowAll
-    {
-        get => _showAll;
-        set { if (_showAll != value) { _showAll = value; OnPropertyChanged(); ApplyFilters(); } }
-    }
-
     public string SearchText
     {
         get => _searchText;
         set { if (_searchText != value) { _searchText = value ?? string.Empty; OnPropertyChanged(); ApplyFilters(); } }
     }
 
-    public string StatusMessage
-    {
-        get => _statusMessage;
-        set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
-    }
+    [ObservableProperty]
+    private string _statusMessage = "Loading sessions…";
 
-    public SessionSortField SortField
-    {
-        get => _sortField;
-        set { if (_sortField != value) { _sortField = value; OnPropertyChanged(); ApplyFilters(); } }
-    }
+    [ObservableProperty]
+    private SessionSortField _sortField = SessionSortField.LastModified;
 
-    public bool SortDescending
-    {
-        get => _sortDescending;
-        set { if (_sortDescending != value) { _sortDescending = value; OnPropertyChanged(); ApplyFilters(); } }
-    }
+    [ObservableProperty]
+    private bool _sortDescending = true;
 
     private List<CopilotSession> _all = new();
 
@@ -99,6 +71,18 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
         _marshalToUi = marshalToUi ?? (SynchronizationContext.Current is not null ? CreateUiMarshaller(SynchronizationContext.Current) : null);
     }
+
+    partial void OnShowRecentChanged(bool value) => ApplyFilters();
+
+    partial void OnShowNamedChanged(bool value) => ApplyFilters();
+
+    partial void OnShowHeavyChanged(bool value) => ApplyFilters();
+
+    partial void OnShowAllChanged(bool value) => ApplyFilters();
+
+    partial void OnSortFieldChanged(SessionSortField value) => ApplyFilters();
+
+    partial void OnSortDescendingChanged(bool value) => ApplyFilters();
 
     /// <summary>Re-scan disk + apply current filters. Safe to call repeatedly.</summary>
     [Obsolete("Use RefreshAsync instead. This method now schedules a background refresh and returns immediately.")]
@@ -205,11 +189,11 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         }
 
         IEnumerable<CopilotSession> rows;
-        if (_showAll)
+        if (ShowAll)
         {
             rows = _all;
         }
-        else if (!_showRecent && !_showNamed && !_showHeavy)
+        else if (!ShowRecent && !ShowNamed && !ShowHeavy)
         {
             // No chips checked + Show all off: user explicitly hid everything.
             rows = Array.Empty<CopilotSession>();
@@ -238,20 +222,20 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     {
         // Use a single sort key extractor based on the chosen field; flipping
         // direction is just OrderBy vs OrderByDescending.
-        return _sortField switch
+        return SortField switch
         {
-            SessionSortField.LastModified  => _sortDescending ? rows.OrderByDescending(s => s.LastModified)            : rows.OrderBy(s => s.LastModified),
-            SessionSortField.Name          => _sortDescending ? rows.OrderByDescending(s => s.Name ?? s.Cwd ?? s.Id, StringComparer.OrdinalIgnoreCase)
-                                                              : rows.OrderBy(s => s.Name ?? s.Cwd ?? s.Id, StringComparer.OrdinalIgnoreCase),
-            SessionSortField.Cwd           => _sortDescending ? rows.OrderByDescending(s => s.Cwd ?? "", StringComparer.OrdinalIgnoreCase)
-                                                              : rows.OrderBy(s => s.Cwd ?? "", StringComparer.OrdinalIgnoreCase),
-            SessionSortField.Repository    => _sortDescending ? rows.OrderByDescending(s => s.Repository ?? "", StringComparer.OrdinalIgnoreCase)
-                                                              : rows.OrderBy(s => s.Repository ?? "", StringComparer.OrdinalIgnoreCase),
-            SessionSortField.SummaryCount  => _sortDescending ? rows.OrderByDescending(s => s.SummaryCount)
-                                                              : rows.OrderBy(s => s.SummaryCount),
-            SessionSortField.Size          => _sortDescending ? rows.OrderByDescending(s => s.SizeBytes)
-                                                              : rows.OrderBy(s => s.SizeBytes),
-            _                              => rows.OrderByDescending(s => s.LastModified),
+            SessionSortField.LastModified => SortDescending ? rows.OrderByDescending(s => s.LastModified) : rows.OrderBy(s => s.LastModified),
+            SessionSortField.Name => SortDescending ? rows.OrderByDescending(s => s.Name ?? s.Cwd ?? s.Id, StringComparer.OrdinalIgnoreCase)
+                                                    : rows.OrderBy(s => s.Name ?? s.Cwd ?? s.Id, StringComparer.OrdinalIgnoreCase),
+            SessionSortField.Cwd => SortDescending ? rows.OrderByDescending(s => s.Cwd ?? "", StringComparer.OrdinalIgnoreCase)
+                                                   : rows.OrderBy(s => s.Cwd ?? "", StringComparer.OrdinalIgnoreCase),
+            SessionSortField.Repository => SortDescending ? rows.OrderByDescending(s => s.Repository ?? "", StringComparer.OrdinalIgnoreCase)
+                                                          : rows.OrderBy(s => s.Repository ?? "", StringComparer.OrdinalIgnoreCase),
+            SessionSortField.SummaryCount => SortDescending ? rows.OrderByDescending(s => s.SummaryCount)
+                                                            : rows.OrderBy(s => s.SummaryCount),
+            SessionSortField.Size => SortDescending ? rows.OrderByDescending(s => s.SizeBytes)
+                                                    : rows.OrderBy(s => s.SizeBytes),
+            _ => rows.OrderByDescending(s => s.LastModified),
         };
     }
 
@@ -259,9 +243,9 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
     {
         var settings = _settings.Current.SessionListing;
         var recentCutoff = DateTime.UtcNow.AddDays(-Math.Max(1, settings.RecentWindowDays));
-        if (_showRecent && s.LastModified.ToUniversalTime() < recentCutoff) return false;
-        if (_showNamed  && !s.UserNamed) return false;
-        if (_showHeavy  && s.SummaryCount < settings.HeavyUseSummaryThreshold) return false;
+        if (ShowRecent && s.LastModified.ToUniversalTime() < recentCutoff) return false;
+        if (ShowNamed && !s.UserNamed) return false;
+        if (ShowHeavy && s.SummaryCount < settings.HeavyUseSummaryThreshold) return false;
         return true;
     }
 
@@ -310,10 +294,6 @@ public sealed class SessionsViewModel : INotifyPropertyChanged
         static bool Contains(string? haystack, string needle) =>
             haystack is not null && haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
 /// <summary>Sort field for the Sessions tab.</summary>
@@ -411,7 +391,7 @@ public sealed class SessionRow
         if (span.TotalMinutes < 1) return "just now";
         if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
         if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
-        if (span.TotalDays < 7)   return $"{(int)span.TotalDays}d ago";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
         return when.ToLocalTime().ToString("yyyy-MM-dd");
     }
 

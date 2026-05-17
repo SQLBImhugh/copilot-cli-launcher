@@ -8,9 +8,9 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
-            <!-- Default card border thickness (1px). The Copilot CLI theme bumps
-                 this to 2px via ThemeManager so the bright pink stroke is more
-                 visible against the dark backdrop. -->
+            <!-- Default card border thickness (1px). ThemeManager bumps this
+                 to 2px for the Copilot CLI palette and in Windows High
+                 Contrast so card outlines stay readable. -->
             <Thickness x:Key="CardBorderThickness">1</Thickness>
             <!-- Filter checkbox label font size — defaults to the Fluent body
                  size; ThemeManager bumps this in copilotCli mode so the label

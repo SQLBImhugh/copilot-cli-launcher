@@ -7,14 +7,14 @@ using Microsoft.CommandPalette.Extensions.Toolkit;
 namespace CopilotLauncher.CmdPal;
 
 /// <summary>
-/// Top-level command provider. Exposes two entries in the PowerToys
-/// Command Palette:
-///   - "Resume Copilot session…"  — opens <see cref="ResumeSessionPage"/>
-///   - "Launch Copilot shortcut…" — opens <see cref="LaunchShortcutPage"/>
+/// Top-level command provider. Exposes the session + shortcut pages, a live
+/// fallback result for "copilot …" queries, and an in-palette settings page
+/// for resume defaults.
 /// </summary>
 public sealed partial class CopilotLauncherCommandsProvider : CommandProvider
 {
     private readonly ICommandItem[] _commands;
+    private readonly IFallbackCommandItem[] _fallbackCommands;
 
     public CopilotLauncherCommandsProvider()
     {
@@ -28,8 +28,8 @@ public sealed partial class CopilotLauncherCommandsProvider : CommandProvider
         var shortcuts = new ShortcutsService();
         var launch = new LaunchService();
 
-        _commands = new ICommandItem[]
-        {
+        _commands =
+        [
             new CommandItem(new ResumeSessionPage(sessions, launch, terminals, settings))
             {
                 Title = "Resume Copilot session…",
@@ -42,9 +42,29 @@ public sealed partial class CopilotLauncherCommandsProvider : CommandProvider
                 Subtitle = "Run one of your saved shortcuts (Sessions tab → Save as shortcut…)",
                 Icon = new IconInfo("\uE734"),
             },
-        };
+        ];
+
+        _fallbackCommands =
+        [
+            new CopilotFallbackHandler(sessions, launch, terminals, settings),
+        ];
+
+        Settings = new ProviderSettings(new CopilotSettingsPage(settings));
     }
 
     public override ICommandItem[] TopLevelCommands() => _commands;
+
+    public override IFallbackCommandItem[] FallbackCommands() => _fallbackCommands;
+
+    /// <summary>Minimal settings wrapper when the toolkit helper isn't present.</summary>
+    private sealed partial class ProviderSettings : ICommandSettings
+    {
+        public ProviderSettings(IContentPage settingsPage)
+        {
+            SettingsPage = settingsPage;
+        }
+
+        public IContentPage SettingsPage { get; }
+    }
 }
 

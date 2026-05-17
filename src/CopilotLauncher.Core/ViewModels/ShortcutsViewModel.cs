@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 
@@ -11,7 +10,7 @@ namespace CopilotLauncher.ViewModels;
 /// + <see cref="ILaunchService"/> behind an ObservableCollection so the UI updates
 /// when entries are added / removed.
 /// </summary>
-public sealed class ShortcutsViewModel : INotifyPropertyChanged
+public sealed partial class ShortcutsViewModel : ObservableObject
 {
     private readonly IShortcutsService _store;
     private readonly ILaunchService _launch;
@@ -21,12 +20,8 @@ public sealed class ShortcutsViewModel : INotifyPropertyChanged
 
     public ObservableCollection<Shortcut> Items { get; } = new();
 
+    [ObservableProperty]
     private string _statusMessage = string.Empty;
-    public string StatusMessage
-    {
-        get => _statusMessage;
-        set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
-    }
 
     public ShortcutsViewModel(
         IShortcutsService store,
@@ -109,11 +104,11 @@ public sealed class ShortcutsViewModel : INotifyPropertyChanged
         }
         return discovered.OrderBy(t => t.Id switch
         {
-            "wt" => 0, "pwsh" => 1, "powershell" => 2, "cmd" => 3, _ => 4
+            "wt" => 0,
+            "pwsh" => 1,
+            "powershell" => 2,
+            "cmd" => 3,
+            _ => 4
         }).First();
     }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

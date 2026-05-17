@@ -1,5 +1,4 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 
@@ -10,7 +9,7 @@ namespace CopilotLauncher.ViewModels;
 /// <see cref="AppSettings"/>; saves to disk are debounced (500ms) and
 /// run off the UI thread to avoid jank from rapid slider/text changes.
 /// </summary>
-public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private const int SaveDebounceMs = 500;
 
@@ -101,10 +100,6 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Raised when the user picks a different launcher theme. WinUI
     /// side hooks this to call ThemeManager.Apply on the main window.</summary>
     public event EventHandler<string>? ThemeChanged;
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     public void Dispose()
     {

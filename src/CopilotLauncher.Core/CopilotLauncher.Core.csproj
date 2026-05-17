@@ -13,6 +13,9 @@
 
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="16.2.1" />
+    <!-- ObservableObject + [ObservableProperty] source generator. Used by
+         the 5 Core ViewModels for reduced boilerplate. -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
   </ItemGroup>
 
 </Project>

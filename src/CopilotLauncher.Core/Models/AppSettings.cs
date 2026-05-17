@@ -81,6 +81,12 @@ public sealed class BriefingSettings
 {
     public bool ShowVersionBumpBriefing { get; set; } = true;
     public bool AISummaryOnBump { get; set; }
+    /// <summary>True to also generate AI summaries when the startup update
+    /// check (gated by AutoUpdateFrequency=daily|weekly) detects a version
+    /// bump. Distinct from <see cref="AISummaryOnBump"/> which controls the
+    /// manual Briefing tab "Check now" button. Default false to avoid
+    /// burning premium Copilot CLI requests on every launch.</summary>
+    public bool AISummaryOnStartupUpdate { get; set; }
     public string? AgentsContextFilePath { get; set; }
     public bool AppendToHistoryLog { get; set; } = true;
     public string FallbackSource { get; set; } = "both";

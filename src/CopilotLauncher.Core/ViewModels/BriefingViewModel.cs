@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 
@@ -11,7 +10,7 @@ namespace CopilotLauncher.ViewModels;
 /// and exposes a "Force check now" action that runs UpdateCheckService +
 /// BriefingService + adds a new BriefingEntry on a version change.
 /// </summary>
-public sealed class BriefingViewModel : INotifyPropertyChanged
+public sealed partial class BriefingViewModel : ObservableObject
 {
     private readonly IBriefingHistoryService _history;
     private readonly IUpdateCheckService _updates;
@@ -26,14 +25,14 @@ public sealed class BriefingViewModel : INotifyPropertyChanged
     public string StatusMessage
     {
         get => _statusMessage;
-        private set { if (_statusMessage != value) { _statusMessage = value; OnPropertyChanged(); } }
+        private set => SetProperty(ref _statusMessage, value);
     }
 
     private bool _isChecking;
     public bool IsChecking
     {
         get => _isChecking;
-        private set { if (_isChecking != value) { _isChecking = value; OnPropertyChanged(); } }
+        private set => SetProperty(ref _isChecking, value);
     }
 
     public BriefingViewModel(
@@ -144,8 +143,4 @@ public sealed class BriefingViewModel : INotifyPropertyChanged
         Items.Clear();
         StatusMessage = "Briefing history cleared.";
     }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

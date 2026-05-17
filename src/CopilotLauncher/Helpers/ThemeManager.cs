@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
+using Windows.UI.ViewManagement;
 
 namespace CopilotLauncher.Helpers;
 
@@ -26,12 +28,18 @@ namespace CopilotLauncher.Helpers;
 /// change, and a Light↔Dark bounce is enough to force every existing
 /// control to pick up the new values.
 ///
-/// HighContrast is intentionally not customised; when the OS reports HC
-/// the user sees the standard Fluent HC palette regardless of which theme
-/// they picked here. (See winui-design code-review note #1.)
+/// HighContrast has its own code path: the Copilot palette is removed, key
+/// surfaces are redirected to the Windows SystemColor* brushes, Mica stays
+/// off, and only compact-mode sizing changes continue to apply.
 /// </summary>
 public static class ThemeManager
 {
+    private static readonly FontFamily DefaultHeadingFont =
+        new("Segoe UI Variable Display, Segoe UI Variable Text, Segoe UI");
+
+    private static readonly FontFamily DefaultBodyFont =
+        new("Segoe UI Variable Text, Segoe UI");
+
     // VT323 — pure pixel font, used ONLY on headings (page titles + Settings
     // section subheadings). The user's preferred copilotCli-mode body /
     // control text is the CLI font (Consolas), not pixel art, because
@@ -49,14 +57,56 @@ public static class ThemeManager
     private static readonly FontFamily CliMonoFont =
         new("Consolas, Courier New");
 
+    // High Contrast is limited to these Windows-provided system brushes.
+    private static readonly (string Key, string SystemBrushKey)[] HighContrastBrushRedirects =
+    {
+        ("ApplicationPageBackgroundThemeBrush", "SystemColorWindowColorBrush"),
+        ("SolidBackgroundFillColorBaseBrush", "SystemColorWindowColorBrush"),
+        ("SolidBackgroundFillColorSecondaryBrush", "SystemColorWindowColorBrush"),
+        ("SolidBackgroundFillColorTertiaryBrush", "SystemColorWindowColorBrush"),
+        ("LayerFillColorDefaultBrush", "SystemColorWindowColorBrush"),
+        ("LayerOnAcrylicFillColorDefaultBrush", "SystemColorWindowColorBrush"),
+        ("CardBackgroundFillColorDefaultBrush", "SystemColorWindowColorBrush"),
+        ("CardBackgroundFillColorSecondaryBrush", "SystemColorWindowColorBrush"),
+        ("SubtleFillColorTransparentBrush", "SystemColorWindowColorBrush"),
+        ("SubtleFillColorSecondaryBrush", "SystemColorWindowColorBrush"),
+        ("SubtleFillColorTertiaryBrush", "SystemColorWindowColorBrush"),
+        ("SubtleFillColorDisabledBrush", "SystemColorWindowColorBrush"),
+        ("CardStrokeColorDefaultBrush", "SystemColorWindowTextColorBrush"),
+        ("CardStrokeColorDefaultSolidBrush", "SystemColorWindowTextColorBrush"),
+        ("TextFillColorPrimaryBrush", "SystemColorWindowTextColorBrush"),
+        ("TextFillColorSecondaryBrush", "SystemColorWindowTextColorBrush"),
+        ("TextFillColorTertiaryBrush", "SystemColorWindowTextColorBrush"),
+        ("TextFillColorDisabledBrush", "SystemColorGrayTextColorBrush"),
+        ("AccentFillColorDefaultBrush", "SystemColorHighlightColorBrush"),
+        ("AccentFillColorSecondaryBrush", "SystemColorHighlightColorBrush"),
+        ("AccentFillColorTertiaryBrush", "SystemColorHighlightColorBrush"),
+        ("TextOnAccentFillColorPrimaryBrush", "SystemColorHighlightTextColorBrush"),
+        ("TextOnAccentFillColorSecondaryBrush", "SystemColorHighlightTextColorBrush"),
+        ("TextOnAccentFillColorDisabledBrush", "SystemColorGrayTextColorBrush"),
+        ("AccentTextFillColorPrimaryBrush", "SystemColorHotlightColorBrush"),
+        ("AccentTextFillColorSecondaryBrush", "SystemColorHotlightColorBrush"),
+        ("AccentTextFillColorTertiaryBrush", "SystemColorHotlightColorBrush"),
+        ("ControlFillColorDefaultBrush", "SystemColorButtonFaceColorBrush"),
+        ("ControlFillColorSecondaryBrush", "SystemColorButtonFaceColorBrush"),
+        ("ControlFillColorTertiaryBrush", "SystemColorButtonFaceColorBrush"),
+        ("ControlStrokeColorDefaultBrush", "SystemColorButtonTextColorBrush"),
+        ("ControlStrokeColorSecondaryBrush", "SystemColorButtonTextColorBrush"),
+        ("FocusStrokeColorOuterBrush", "SystemColorHighlightColorBrush"),
+        ("FocusStrokeColorInnerBrush", "SystemColorWindowColorBrush"),
+    };
+
     public static FontFamily GetActiveBodyFontFamily()
     {
         var app = Application.Current;
-        if (app?.Resources is null) return new FontFamily("Segoe UI Variable Text");
+        if (app?.Resources is null) return DefaultBodyFont;
         if (app.Resources.TryGetValue("ContentControlThemeFontFamily", out var resolved)
             && resolved is FontFamily ff)
             return ff;
-        return new FontFamily("Segoe UI Variable Text");
+        if (app.Resources.TryGetValue("BodyFontFamily", out resolved)
+            && resolved is FontFamily body)
+            return body;
+        return DefaultBodyFont;
     }
 
     /// <summary>Sampled from the GitHub Copilot CLI welcome banner.
@@ -148,7 +198,6 @@ public static class ThemeManager
         ("ToggleSwitchKnobFillOnPressed",        Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
     };
 
-
     /// <summary>
     /// Apply theme + compact-mode font/size scaling. Both states must be
     /// applied together so they don't overwrite each other's font-size
@@ -159,46 +208,57 @@ public static class ThemeManager
         var app = Application.Current;
         if (app is null) return;
 
-        var wantPalette = string.Equals(theme, "copilotCli", StringComparison.OrdinalIgnoreCase);
+        var hcActive = IsHighContrastActive();
+        var wantPalette = !hcActive && string.Equals(theme, "copilotCli", StringComparison.OrdinalIgnoreCase);
 
-        // Brushes (theme-only).
-        foreach (var (key, color) in CopilotPalette)
+        if (hcActive)
         {
-            if (wantPalette)
-                app.Resources[key] = new SolidColorBrush(color);
-            else if (app.Resources.ContainsKey(key))
-                app.Resources.Remove(key);
-        }
+            foreach (var (key, _) in CopilotPalette)
+            {
+                if (app.Resources.ContainsKey(key))
+                    app.Resources.Remove(key);
+            }
 
-        // Font families (theme-only).
-        if (wantPalette)
-        {
-            app.Resources["HeadingFontFamily"] = PixelFont;
-            app.Resources["BodyFontFamily"] = CliMonoFont;
-            app.Resources["ContentControlThemeFontFamily"] = CliMonoFont;
-            app.Resources["XamlAutoFontFamily"] = CliMonoFont;
-            app.Resources["CliMonoFontFamily"] = CliMonoFont;
-            app.Resources["CardBorderThickness"] = new Thickness(2);
+            ApplyHighContrastBrushOverrides(app);
+            ApplyDefaultFontFamilies(app, highContrast: true);
         }
         else
         {
-            if (app.Resources.ContainsKey("HeadingFontFamily")) app.Resources.Remove("HeadingFontFamily");
-            if (app.Resources.ContainsKey("BodyFontFamily")) app.Resources.Remove("BodyFontFamily");
-            if (app.Resources.ContainsKey("ContentControlThemeFontFamily")) app.Resources.Remove("ContentControlThemeFontFamily");
-            if (app.Resources.ContainsKey("XamlAutoFontFamily")) app.Resources.Remove("XamlAutoFontFamily");
-            if (app.Resources.ContainsKey("CliMonoFontFamily")) app.Resources.Remove("CliMonoFontFamily");
-            if (app.Resources.ContainsKey("CardBorderThickness")) app.Resources["CardBorderThickness"] = new Thickness(1);
+            RemoveHighContrastBrushOverrides(app);
+
+            foreach (var (key, color) in CopilotPalette)
+            {
+                if (wantPalette)
+                    app.Resources[key] = new SolidColorBrush(color);
+                else if (app.Resources.ContainsKey(key))
+                    app.Resources.Remove(key);
+            }
+
+            if (wantPalette)
+            {
+                app.Resources["HeadingFontFamily"] = PixelFont;
+                app.Resources["BodyFontFamily"] = CliMonoFont;
+                app.Resources["ContentControlThemeFontFamily"] = CliMonoFont;
+                app.Resources["XamlAutoFontFamily"] = CliMonoFont;
+                app.Resources["CliMonoFontFamily"] = CliMonoFont;
+                app.Resources["CardBorderThickness"] = new Thickness(2);
+            }
+            else
+            {
+                ApplyDefaultFontFamilies(app, highContrast: false);
+            }
         }
 
         // Font sizes + page padding — depend on BOTH theme and compact mode.
         // Resolve target values once per (theme, compact) combination so the
         // two modes can't conflict.
-        var (controlFs, navFs, filterFs, titleFs, sectionFs, pagePad) = (theme, compact) switch
+        var sizingTheme = hcActive ? "system" : theme;
+        var (controlFs, navFs, filterFs, titleFs, sectionFs, pagePad) = (sizingTheme, compact) switch
         {
             ("copilotCli", true)  => (12.0, 12.0, 12.0, 18.0, 13.0, new Thickness(12, 8, 12, 8)),
             ("copilotCli", false) => (16.0, 16.0, 16.0, 40.0, 20.0, new Thickness(32, 24, 32, 16)),
-            (_,            true)  => (12.0, 12.0, 12.0, 18.0, 13.0, new Thickness(12, 8, 12, 8)),
-            (_,            false) => (14.0, 14.0, 14.0, 40.0, 20.0, new Thickness(32, 24, 32, 16)),
+            (_,            true)   => (12.0, 12.0, 12.0, 18.0, 13.0, new Thickness(12, 8, 12, 8)),
+            (_,            false)  => (14.0, 14.0, 14.0, 40.0, 20.0, new Thickness(32, 24, 32, 16)),
         };
         var sizeOverridesActive = wantPalette || compact;
         WriteOrRevert(app, "ContentControlThemeFontSize", controlFs, sizeOverridesActive);
@@ -213,20 +273,41 @@ public static class ThemeManager
 
         if (window?.Content is FrameworkElement root)
         {
-            var target = theme switch
-            {
-                "light"      => ElementTheme.Light,
-                "dark"       => ElementTheme.Dark,
-                "copilotCli" => ElementTheme.Dark,
-                _            => ElementTheme.Default,
-            };
+            var target = hcActive
+                ? ElementTheme.Default
+                : theme switch
+                {
+                    "light"      => ElementTheme.Light,
+                    "dark"       => ElementTheme.Dark,
+                    "copilotCli" => ElementTheme.Dark,
+                    _            => ElementTheme.Default,
+                };
             // Light↔Dark bounce so every {ThemeResource} marker re-resolves.
             var bounce = target == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
             root.RequestedTheme = bounce;
             root.RequestedTheme = target;
+
+            if (hcActive)
+            {
+                try
+                {
+                    window.SystemBackdrop = null;
+                    if (root is Panel panel)
+                    {
+                        if (app.Resources["SolidBackgroundFillColorBaseBrush"] is Brush bg)
+                            panel.Background = bg;
+                        else
+                            panel.Background = null;
+                    }
+                }
+                catch
+                {
+                    // High Contrast backdrop changes are non-critical.
+                }
+            }
         }
 
-        if (window is CopilotLauncher.MainWindow main)
+        if (!hcActive && window is CopilotLauncher.MainWindow main)
             main.ApplyBackdrop(theme);
 
         ThemeChanged?.Invoke(null, new ThemeAppliedEventArgs(theme, compact));
@@ -241,6 +322,42 @@ public static class ThemeManager
         public string Theme { get; }
         public bool Compact { get; }
         public ThemeAppliedEventArgs(string theme, bool compact) { Theme = theme; Compact = compact; }
+    }
+
+    private static bool IsHighContrastActive()
+    {
+        try { return new AccessibilitySettings().HighContrast; }
+        catch { return false; }
+    }
+
+    private static void ApplyDefaultFontFamilies(Application app, bool highContrast)
+    {
+        app.Resources["HeadingFontFamily"] = DefaultHeadingFont;
+        app.Resources["BodyFontFamily"] = DefaultBodyFont;
+        if (app.Resources.ContainsKey("ContentControlThemeFontFamily")) app.Resources.Remove("ContentControlThemeFontFamily");
+        if (app.Resources.ContainsKey("XamlAutoFontFamily")) app.Resources.Remove("XamlAutoFontFamily");
+        if (app.Resources.ContainsKey("CliMonoFontFamily")) app.Resources.Remove("CliMonoFontFamily");
+        app.Resources["CardBorderThickness"] = new Thickness(highContrast ? 2 : 1);
+    }
+
+    private static void ApplyHighContrastBrushOverrides(Application app)
+    {
+        foreach (var (key, systemBrushKey) in HighContrastBrushRedirects)
+        {
+            if (app.Resources.TryGetValue(systemBrushKey, out var resource) && resource is Brush brush)
+                app.Resources[key] = brush;
+            else if (app.Resources.ContainsKey(key))
+                app.Resources.Remove(key);
+        }
+    }
+
+    private static void RemoveHighContrastBrushOverrides(Application app)
+    {
+        foreach (var (key, _) in HighContrastBrushRedirects)
+        {
+            if (app.Resources.ContainsKey(key))
+                app.Resources.Remove(key);
+        }
     }
 
     private static void WriteOrRevert(Application app, string key, double value, bool isOverride)

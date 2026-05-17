@@ -4,12 +4,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
+using Windows.UI.ViewManagement;
 
 namespace CopilotLauncher;
 
 public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
+
+    private readonly AccessibilitySettings? _accessibilitySettings;
 
     /// <summary>The single main window. Null until OnLaunched fires.
     /// Used by file/folder pickers etc. that need the parent HWND.</summary>
@@ -18,7 +21,47 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        Application.Current.HighContrastAdjustment = Microsoft.UI.Xaml.ApplicationHighContrastAdjustment.None;
         Services = ConfigureServices();
+
+        try
+        {
+            _accessibilitySettings = new AccessibilitySettings();
+            _accessibilitySettings.HighContrastChanged += OnHighContrastChanged;
+        }
+        catch
+        {
+            // High Contrast change notifications are best-effort.
+        }
+    }
+
+    private void OnHighContrastChanged(AccessibilitySettings sender, object args)
+    {
+        var currentWindow = MainWindowOrNull;
+        if (currentWindow is null) return;
+
+        try
+        {
+            _ = currentWindow.DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    var settings = Services.GetRequiredService<ISettingsService>();
+                    Helpers.ThemeManager.Apply(
+                        settings.Current.LauncherBehavior.Theme,
+                        currentWindow,
+                        settings.Current.LauncherBehavior.CompactMode);
+                }
+                catch
+                {
+                    // High Contrast theme sync is non-critical.
+                }
+            });
+        }
+        catch
+        {
+            // High Contrast theme sync is non-critical.
+        }
     }
 
     private static IServiceProvider ConfigureServices()
@@ -207,6 +250,21 @@ public partial class App : Application
             var briefings = Services.GetRequiredService<IBriefingService>();
             var history = Services.GetRequiredService<IBriefingHistoryService>();
             var body = briefings.Render(result.PreviousVersion, result.CurrentVersion, Array.Empty<ReleaseEntry>());
+            var generateStartupAiSummary = settings.Current.Briefings.AISummaryOnStartupUpdate
+                && settings.Current.Briefings.AISummaryOnBump
+                && (string.Equals(cli.AutoUpdateFrequency, "daily", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(cli.AutoUpdateFrequency, "weekly", StringComparison.OrdinalIgnoreCase));
+
+            if (generateStartupAiSummary)
+            {
+                var ai = Services.GetRequiredService<IAISummaryService>();
+                var summary = await ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, result.RawOutput, cts.Token).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(summary))
+                {
+                    body = "## AI Summary\n\n" + summary.Trim() + "\n\n---\n\n" + body;
+                }
+            }
+
             history.Add(new BriefingEntry
             {
                 Id = Guid.NewGuid().ToString(),

@@ -74,4 +74,11 @@ public class AppSettingsTests
         Assert.NotNull(parsed.Briefings);
         Assert.NotNull(parsed.SessionsResume);
     }
+
+    [Fact]
+    public void BriefingSettings_Defaults_AISummaryOnStartupUpdate_ToFalse()
+    {
+        var settings = new AppSettings();
+        Assert.False(settings.Briefings.AISummaryOnStartupUpdate);
+    }
 }

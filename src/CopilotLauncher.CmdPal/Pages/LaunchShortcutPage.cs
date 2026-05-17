@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using CopilotLauncher.CmdPal.Commands;
+using CopilotLauncher.Helpers;
+using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -39,18 +41,44 @@ public sealed partial class LaunchShortcutPage : ListPage
         try
         {
             _shortcuts.Reload();
-            return _shortcuts.All.Select(s =>
-                new ListItem(new LaunchShortcutCommand(_launch, _terminals, _settings, s))
+            return _shortcuts.All.Select(shortcut =>
+                new ListItem(new LaunchShortcutCommand(_launch, _terminals, _settings, shortcut))
                 {
-                    Title = s.Label,
-                    Subtitle = s.WorkingDirectory,
+                    Title = shortcut.Label,
+                    Subtitle = shortcut.WorkingDirectory,
                     Icon = new IconInfo("\uE734"),
+                    MoreCommands = new IContextItem[]
+                    {
+                        new CommandContextItem(new OpenInExplorerCommand(shortcut.WorkingDirectory))
+                        {
+                            Title = "Open in Explorer",
+                        },
+                        new CommandContextItem(new CopyTextCommand(BuildLaunchCommand(shortcut)))
+                        {
+                            Title = "Copy launch command",
+                        },
+                    },
                 }).ToArray<IListItem>();
         }
         catch
         {
             return Array.Empty<IListItem>();
         }
+    }
+
+    private static string BuildLaunchCommand(Shortcut shortcut)
+    {
+        // AI summary is launcher-side behavior, so the copied command only
+        // includes real copilot CLI flags that can be pasted into a shell.
+        var args = new List<string?> { "copilot" };
+        if (shortcut.EnableAllowAll) args.Add("--allow-all");
+        if (!string.IsNullOrWhiteSpace(shortcut.ResumeTarget)) args.Add($"--resume={shortcut.ResumeTarget}");
+        if (!string.IsNullOrWhiteSpace(shortcut.ExtraCopilotArgs))
+        {
+            args.AddRange(ArgQuoter.Split(shortcut.ExtraCopilotArgs));
+        }
+
+        return ArgQuoter.Format(args);
     }
 }
 
