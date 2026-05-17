@@ -27,3 +27,7 @@ Thumbs.db
 build/
 dist/*.msix
 *.pfx
+
+
+# CmdPal cswinrt projection generated files
+src/CopilotLauncher.CmdPal/Generated Files/
