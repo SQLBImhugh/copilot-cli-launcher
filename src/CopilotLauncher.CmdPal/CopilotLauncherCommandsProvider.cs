@@ -25,8 +25,8 @@ public sealed partial class CopilotLauncherCommandsProvider : CommandProvider
         var settings = new SettingsService();
         var sessions = new SessionDiscoveryService();
         var terminals = new TerminalDiscoveryService();
-        var shortcuts = new ShortcutsService(settings);
-        var launch = new LaunchService(settings);
+        var shortcuts = new ShortcutsService();
+        var launch = new LaunchService();
 
         _commands = new ICommandItem[]
         {

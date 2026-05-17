@@ -22,7 +22,9 @@ public static class Program
     {
         if (args.Length > 0 && args[0] == "-RegisterProcessAsComServer")
         {
-            using var server = new ComServer();
+            // ComServer is IAsyncDisposable not IDisposable in Shmuelie 2.x;
+            // do not use `using`. Stop() releases everything we registered.
+            var server = new ComServer();
             using var disposedEvent = new ManualResetEvent(false);
 
             // Single-instance: the same CopilotLauncherExtension instance is
@@ -35,6 +37,7 @@ public static class Program
 
             disposedEvent.WaitOne();
             server.Stop();
+            server.UnsafeDispose();
         }
         else
         {
