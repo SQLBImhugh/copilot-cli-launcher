@@ -172,8 +172,10 @@ public sealed class AISummaryService : IAISummaryService
             if (ext is not ".md" and not ".txt")
                 return null;
 
-            var text = await File.ReadAllTextAsync(full, ct).ConfigureAwait(false);
-            return text.Length <= AISummaryPromptBuilder.RepositoryContextLimit ? text : null;
+            // Return the raw text — oversize files are truncated (with marker)
+            // by AISummaryPromptBuilder.Build rather than silently dropped here,
+            // matching how the changelog is handled.
+            return await File.ReadAllTextAsync(full, ct).ConfigureAwait(false);
         }
         catch
         {
@@ -198,7 +200,13 @@ public sealed class AISummaryService : IAISummaryService
 internal static class AISummaryPromptBuilder
 {
     internal const int ChangelogLimit = 6000;
-    internal const int RepositoryContextLimit = 4000;
+
+    /// <summary>Max chars of the optional repository-context file (AGENTS.md
+    /// or similar) embedded in the prompt. Premium copilot CLI models handle
+    /// 100K+ tokens easily, so 20K chars (~5K tokens) leaves plenty of room
+    /// for a real agents.md plus the changelog. Files larger than this are
+    /// truncated with a marker rather than silently dropped.</summary>
+    internal const int RepositoryContextLimit = 20000;
     private const string TruncationMarker = "...[truncated]";
 
     public static string Build(string fromVersion, string toVersion, string changelog, string? repoContext)
@@ -219,9 +227,15 @@ internal static class AISummaryPromptBuilder
 
         if (!string.IsNullOrWhiteSpace(repoContext))
         {
+            var normalizedRepoContext = repoContext.Trim();
+            if (normalizedRepoContext.Length > RepositoryContextLimit)
+            {
+                normalizedRepoContext = normalizedRepoContext[..Math.Max(0, RepositoryContextLimit - TruncationMarker.Length)]
+                    + TruncationMarker;
+            }
             sb.AppendLine();
             sb.AppendLine("Repository context:");
-            sb.AppendLine(repoContext.Trim());
+            sb.AppendLine(normalizedRepoContext);
         }
 
         return sb.ToString().TrimEnd();

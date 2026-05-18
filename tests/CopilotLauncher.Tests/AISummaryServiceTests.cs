@@ -30,6 +30,40 @@ public class AISummaryServiceTests
     }
 
     [Fact]
+    public void Build_TruncatesLongRepoContextWithMarker()
+    {
+        var repoContext = new string('y', AISummaryPromptBuilder.RepositoryContextLimit + 500);
+
+        var prompt = AISummaryPromptBuilder.Build("1.0.0", "1.1.0", "Fixed bugs", repoContext);
+
+        Assert.Contains("Repository context:", prompt);
+        Assert.Contains("[truncated]", prompt);
+        // Truncated content must be present but not the full original length.
+        Assert.True(prompt.Length < repoContext.Length, "prompt should be shorter than oversize repo-context input");
+    }
+
+    [Fact]
+    public async Task TryReadRepositoryContextAsync_ReturnsContent_EvenForOversizeFiles()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid() + ".md");
+        var oversize = new string('z', AISummaryPromptBuilder.RepositoryContextLimit + 1000);
+        await File.WriteAllTextAsync(path, oversize);
+
+        try
+        {
+            // Pre-fix behavior: silently returned null for files > limit.
+            // Post-fix: returns the raw text; Build() handles truncation.
+            var read = await AISummaryService.TryReadRepositoryContextAsync(path, CancellationToken.None);
+            Assert.NotNull(read);
+            Assert.Equal(oversize.Length, read!.Length);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public void Build_AppendsRepoContextWhenProvided()
     {
         var prompt = AISummaryPromptBuilder.Build("1.0.0", "1.1.0", "Fixed bugs", "Launcher repo context");
