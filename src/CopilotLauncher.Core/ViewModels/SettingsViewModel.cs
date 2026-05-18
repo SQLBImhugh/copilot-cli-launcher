@@ -76,6 +76,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public bool ShowVersionBumpBriefing { get => Settings.Briefings.ShowVersionBumpBriefing; set { Settings.Briefings.ShowVersionBumpBriefing = value; OnPropertyChanged(); ScheduleSave(); } }
     public bool AISummaryOnBump { get => Settings.Briefings.AISummaryOnBump; set { Settings.Briefings.AISummaryOnBump = value; OnPropertyChanged(); ScheduleSave(); } }
     public string AgentsContextFilePath { get => Settings.Briefings.AgentsContextFilePath ?? string.Empty; set { Settings.Briefings.AgentsContextFilePath = string.IsNullOrWhiteSpace(value) ? null : value; OnPropertyChanged(); ScheduleSave(); } }
+    public string BriefingSessionName { get => Settings.Briefings.BriefingSessionName ?? string.Empty; set { Settings.Briefings.BriefingSessionName = string.IsNullOrWhiteSpace(value) ? null : value.Trim(); OnPropertyChanged(); ScheduleSave(); } }
     public bool AppendToHistoryLog { get => Settings.Briefings.AppendToHistoryLog; set { Settings.Briefings.AppendToHistoryLog = value; OnPropertyChanged(); ScheduleSave(); } }
 
     // Session listing

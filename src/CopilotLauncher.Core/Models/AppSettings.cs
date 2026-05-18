@@ -90,6 +90,15 @@ public sealed class BriefingSettings
     public string? AgentsContextFilePath { get; set; }
     public bool AppendToHistoryLog { get; set; } = true;
     public string FallbackSource { get; set; } = "both";
+
+    /// <summary>Name of the Copilot CLI session to reuse for AI briefings so
+    /// historical context accumulates across version bumps. When set, the
+    /// launcher passes <c>--resume=&lt;name&gt;</c> if a session with this
+    /// name already exists (per workspace.yaml), or <c>--name &lt;name&gt;</c>
+    /// to create a new one on first use. Set to empty/null for stateless
+    /// one-shot summaries. Default matches the convention many users adopted
+    /// manually before the launcher gained this feature.</summary>
+    public string? BriefingSessionName { get; set; } = "CopilotCLI-Update-Briefings";
 }
 
 public sealed class RepairSettings

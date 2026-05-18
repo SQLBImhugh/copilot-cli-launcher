@@ -77,6 +77,12 @@
                                 VerticalAlignment="Bottom"
                                 Click="OnBrowseAgentsClick"/>
                     </Grid>
+                    <TextBox Header="Briefing session name (for historical context)"
+                             AutomationProperties.AutomationId="SettingsBriefingSessionNameTextBox"
+                             Text="{x:Bind ViewModel.BriefingSessionName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="(empty — each briefing is stateless)"/>
+                    <TextBlock Text="When set, briefings reuse the named Copilot CLI session so the AI has cumulative context across version bumps. Created on first run, resumed thereafter. Leave empty for one-shot summaries."
+                               Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 

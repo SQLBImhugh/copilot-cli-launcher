@@ -8,16 +8,36 @@ public sealed class AISummaryService : IAISummaryService
 {
     private readonly ISettingsService _settings;
     private readonly Func<ProcessStartInfo, Process?> _spawn;
+    private readonly Func<string, bool> _sessionExistsByName;
+    private readonly Func<string, ProcessUtil.CopilotProcessTarget?> _resolveCopilot;
 
-    public AISummaryService(ISettingsService settings)
-        : this(settings, Process.Start)
+    public AISummaryService(ISettingsService settings, ISessionDiscoveryService sessions)
+        : this(
+            settings,
+            Process.Start,
+            name => sessions.Enumerate().Any(s => string.Equals(s.Name, name, StringComparison.Ordinal)),
+            DefaultResolveCopilotTarget)
     {
     }
 
-    internal AISummaryService(ISettingsService settings, Func<ProcessStartInfo, Process?> spawn)
+    internal AISummaryService(
+        ISettingsService settings,
+        Func<ProcessStartInfo, Process?> spawn,
+        Func<string, bool> sessionExistsByName,
+        Func<string, ProcessUtil.CopilotProcessTarget?>? resolveCopilot = null)
     {
         _settings = settings;
         _spawn = spawn;
+        _sessionExistsByName = sessionExistsByName;
+        _resolveCopilot = resolveCopilot ?? DefaultResolveCopilotTarget;
+    }
+
+    /// <summary>Test-only ctor that defaults the session check to "no session
+    /// exists" — preserves the pre-session-reuse behavior for older tests
+    /// that don't care about <c>--name</c> / <c>--resume</c> args.</summary>
+    internal AISummaryService(ISettingsService settings, Func<ProcessStartInfo, Process?> spawn)
+        : this(settings, spawn, _ => false, null)
+    {
     }
 
     public bool IsEnabled => _settings.Current.Briefings.AISummaryOnBump;
@@ -41,7 +61,7 @@ public sealed class AISummaryService : IAISummaryService
                 ct).ConfigureAwait(false);
 
             var prompt = AISummaryPromptBuilder.Build(fromVersion, toVersion, changelogText, repoContext);
-            var copilot = ResolveCopilotTarget(prompt);
+            var copilot = _resolveCopilot(prompt);
             if (copilot is null)
                 return null;
 
@@ -59,6 +79,25 @@ public sealed class AISummaryService : IAISummaryService
 
             foreach (var arg in copilot.PrefixArgs)
                 psi.ArgumentList.Add(arg);
+
+            // Session-reuse flags (optional). When BriefingSessionName is set,
+            // resume the existing named session if one exists so the AI has
+            // cumulative context across version-bump briefings; otherwise
+            // create it on this first run. Empty/null = stateless one-shot
+            // (original behavior).
+            var sessionName = _settings.Current.Briefings.BriefingSessionName;
+            if (!string.IsNullOrWhiteSpace(sessionName))
+            {
+                if (_sessionExistsByName(sessionName))
+                {
+                    psi.ArgumentList.Add($"--resume={sessionName}");
+                }
+                else
+                {
+                    psi.ArgumentList.Add("--name");
+                    psi.ArgumentList.Add(sessionName);
+                }
+            }
 
             psi.ArgumentList.Add("-p");
             psi.ArgumentList.Add(prompt);
@@ -97,7 +136,7 @@ public sealed class AISummaryService : IAISummaryService
         }
     }
 
-    private static ProcessUtil.CopilotProcessTarget? ResolveCopilotTarget(string prompt)
+    private static ProcessUtil.CopilotProcessTarget? DefaultResolveCopilotTarget(string prompt)
     {
         var primary = ProcessUtil.Resolve(TerminalDiscoveryService.ResolveOnPath);
         if (primary is null)
