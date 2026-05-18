@@ -125,6 +125,42 @@ if (-not $Msix) {
 Write-Host "MSIX install mode (release '$tag')" -ForegroundColor Cyan
 Write-Host ''
 
+# Clean up any prior portable install — its Start Menu shortcut shares the
+# MSIX's display name ("Copilot CLI Launcher") and would show up as a duplicate
+# tile. Best-effort; never abort on failure.
+$portableRoot     = Join-Path $env:LOCALAPPDATA 'CopilotLauncher\app'
+$portableShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Copilot CLI Launcher.lnk'
+$removedPortable  = $false
+if (Test-Path $portableShortcut) {
+    try {
+        $sh = New-Object -ComObject WScript.Shell
+        $sc = $sh.CreateShortcut($portableShortcut)
+        # Only remove if it points at the portable-install exe (don't nuke
+        # an unrelated user-created shortcut with the same filename).
+        if ($sc.TargetPath -like "$portableRoot*") {
+            Remove-Item $portableShortcut -Force -ErrorAction Stop
+            $removedPortable = $true
+        }
+    } catch {
+        Write-Host "  ! Could not remove legacy Start Menu shortcut: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor DarkYellow
+    }
+}
+if (Test-Path $portableRoot) {
+    try {
+        foreach ($p in (Get-Process CopilotLauncher -ErrorAction SilentlyContinue)) {
+            try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch {}
+        }
+        Start-Sleep -Milliseconds 400
+        Remove-Item -Recurse -Force $portableRoot -ErrorAction Stop
+        $removedPortable = $true
+    } catch {
+        Write-Host "  ! Could not remove prior portable install at $portableRoot - $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor DarkYellow
+    }
+}
+if ($removedPortable) {
+    Write-Host "Removed prior portable install (avoids duplicate Start Menu tile)." -ForegroundColor DarkGray
+}
+
 $tmp = Join-Path $env:TEMP "CopilotLauncherInstall-$([Guid]::NewGuid().ToString('N').Substring(0,8))"
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
