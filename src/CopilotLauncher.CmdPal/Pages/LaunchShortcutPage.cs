@@ -49,7 +49,7 @@ public sealed partial class LaunchShortcutPage : ListPage
                     // Match ResumeSessionPage — same pixel-art mascot on
                     // every list item the extension produces so they all
                     // read consistently in the palette.
-                    Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png"),
+                    Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
                     MoreCommands = new IContextItem[]
                     {
                         new CommandContextItem(new OpenInExplorerCommand(shortcut.WorkingDirectory))

@@ -35,7 +35,7 @@ public sealed partial class CopilotFallbackHandler : FallbackCommandItem
         // App's pixel-art mascot — distinctive vs the generic Document glyph
         // (\uE7C3) we used to use which made fallback results look like
         // plain file shortcuts.
-        Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png");
+        Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         Title = string.Empty;
         Subtitle = string.Empty;
     }

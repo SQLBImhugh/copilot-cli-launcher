@@ -31,11 +31,13 @@ public sealed partial class ResumeSessionCommand : InvokableCommand
         _settings = settings;
         _session = session;
         Name = "Resume";
-        // Mascot, NOT the Play glyph (\uE768). PT Command Palette renders
-        // the underlying Command.Icon on list items, not ListItem.Icon —
-        // so the per-item mascot we set in ResumeSessionPage was getting
-        // overridden by the Play glyph defined here.
-        Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png");
+        // Mascot, NOT the Play glyph. Use IconHelpers.FromRelativePath
+        // (Toolkit) because ms-appx:/// URIs do not resolve cross-process
+        // when the extension is hosted by PT Command Palette — PT falls
+        // back to its own default icon (which is what we kept seeing).
+        // FromRelativePath resolves against the package install root and
+        // loads the bytes for PT to render directly.
+        Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
     }
 
     public override CommandResult Invoke()

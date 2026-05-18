@@ -20,7 +20,7 @@ public sealed partial class CopilotLauncherCommandsProvider : CommandProvider
     {
         Id = "CopilotLauncher";
         DisplayName = "Copilot CLI Launcher";
-        Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png");
+        Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
 
         var settings = new SettingsService();
         var sessions = new SessionDiscoveryService();
