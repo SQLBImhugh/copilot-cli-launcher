@@ -27,7 +27,8 @@ public sealed partial class LaunchShortcutCommand : InvokableCommand
         _settings = settings;
         _shortcut = shortcut;
         Name = "Launch";
-        Icon = new IconInfo("\uE768");
+        // Mascot, NOT the Play glyph — PT renders Command.Icon on list items.
+        Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png");
     }
 
     public override CommandResult Invoke()

@@ -31,7 +31,11 @@ public sealed partial class ResumeSessionCommand : InvokableCommand
         _settings = settings;
         _session = session;
         Name = "Resume";
-        Icon = new IconInfo("\uE768"); // Segoe Fluent Play
+        // Mascot, NOT the Play glyph (\uE768). PT Command Palette renders
+        // the underlying Command.Icon on list items, not ListItem.Icon —
+        // so the per-item mascot we set in ResumeSessionPage was getting
+        // overridden by the Play glyph defined here.
+        Icon = new IconInfo("ms-appx:///Assets/StoreLogo.png");
     }
 
     public override CommandResult Invoke()
