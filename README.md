@@ -32,31 +32,54 @@ Switch via the title-bar palette button or **Settings → Launcher behavior → 
 
 ## Install
 
-The signed MSIX is the recommended install. The portable `.exe` is for one-off use without registration.
+Pick one:
 
-### Option A — `.msix` (signed, modern install)
+### Option A — One-liner (recommended)
 
-The MSIX is signed with a self-signed dev cert. To install on a machine that hasn't trusted that cert yet:
+Installs the portable `.exe` to `%LOCALAPPDATA%\CopilotLauncher\app\` with a Start Menu shortcut. No admin, no cert prompts, no MSIX registration:
 
-1. Download both files from the [latest release](https://github.com/SQLBImhugh/copilot-cli-launcher/releases/latest):
-   - `CopilotLauncher-vX.Y.Z.msix`
-   - `CopilotLauncher-vX.Y.Z-DevCert.cer`
-2. Trust the cert (one-time, **no admin needed**):
-   ```powershell
-   Import-Certificate -FilePath .\CopilotLauncher-*-DevCert.cer `
-     -CertStoreLocation Cert:\CurrentUser\TrustedPeople
-   ```
-3. Install:
-   ```powershell
-   Add-AppxPackage .\CopilotLauncher-*.msix
-   ```
-   Or just double-click the `.msix` in Explorer.
+```powershell
+iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/install.ps1 | iex
+```
 
-To uninstall: Windows Settings → Apps → "Copilot CLI Launcher" → Uninstall.
+To uninstall: delete the folder + shortcut, or re-run the same one-liner to upgrade in place.
 
-### Option B — Portable `.exe`
+### Option B — One-liner, MSIX install (signed packages + Command Palette extension)
 
-Download `CopilotLauncher-vX.Y.Z.exe` from the [latest release](https://github.com/SQLBImhugh/copilot-cli-launcher/releases/latest) and run. Self-contained — bundles the .NET 8 runtime AND the Windows App SDK, no separate downloads. ~65 MB.
+Installs both the standalone app **and** the PowerToys [Command Palette](https://github.com/microsoft/PowerToys/tree/main/src/modules/cmdpal) extension as registered MSIX packages, and auto-trusts the dev signing cert into your current-user `TrustedPeople` store (no admin needed):
+
+```powershell
+& ([scriptblock]::Create((iwr -useb https://github.com/SQLBImhugh/copilot-cli-launcher/raw/main/dist/install.ps1).Content)) -Msix
+```
+
+Switches:
+- `-SkipCmdPal` — install only the standalone app
+- `-SkipMain` — install only the Command Palette extension
+
+To uninstall: Windows Settings → Apps → "Copilot CLI Launcher" / "Copilot CLI Launcher (Command Palette)" → Uninstall.
+
+### Option C — Manual MSIX (download + install)
+
+If you'd rather not pipe a script from the web. Download both files from the [latest release](https://github.com/SQLBImhugh/copilot-cli-launcher/releases/latest):
+- `CopilotLauncher-vX.Y.Z.msix` (standalone app, ~60 MB)
+- `CopilotLauncher-CmdPal-vX.Y.Z.msix` (Command Palette extension, ~12 MB) — *optional*
+- `CopilotLauncher-vX.Y.Z-DevCert.cer`
+
+Then:
+
+```powershell
+# 1. Trust the dev cert (one-time, no admin needed)
+Import-Certificate -FilePath .\CopilotLauncher-*-DevCert.cer `
+  -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+
+# 2. Install (one or both)
+Add-AppxPackage .\CopilotLauncher-v*.msix
+Add-AppxPackage .\CopilotLauncher-CmdPal-v*.msix
+```
+
+### Option D — Portable `.exe` (no install)
+
+Download `CopilotLauncher-vX.Y.Z.exe` from the [latest release](https://github.com/SQLBImhugh/copilot-cli-launcher/releases/latest) and run it directly. Self-contained — bundles the .NET 8 runtime AND the Windows App SDK, no separate downloads. ~65 MB.
 
 ### Verifying downloads
 
