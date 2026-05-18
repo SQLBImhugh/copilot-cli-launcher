@@ -89,6 +89,7 @@ public sealed class UpdateCheckService : IUpdateCheckService
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            CreateNoWindow = true,
         };
         foreach (var a in copilot.PrefixArgs) psi.ArgumentList.Add(a);
         psi.ArgumentList.Add("update");
@@ -120,6 +121,7 @@ public sealed class UpdateCheckService : IUpdateCheckService
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            CreateNoWindow = true,
         };
         foreach (var a in copilot.PrefixArgs) psi.ArgumentList.Add(a);
         psi.ArgumentList.Add("--version");
