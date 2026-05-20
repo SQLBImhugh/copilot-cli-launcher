@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using CopilotLauncher.Helpers;
 
 namespace CopilotLauncher.Services;
@@ -66,7 +67,7 @@ public sealed class AISummaryService : IAISummaryService
                 return null;
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(60));
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
 
             var psi = new ProcessStartInfo
             {
@@ -75,6 +76,8 @@ public sealed class AISummaryService : IAISummaryService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             };
 
             foreach (var arg in copilot.PrefixArgs)
@@ -99,6 +102,18 @@ public sealed class AISummaryService : IAISummaryService
                 }
             }
 
+            // copilot 1.0.49 quirk: in non-interactive `-p` mode the model's
+            // text reply is NEVER printed to stdout in text output mode —
+            // only tool-invocation banners and the stats footer appear.
+            // The reply is only emitted via JSONL when `--output-format json`
+            // is set. `--allow-all-tools` is required for any non-trivial
+            // briefing because the model must fetch release notes from the
+            // web or `gh`. Without it, the model's tool calls are denied
+            // ("Permission denied and could not request permission from
+            // user") and it ends up producing no useful summary anyway.
+            psi.ArgumentList.Add("--allow-all-tools");
+            psi.ArgumentList.Add("--output-format");
+            psi.ArgumentList.Add("json");
             psi.ArgumentList.Add("-p");
             psi.ArgumentList.Add(prompt);
             psi.ArgumentList.Add("--no-color");
@@ -116,8 +131,8 @@ public sealed class AISummaryService : IAISummaryService
                 var stdout = await stdoutTask.ConfigureAwait(false);
                 _ = await stderrTask.ConfigureAwait(false);
 
-                var trimmed = stdout.Trim();
-                return trimmed.Length == 0 ? null : trimmed;
+                var extracted = ExtractAssistantTextFromJsonl(stdout);
+                return string.IsNullOrWhiteSpace(extracted) ? null : extracted;
             }
             catch (OperationCanceledException)
             {
@@ -194,6 +209,47 @@ public sealed class AISummaryService : IAISummaryService
         {
             // Best effort only.
         }
+    }
+
+    /// <summary>
+    /// Parses copilot's <c>--output-format json</c> JSONL output and extracts
+    /// the model's text reply. The model emits one or more
+    /// <c>assistant.message</c> events; we concatenate the non-empty
+    /// <c>data.content</c> fields in order (excluding tool-call-only turns,
+    /// where content is empty).
+    ///
+    /// Public + internal for unit testing.
+    /// </summary>
+    internal static string ExtractAssistantTextFromJsonl(string stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout)) return string.Empty;
+
+        var sb = new StringBuilder();
+        foreach (var rawLine in stdout.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r').Trim();
+            if (line.Length == 0 || line[0] != '{') continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) continue;
+                if (!root.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+                if (typeEl.GetString() != "assistant.message") continue;
+                if (!root.TryGetProperty("data", out var dataEl) || dataEl.ValueKind != JsonValueKind.Object) continue;
+                if (!dataEl.TryGetProperty("content", out var contentEl) || contentEl.ValueKind != JsonValueKind.String) continue;
+                var content = contentEl.GetString();
+                if (string.IsNullOrWhiteSpace(content)) continue;
+                if (sb.Length > 0) sb.AppendLine();
+                sb.Append(content);
+            }
+            catch (JsonException)
+            {
+                // Skip malformed lines (e.g. terminal control sequences).
+            }
+        }
+
+        return sb.ToString().Trim();
     }
 }
 

@@ -125,6 +125,11 @@ public class AISummaryServiceTests
         // Original required args still present.
         Assert.Contains("-p", psi.ArgumentList);
         Assert.Contains("--no-color", psi.ArgumentList);
+        // Non-interactive mode requirements for copilot 1.0.49+.
+        Assert.Contains("--allow-all-tools", psi.ArgumentList);
+        var fmtIdx = psi.ArgumentList.IndexOf("--output-format");
+        Assert.True(fmtIdx >= 0, "--output-format missing");
+        Assert.Equal("json", psi.ArgumentList[fmtIdx + 1]);
     }
 
     [Fact]
@@ -162,6 +167,68 @@ public class AISummaryServiceTests
 
         Assert.NotNull(psi);
         Assert.DoesNotContain(psi!.ArgumentList, a => a == "--name" || a.StartsWith("--resume", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ExtractAssistantText_PullsContentFromFinalAssistantMessage()
+    {
+        // Two assistant.message events: the first is a tool-call turn with
+        // empty content, the second contains the real summary text. The
+        // extractor must concatenate only non-empty content fields.
+        var jsonl = string.Join('\n', new[]
+        {
+            "{\"type\":\"session.info\",\"data\":{\"sessionId\":\"abc\"}}",
+            "{\"type\":\"assistant.message\",\"data\":{\"content\":\"\",\"toolRequests\":[{\"name\":\"web\"}]}}",
+            "{\"type\":\"tool.execution_complete\",\"data\":{\"toolCallId\":\"x\"}}",
+            "{\"type\":\"assistant.message\",\"data\":{\"content\":\"Here are the changes:\\n- bullet one\\n- bullet two\",\"toolRequests\":[]}}",
+            "{\"type\":\"result\",\"data\":{\"exitCode\":0}}",
+        });
+
+        var text = AISummaryService.ExtractAssistantTextFromJsonl(jsonl);
+
+        Assert.Equal("Here are the changes:\n- bullet one\n- bullet two", text);
+    }
+
+    [Fact]
+    public void ExtractAssistantText_ConcatenatesMultipleAssistantTextTurns()
+    {
+        var jsonl = string.Join('\n', new[]
+        {
+            "{\"type\":\"assistant.message\",\"data\":{\"content\":\"First half.\",\"toolRequests\":[]}}",
+            "{\"type\":\"assistant.message\",\"data\":{\"content\":\"Second half.\",\"toolRequests\":[]}}",
+        });
+
+        var text = AISummaryService.ExtractAssistantTextFromJsonl(jsonl);
+
+        Assert.Equal($"First half.{Environment.NewLine}Second half.", text);
+    }
+
+    [Fact]
+    public void ExtractAssistantText_ReturnsEmpty_OnEmptyOrToolOnlyStreams()
+    {
+        Assert.Equal(string.Empty, AISummaryService.ExtractAssistantTextFromJsonl(""));
+        Assert.Equal(string.Empty, AISummaryService.ExtractAssistantTextFromJsonl("   \n\n  "));
+
+        // Only tool-call assistant messages (content empty) -> nothing extractable.
+        var toolOnly = "{\"type\":\"assistant.message\",\"data\":{\"content\":\"\",\"toolRequests\":[{\"name\":\"x\"}]}}";
+        Assert.Equal(string.Empty, AISummaryService.ExtractAssistantTextFromJsonl(toolOnly));
+    }
+
+    [Fact]
+    public void ExtractAssistantText_IgnoresMalformedAndNonJsonLines()
+    {
+        var jsonl = string.Join('\n', new[]
+        {
+            "● Extension loaded",
+            "not json at all",
+            "{\"type\":\"assistant.reasoning\",\"data\":{\"content\":\"thinking...\"}}",  // wrong event type
+            "{\"type\":\"assistant.message\",\"data\":{\"content\":\"Real reply.\"}}",
+            "{broken json",
+        });
+
+        var text = AISummaryService.ExtractAssistantTextFromJsonl(jsonl);
+
+        Assert.Equal("Real reply.", text);
     }
 
     private static async Task<(FakeSettings settings, ProcessStartInfo? captured)> CaptureSpawnAsync(
