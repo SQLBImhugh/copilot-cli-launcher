@@ -106,8 +106,26 @@ public sealed class UpdateCheckService : IUpdateCheckService
         var stderr = await stderrTask.ConfigureAwait(false);
 
         var combined = (stdout + Environment.NewLine + stderr).Trim();
-        return IUpdateCheckService.ParseOutput(combined, prev)
-            ?? new UpdateCheckResult { PreviousVersion = prev, CurrentVersion = prev, RawOutput = combined };
+
+        // Re-query `copilot --version` after the update exits. This is the
+        // source of truth — older copilot builds emit update-completion text
+        // we don't recognize (no "Copilot CLI version X.Y.Z installed."
+        // line), and a parse-only path would then report "no version change"
+        // even though the CLI just updated. Symptom: clicking "Check now" on
+        // a stale CLI shows OLD→OLD; a second click shows NEW→NEW; the actual
+        // OLD→NEW transition is lost and no briefing is created.
+        var post = await _getCurrentVersion().ConfigureAwait(false);
+        var parsed = IUpdateCheckService.ParseOutput(combined, prev);
+        var current = post != "unknown"
+            ? post
+            : parsed?.CurrentVersion ?? prev;
+
+        return new UpdateCheckResult
+        {
+            PreviousVersion = prev,
+            CurrentVersion = current,
+            RawOutput = combined,
+        };
     }
 
     private static async Task<string> GetVersionFromCli()

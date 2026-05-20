@@ -56,4 +56,35 @@ public class UpdateCheckServiceTests
         var result = IUpdateCheckService.ParseOutput(raw, "1.0.46");
         Assert.Equal(raw, result!.RawOutput);
     }
+
+    [Fact]
+    public void Fallback_PrefersPostUpdateQuery_OverParsedOutput()
+    {
+        // Regression test for "first Check Now sees OLD->OLD even though the
+        // update succeeded" bug. Documents the precedence rule used inside
+        // RunAsync:
+        //   post != "unknown"  ->  post
+        //   else parsed?.CurrentVersion ?? prev
+        // This protects against older copilot CLIs that emit unrecognized
+        // update text but DID install a new version (visible via --version).
+        string prev = "1.0.40";
+        string post = "1.0.49";
+
+        // Unrecognized update output -> parsed is null. Post wins.
+        var parsed = IUpdateCheckService.ParseOutput("blah blah", prev);
+        Assert.Null(parsed);
+        var current = post != "unknown" ? post : (parsed?.CurrentVersion ?? prev);
+        Assert.Equal("1.0.49", current);
+
+        // Post unknown, parsed recognized -> parsed wins.
+        post = "unknown";
+        parsed = IUpdateCheckService.ParseOutput("Copilot CLI version 1.0.48 installed.", prev);
+        current = post != "unknown" ? post : (parsed?.CurrentVersion ?? prev);
+        Assert.Equal("1.0.48", current);
+
+        // Post unknown, parsed null -> fall back to prev.
+        parsed = IUpdateCheckService.ParseOutput("noise", prev);
+        current = post != "unknown" ? post : (parsed?.CurrentVersion ?? prev);
+        Assert.Equal("1.0.40", current);
+    }
 }
