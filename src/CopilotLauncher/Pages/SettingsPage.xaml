@@ -164,9 +164,6 @@
                                   OffContent="Off — sessions with interrupted tool calls may fail on --resume"
                                   OnContent="On — silently fix dangling events at startup (default, recommended)"
                                   IsOn="{x:Bind ViewModel.AutoRepairDanglingToolUse, Mode=TwoWay}"/>
-                    <ToggleSwitch Header="Apply Win32 keep-alive workaround (issue #3298)"
-                                  AutomationProperties.AutomationId="SettingsApplyWin32WorkaroundToggle"
-                                  IsOn="{x:Bind ViewModel.ApplyWin32KeepAliveWorkaround, Mode=TwoWay}"/>
                 </StackPanel>
             </muxc:Expander>
 

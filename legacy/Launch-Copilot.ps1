@@ -76,7 +76,7 @@ function Get-LauncherConfig {
         stateDir               = (Join-Path ([Environment]::GetFolderPath('Desktop')) 'CopilotCLI')
         agentsMdPath           = Join-Path $PSScriptRoot 'agents.md'
         briefingSessionName    = $null   # default: <projectName>-Briefings
-        trackedIssues          = @(3298)
+        trackedIssues          = @()
         applyKnownWorkarounds  = $true
         autoUpdate             = $true
     }
@@ -203,55 +203,14 @@ function Test-CopilotCliIssueClosed {
 
 function Repair-Win32NativeAddon {
     <#
-    Workaround for github/copilot-cli#3298: hand-write the missing
-    native/win32/index.js loader stub so /keep-alive works on Windows.
-    Idempotent. Re-applied after every `copilot update` since each
-    update overwrites the version directory.
+    Workaround for github/copilot-cli#3298 — RETIRED.
+    Fixed upstream in v1.0.48 (2026-05-16): the win32 native addon now loads
+    its .node binary from prebuilds/win32-x64/ instead of native/win32/index.js.
+    The entire native/win32/ directory no longer exists in v1.0.48+.
+    This function is kept as a no-op for config.json backward compatibility.
     #>
     param([string]$Version)
-    if (-not $Version) { return $false }
-    $win32Dir = Join-Path $env:LOCALAPPDATA "copilot\pkg\universal\$Version\native\win32"
-    if (-not (Test-Path $win32Dir)) { return $false }
-    $loader = Join-Path $win32Dir 'index.js'
-    if (Test-Path $loader) { return $false }
-    $binary = Join-Path $win32Dir 'win32-native.win32-x64-msvc.node'
-    if (-not (Test-Path $binary)) { return $false }
-    $stub = @'
-// Workaround for https://github.com/github/copilot-cli/issues/3298
-// The auto-generated NAPI-RS loader for win32-native is missing from the
-// prebuild bundle. This hand-written shim loads the right .node binary so
-// /keep-alive (and getErrorMode, enableCrashReporting, installExceptionFilter)
-// work on Windows. Re-applied by Launch-Copilot.ps1 after every CLI update.
-const path = require('node:path')
-let nativeBinding = null
-const loadErrors = []
-if (process.platform === 'win32') {
-  if (process.arch === 'x64') {
-    try { nativeBinding = require('./win32-native.win32-x64-msvc.node') }
-    catch (e) { loadErrors.push(e) }
-  } else if (process.arch === 'arm64') {
-    try { nativeBinding = require('./win32-native.win32-arm64-msvc.node') }
-    catch (e) { loadErrors.push(e) }
-  } else {
-    loadErrors.push(new Error(`Unsupported Windows architecture: ${process.arch}`))
-  }
-} else {
-  module.exports = {}
-  return
-}
-if (!nativeBinding) {
-  throw new Error(`Failed to load win32-native: ${loadErrors.map(e => e.message).join('; ')}`)
-}
-module.exports = nativeBinding
-'@
-    try {
-        $stub | Set-Content -Path $loader -Encoding utf8 -NoNewline
-        Write-Host "[Launch-Copilot] patched win32 native addon loader (issue #3298) for $Version" -ForegroundColor DarkGray
-        return $true
-    } catch {
-        Write-Host "[Launch-Copilot] could not patch win32 loader: $_" -ForegroundColor DarkYellow
-        return $false
-    }
+    return $false
 }
 
 function Repair-CopilotSessionDanglingToolUses {

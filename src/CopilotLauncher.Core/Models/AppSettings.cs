@@ -36,7 +36,7 @@ public sealed class AppSettings
         LauncherBehavior ??= new();
         Storage          ??= new();
 
-        Repair.TrackedGitHubIssues   ??= new() { 3298 };
+        Repair.TrackedGitHubIssues   ??= new();
         SessionListing.HiddenPathGlobs ??= new();
     }
 }
@@ -104,8 +104,7 @@ public sealed class BriefingSettings
 public sealed class RepairSettings
 {
     public bool AutoRepairDanglingToolUse { get; set; } = true;
-    public bool ApplyWin32KeepAliveWorkaround { get; set; } = true;
-    public List<int> TrackedGitHubIssues { get; set; } = new() { 3298 };
+    public List<int> TrackedGitHubIssues { get; set; } = new();
 }
 
 public sealed class SessionListingSettings

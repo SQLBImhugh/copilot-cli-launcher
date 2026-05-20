@@ -87,7 +87,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     // Repair
     public bool AutoRepairDanglingToolUse { get => Settings.Repair.AutoRepairDanglingToolUse; set { Settings.Repair.AutoRepairDanglingToolUse = value; OnPropertyChanged(); ScheduleSave(); } }
-    public bool ApplyWin32KeepAliveWorkaround { get => Settings.Repair.ApplyWin32KeepAliveWorkaround; set { Settings.Repair.ApplyWin32KeepAliveWorkaround = value; OnPropertyChanged(); ScheduleSave(); } }
 
     // Launcher behavior
     public string AfterLaunch { get => Settings.LauncherBehavior.AfterLaunch; set { Settings.LauncherBehavior.AfterLaunch = value; OnPropertyChanged(); ScheduleSave(); } }

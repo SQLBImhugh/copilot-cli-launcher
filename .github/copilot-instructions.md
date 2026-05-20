@@ -158,8 +158,8 @@ Documented in the session plan.md and run before each phase commit.
 
 ## Upstream issues to watch
 
-| Issue | Why it matters |
-|---|---|
-| [github/copilot-cli#3298](https://github.com/github/copilot-cli/issues/3298) | The Win32 keep-alive `native/win32/index.js` loader regression. The KnownBugWorkaroundService (Phase 4) ports the legacy fix; auto-disables when issue closes via the daily-cached `gh` API check. |
+No tracked issues at this time. Previous entries:
 
-When upstream closes a tracked issue and the fix actually ships, remove the corresponding workaround from `KnownBugWorkaroundService` and from the default `TrackedGitHubIssues` list in `RepairSettings`. Update `legacy/Launch-Copilot.ps1` similarly so the legacy kit stays in sync.
+- ~~[github/copilot-cli#3298](https://github.com/github/copilot-cli/issues/3298)~~ — Fixed in v1.0.48 (2026-05-16). The Win32 keep-alive `native/win32/index.js` loader stub is no longer needed; the win32 native addon now loads from `prebuilds/win32-x64/`. `KnownBugWorkaroundService` was removed and `Repair-Win32NativeAddon` in the legacy kit was retired to a no-op.
+
+When a future upstream issue warrants a workaround, add a new service in Core, register it in `App.xaml.cs`, and add the issue number to `RepairSettings.TrackedGitHubIssues`. Update `legacy/Launch-Copilot.ps1` similarly so the legacy kit stays in sync.

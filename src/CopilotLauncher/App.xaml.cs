@@ -80,7 +80,6 @@ public partial class App : Application
         services.AddSingleton<IBriefingService, BriefingService>();
         services.AddSingleton<IBriefingHistoryService, BriefingHistoryService>();
         services.AddSingleton<IShortcutExportService, ShortcutExportService>();
-        services.AddSingleton<IKnownBugWorkaroundService, KnownBugWorkaroundService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IAfterLaunchAction, Helpers.WinUIAfterLaunchAction>();
         services.AddSingleton<IAISummaryService, AISummaryService>();
@@ -186,12 +185,6 @@ public partial class App : Application
                 var settings = Services.GetRequiredService<ISettingsService>();
                 if (settings.Current.Repair.AutoRepairDanglingToolUse)
                     Services.GetRequiredService<ISessionRepairService>().RepairAll();
-
-                // Apply known-bug workarounds (e.g. issue #3298 win32 keep-alive).
-                // Reads its own toggle internally; safe to call unconditionally.
-                // Async because the version probe spawns `copilot --version`
-                // with a 5s timeout — we don't want to block the startup task.
-                await Services.GetRequiredService<IKnownBugWorkaroundService>().ApplyAllAsync().ConfigureAwait(false);
 
                 // Sync the Start with Windows registry entry to whatever is
                 // currently saved in settings. Idempotent.

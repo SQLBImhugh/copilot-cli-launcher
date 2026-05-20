@@ -12,6 +12,8 @@ obj/
 
 # Publish output
 dist/CopilotLauncher/
+dist/CopilotLauncher-msix-loose/
+dist/release-*/
 dist/*.zip
 
 # OS / editor noise

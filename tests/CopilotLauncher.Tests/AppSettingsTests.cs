@@ -39,7 +39,6 @@ public class AppSettingsTests
         s.SessionListing.HiddenPathGlobs = null!;
         s.Normalize();
         Assert.NotNull(s.Repair.TrackedGitHubIssues);
-        Assert.NotEmpty(s.Repair.TrackedGitHubIssues);  // 3298 default
         Assert.NotNull(s.SessionListing.HiddenPathGlobs);
     }
 
