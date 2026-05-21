@@ -99,7 +99,7 @@ public sealed partial class BriefingViewModel : ObservableObject
 
             if (_ai.IsEnabled)
             {
-                StatusMessage = "Generating AI summary...";
+                StatusMessage = $"Updated {result.PreviousVersion} → {result.CurrentVersion}. Generating AI summary…";
                 var summary = await _ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, result.RawOutput, ct).ConfigureAwait(true);
                 if (!string.IsNullOrWhiteSpace(summary))
                 {
@@ -108,7 +108,7 @@ public sealed partial class BriefingViewModel : ObservableObject
                 else
                 {
                     aiUnavailable = true;
-                    StatusMessage = "AI summary unavailable; using bundled changelog.";
+                    StatusMessage = $"Updated {result.PreviousVersion} → {result.CurrentVersion}. AI summary unavailable; using bundled changelog.";
                 }
             }
 

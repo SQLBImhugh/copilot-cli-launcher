@@ -87,4 +87,39 @@ public class UpdateCheckServiceTests
         current = post != "unknown" ? post : (parsed?.CurrentVersion ?? prev);
         Assert.Equal("1.0.40", current);
     }
+
+    [Fact]
+    public void BuildVersionArguments_IncludesNoAutoUpdateFlag()
+    {
+        // Regression test for v0.1.10 fix. copilot CLI silently
+        // auto-updates itself on every invocation that goes through the
+        // app gate, INCLUDING `--version`. If our version probe omits
+        // `--no-auto-update`, the "prev" query inside RunAsync ends up
+        // capturing the post-auto-update version — the launcher then
+        // sees prev == post and reports "no version change" even though
+        // copilot actually just updated under the hood. Symptom: user
+        // clicks Check Now when a new release drops, gets "still X.Y.Z",
+        // and no briefing entry is created.
+        var args = UpdateCheckService.BuildVersionArguments(Array.Empty<string>());
+        Assert.Contains("--no-auto-update", args);
+        Assert.Contains("--version", args);
+        var list = args.ToList();
+        Assert.True(list.IndexOf("--no-auto-update") < list.IndexOf("--version"));
+    }
+
+    [Fact]
+    public void BuildVersionArguments_PreservesPrefixArgs()
+    {
+        // If ProcessUtil.Resolve hands us a wrapped invocation (e.g.
+        // ["node", "path/to/copilot.js"]), the prefix args must survive
+        // ahead of our --no-auto-update/--version flags so the wrapper
+        // still works.
+        var prefix = new[] { "node", @"C:\bin\copilot.js" };
+        var args = UpdateCheckService.BuildVersionArguments(prefix);
+        Assert.Equal(4, args.Count);
+        Assert.Equal("node", args[0]);
+        Assert.Equal(@"C:\bin\copilot.js", args[1]);
+        Assert.Equal("--no-auto-update", args[2]);
+        Assert.Equal("--version", args[3]);
+    }
 }

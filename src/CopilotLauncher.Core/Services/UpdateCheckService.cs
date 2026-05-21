@@ -128,6 +128,22 @@ public sealed class UpdateCheckService : IUpdateCheckService
         };
     }
 
+    /// <summary>
+    /// Build the argument list for a "what version is installed?" query.
+    /// `--no-auto-update` is included to prevent copilot CLI from silently
+    /// self-updating during the query — see <see cref="GetVersionFromCli"/>
+    /// for rationale. Exposed as <c>internal static</c> so tests can assert
+    /// the flag is present without spinning up a subprocess.
+    /// </summary>
+    internal static IReadOnlyList<string> BuildVersionArguments(IEnumerable<string> prefixArgs)
+    {
+        var args = new List<string>();
+        foreach (var a in prefixArgs) args.Add(a);
+        args.Add("--no-auto-update");
+        args.Add("--version");
+        return args;
+    }
+
     private static async Task<string> GetVersionFromCli()
     {
         var copilot = Helpers.ProcessUtil.Resolve(TerminalDiscoveryService.ResolveOnPath);
@@ -141,8 +157,17 @@ public sealed class UpdateCheckService : IUpdateCheckService
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
-        foreach (var a in copilot.PrefixArgs) psi.ArgumentList.Add(a);
-        psi.ArgumentList.Add("--version");
+        // `--no-auto-update` is CRITICAL here: copilot CLI silently
+        // auto-updates itself on every invocation that goes through the
+        // app gate (including `--version`). Without this flag, the "prev"
+        // query in RunAsync would already capture the post-update version,
+        // making the subsequent explicit `copilot update` a no-op and
+        // causing the launcher to report "no version change" even when a
+        // real OLD->NEW transition just occurred. See the auto-update
+        // gate in copilot's index.js (function te()):
+        //   if(argv.includes("--no-auto-update")) return false;
+        foreach (var a in BuildVersionArguments(copilot.PrefixArgs))
+            psi.ArgumentList.Add(a);
 
         try
         {
