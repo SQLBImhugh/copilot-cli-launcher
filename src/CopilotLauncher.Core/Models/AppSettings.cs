@@ -99,6 +99,17 @@ public sealed class BriefingSettings
     /// one-shot summaries. Default matches the convention many users adopted
     /// manually before the launcher gained this feature.</summary>
     public string? BriefingSessionName { get; set; } = "CopilotCLI-Update-Briefings";
+
+    /// <summary>Last copilot CLI version the launcher recorded after running an
+    /// update check. Persisted across launches so transitions caused by silent
+    /// background auto-updates (copilot CLI auto-updates on most invocations,
+    /// including <c>--version</c>) are still detectable when the user clicks
+    /// Check now after the fact. Empty when the launcher has never observed
+    /// a version (first-ever check bootstraps without creating a briefing).
+    /// On v0.1.10 -> v0.1.11 upgrade, this is migrated from the most recent
+    /// briefing entry's ToVersion if available, so returning users skip the
+    /// bootstrap step.</summary>
+    public string? LastObservedCopilotVersion { get; set; }
 }
 
 public sealed class RepairSettings

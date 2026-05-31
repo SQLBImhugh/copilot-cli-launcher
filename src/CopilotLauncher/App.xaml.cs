@@ -79,6 +79,7 @@ public partial class App : Application
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
         services.AddSingleton<IBriefingService, BriefingService>();
         services.AddSingleton<IBriefingHistoryService, BriefingHistoryService>();
+        services.AddSingleton<IReleaseNotesService, ReleaseNotesService>();
         services.AddSingleton<IShortcutExportService, ShortcutExportService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IAfterLaunchAction, Helpers.WinUIAfterLaunchAction>();
@@ -237,12 +238,17 @@ public partial class App : Application
             var result = await updates.RunAsync(cts.Token).ConfigureAwait(false);
             File.WriteAllText(stateFile, DateTime.UtcNow.ToString("o"));
 
-            if (result is null || !result.VersionChanged) return;
+            if (result is null) return;
+            // Bootstrap was already committed inside RunAsync; nothing to do.
+            if (result.IsBootstrap) return;
+            if (!result.VersionChanged) return;
             if (!settings.Current.Briefings.ShowVersionBumpBriefing) return;
 
             var briefings = Services.GetRequiredService<IBriefingService>();
             var history = Services.GetRequiredService<IBriefingHistoryService>();
-            var body = briefings.Render(result.PreviousVersion, result.CurrentVersion, Array.Empty<ReleaseEntry>());
+            var releaseNotes = Services.GetRequiredService<IReleaseNotesService>();
+            var entries = await releaseNotes.FetchAsync(result.PreviousVersion, result.CurrentVersion, cts.Token).ConfigureAwait(false);
+            var body = briefings.Render(result.PreviousVersion, result.CurrentVersion, entries);
             var generateStartupAiSummary = settings.Current.Briefings.AISummaryOnStartupUpdate
                 && settings.Current.Briefings.AISummaryOnBump
                 && (string.Equals(cli.AutoUpdateFrequency, "daily", StringComparison.OrdinalIgnoreCase)
@@ -251,7 +257,13 @@ public partial class App : Application
             if (generateStartupAiSummary)
             {
                 var ai = Services.GetRequiredService<IAISummaryService>();
-                var summary = await ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, result.RawOutput, cts.Token).ConfigureAwait(false);
+                // Same swap as BriefingViewModel: feed the AI real release notes
+                // when we have them, fall back to raw `copilot update` stdout
+                // otherwise. See BriefingViewModel.ForceCheckAsync for rationale.
+                var aiChangelog = entries.Count > 0
+                    ? ReleaseNotesService.BuildChangelogText(entries)
+                    : result.RawOutput;
+                var summary = await ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, aiChangelog, cts.Token).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(summary))
                 {
                     body = "## AI Summary\n\n" + summary.Trim() + "\n\n---\n\n" + body;
@@ -267,6 +279,9 @@ public partial class App : Application
                 Source = "startup-update",
                 Body = body + Environment.NewLine + "Raw output:" + Environment.NewLine + result.RawOutput,
             });
+            // Two-phase commit: only advance the persisted baseline AFTER the
+            // briefing entry is durably written. Mirrors BriefingViewModel.ForceCheckAsync.
+            updates.CommitObservedVersion(result.CurrentVersion);
         }
         catch
         {

@@ -11,15 +11,53 @@ public sealed class UpdateCheckResult
 
     /// <summary>Raw stdout/stderr from `copilot update`. Useful for diagnostics if parsing fails.</summary>
     public required string RawOutput { get; init; }
+
+    /// <summary>
+    /// True when this is the first observation the launcher has ever made
+    /// (no <c>LastObservedCopilotVersion</c> in settings AND no prior briefing
+    /// to migrate from). Callers should record a baseline without creating a
+    /// briefing in this case — the very first check shouldn't fabricate a
+    /// "1.0.X → 1.0.X" no-op briefing or, worse, a wrong "→ from unknown"
+    /// transition. Subsequent checks will catch real updates against this
+    /// baseline. <see cref="VersionChanged"/> is false when bootstrapping
+    /// (PreviousVersion == CurrentVersion by construction).
+    /// </summary>
+    public bool IsBootstrap { get; init; }
 }
 
 public interface IUpdateCheckService
 {
     /// <summary>
     /// Runs <c>copilot update</c>, parses the output, and reports the version
-    /// before/after. Returns null if the copilot CLI is not on PATH.
+    /// before/after using the launcher's persisted "last observed" baseline
+    /// (NOT a fresh in-process query — copilot's silent background auto-update
+    /// can already have advanced the cached version before the user clicks
+    /// Check now, making any synchronous prev-query meaningless).
+    /// Returns null if the copilot CLI is not on PATH or the post-update
+    /// version cannot be determined at all.
+    /// <para>
+    /// IMPORTANT: this method does NOT persist the new baseline. Callers MUST
+    /// invoke <see cref="CommitObservedVersion"/> AFTER successfully recording
+    /// a briefing (or after presenting bootstrap UX). This two-phase commit
+    /// prevents transitions from being silently lost when briefing rendering
+    /// or AI summary generation fails partway through.
+    /// </para>
+    /// <para>
+    /// Bootstrap exception: when the result has <see cref="UpdateCheckResult.IsBootstrap"/>
+    /// set, this method ALREADY committed the baseline (there's no briefing to
+    /// wait for). Callers should not call <see cref="CommitObservedVersion"/>
+    /// in that case, but doing so is harmless (idempotent).
+    /// </para>
     /// </summary>
     Task<UpdateCheckResult?> RunAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Persist the observed version as the new baseline. Idempotent — writes
+    /// only when the value actually changes. Call this AFTER the briefing
+    /// entry has been successfully persisted so a mid-flight failure doesn't
+    /// strand the transition undetectable.
+    /// </summary>
+    void CommitObservedVersion(string version);
 
     /// <summary>
     /// Parse copilot's update-output text. Public + static so tests can hit it
@@ -60,25 +98,54 @@ public interface IUpdateCheckService
 
 public sealed class UpdateCheckService : IUpdateCheckService
 {
+    private readonly ISettingsService _settings;
+    private readonly IBriefingHistoryService _history;
     private readonly Func<ProcessStartInfo, Process?> _spawn;
     private readonly Func<Task<string>> _getCurrentVersion;
 
-    public UpdateCheckService()
-        : this(Process.Start, GetVersionFromCli) { }
+    public UpdateCheckService(ISettingsService settings, IBriefingHistoryService history)
+        : this(settings, history, Process.Start, GetVersionFromCli) { }
 
     /// <summary>Test-only ctor.</summary>
     internal UpdateCheckService(
+        ISettingsService settings,
+        IBriefingHistoryService history,
         Func<ProcessStartInfo, Process?> spawn,
         Func<Task<string>> getCurrentVersion)
     {
+        _settings = settings;
+        _history = history;
         _spawn = spawn;
         _getCurrentVersion = getCurrentVersion;
     }
 
     public async Task<UpdateCheckResult?> RunAsync(CancellationToken ct = default)
     {
-        var prev = await _getCurrentVersion().ConfigureAwait(false);
-        if (prev == "unknown") return null;
+        // Persisted baseline. Empty when the launcher has never observed a
+        // version (fresh install) OR when v0.1.10 -> v0.1.11 upgrade left
+        // the field unpopulated. For the upgrade case we migrate from the
+        // most recent briefing's ToVersion so returning users keep their
+        // continuity instead of getting a fake "first run" bootstrap.
+        var prev = _settings.Current.Briefings.LastObservedCopilotVersion ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(prev))
+        {
+            try
+            {
+                if (_history.All.Count > 0)
+                {
+                    // BriefingHistoryService.All is sorted newest-first inside Add,
+                    // so [0].ToVersion is the most recent transition we recorded
+                    // (under the v0.1.10 in-process-prev model).
+                    var migrated = _history.All[0].ToVersion;
+                    if (!string.IsNullOrWhiteSpace(migrated)) prev = migrated;
+                }
+            }
+            catch
+            {
+                // Migration is best-effort. If briefings.json is unreadable we'll
+                // just treat this as a genuine bootstrap.
+            }
+        }
 
         var copilot = Helpers.ProcessUtil.Resolve(TerminalDiscoveryService.ResolveOnPath);
         if (copilot is null) return null;
@@ -110,38 +177,69 @@ public sealed class UpdateCheckService : IUpdateCheckService
         // Re-query `copilot --version` after the update exits. This is the
         // source of truth — older copilot builds emit update-completion text
         // we don't recognize (no "Copilot CLI version X.Y.Z installed."
-        // line), and a parse-only path would then report "no version change"
-        // even though the CLI just updated. Symptom: clicking "Check now" on
-        // a stale CLI shows OLD→OLD; a second click shows NEW→NEW; the actual
-        // OLD→NEW transition is lost and no briefing is created.
+        // line), and a parse-only path would then report stale.
+        //
+        // NOTE: we deliberately do NOT pass `--no-auto-update`. copilot CLI's
+        // own auto-update has already run (either via this `copilot update`
+        // call or earlier in the background), so `--version` returns the
+        // current cached version, which is what we want. v0.1.10 added the
+        // flag thinking it would let us snapshot "prev" before update; but
+        // the flag also disables the cache-walk in copilot's gate function,
+        // so it returns the immutable npm-bundled version instead. With the
+        // persisted-baseline model the prev-snapshot isn't needed anyway.
         var post = await _getCurrentVersion().ConfigureAwait(false);
         var parsed = IUpdateCheckService.ParseOutput(combined, prev);
         var current = post != "unknown"
             ? post
-            : parsed?.CurrentVersion ?? prev;
+            : (parsed?.CurrentVersion ?? string.Empty);
+
+        if (string.IsNullOrEmpty(current))
+        {
+            // Couldn't determine the post-update version at all (CLI broken
+            // or both --version and update output unparseable). Better to
+            // return null than fabricate a transition.
+            return null;
+        }
+
+        var isBootstrap = string.IsNullOrEmpty(prev);
+        if (isBootstrap)
+        {
+            // First-ever observation. Commit the baseline immediately —
+            // there's no briefing to wait for, so the two-phase-commit
+            // concern doesn't apply. Future checks will detect transitions
+            // against this baseline.
+            CommitObservedVersion(current);
+            return new UpdateCheckResult
+            {
+                PreviousVersion = current,
+                CurrentVersion = current,
+                RawOutput = combined,
+                IsBootstrap = true,
+            };
+        }
 
         return new UpdateCheckResult
         {
             PreviousVersion = prev,
             CurrentVersion = current,
             RawOutput = combined,
+            IsBootstrap = false,
         };
     }
 
-    /// <summary>
-    /// Build the argument list for a "what version is installed?" query.
-    /// `--no-auto-update` is included to prevent copilot CLI from silently
-    /// self-updating during the query — see <see cref="GetVersionFromCli"/>
-    /// for rationale. Exposed as <c>internal static</c> so tests can assert
-    /// the flag is present without spinning up a subprocess.
-    /// </summary>
-    internal static IReadOnlyList<string> BuildVersionArguments(IEnumerable<string> prefixArgs)
+    public void CommitObservedVersion(string version)
     {
-        var args = new List<string>();
-        foreach (var a in prefixArgs) args.Add(a);
-        args.Add("--no-auto-update");
-        args.Add("--version");
-        return args;
+        if (string.IsNullOrWhiteSpace(version)) return;
+        var current = _settings.Current.Briefings.LastObservedCopilotVersion;
+        if (string.Equals(current, version, StringComparison.Ordinal)) return;
+        _settings.Current.Briefings.LastObservedCopilotVersion = version;
+        try { _settings.Save(); }
+        catch
+        {
+            // Best-effort persistence. A failed save means the next check
+            // will re-detect the same transition; the user can dismiss the
+            // duplicate. Better than throwing here and losing the briefing.
+        }
     }
 
     private static async Task<string> GetVersionFromCli()
@@ -157,17 +255,8 @@ public sealed class UpdateCheckService : IUpdateCheckService
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
-        // `--no-auto-update` is CRITICAL here: copilot CLI silently
-        // auto-updates itself on every invocation that goes through the
-        // app gate (including `--version`). Without this flag, the "prev"
-        // query in RunAsync would already capture the post-update version,
-        // making the subsequent explicit `copilot update` a no-op and
-        // causing the launcher to report "no version change" even when a
-        // real OLD->NEW transition just occurred. See the auto-update
-        // gate in copilot's index.js (function te()):
-        //   if(argv.includes("--no-auto-update")) return false;
-        foreach (var a in BuildVersionArguments(copilot.PrefixArgs))
-            psi.ArgumentList.Add(a);
+        foreach (var a in copilot.PrefixArgs) psi.ArgumentList.Add(a);
+        psi.ArgumentList.Add("--version");
 
         try
         {

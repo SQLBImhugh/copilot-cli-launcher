@@ -17,6 +17,7 @@ public sealed partial class BriefingViewModel : ObservableObject
     private readonly IBriefingService _briefings;
     private readonly ISettingsService _settings;
     private readonly IAISummaryService _ai;
+    private readonly IReleaseNotesService _releaseNotes;
     private int _checkInFlight;  // single-flight guard
 
     public ObservableCollection<BriefingEntry> Items { get; } = new();
@@ -40,12 +41,14 @@ public sealed partial class BriefingViewModel : ObservableObject
         IUpdateCheckService updates,
         IBriefingService briefings,
         ISettingsService settings,
+        IReleaseNotesService releaseNotes,
         IAISummaryService? ai = null)
     {
         _history = history;
         _updates = updates;
         _briefings = briefings;
         _settings = settings;
+        _releaseNotes = releaseNotes;
         _ai = ai ?? new NoopAISummaryService();
     }
 
@@ -88,19 +91,37 @@ public sealed partial class BriefingViewModel : ObservableObject
                 StatusMessage = "Could not run `copilot update` (CLI not on PATH or update failed).";
                 return;
             }
+            if (result.IsBootstrap)
+            {
+                // First-ever check — RunAsync already persisted the baseline.
+                // No briefing yet; subsequent checks will catch real updates.
+                StatusMessage = $"Recorded baseline {result.CurrentVersion}. Future updates from here will be briefed.";
+                return;
+            }
             if (!result.VersionChanged)
             {
                 StatusMessage = $"Checked — no version change (still {result.CurrentVersion}).";
                 return;
             }
 
-            var body = _briefings.Render(result.PreviousVersion, result.CurrentVersion, Array.Empty<ReleaseEntry>());
+            var entries = await _releaseNotes.FetchAsync(result.PreviousVersion, result.CurrentVersion, ct).ConfigureAwait(true);
+            var body = _briefings.Render(result.PreviousVersion, result.CurrentVersion, entries);
+            // Build the changelog text fed to the AI. Prefer real GitHub
+            // release notes (rich, machine-readable per-version bullets);
+            // fall back to the raw `copilot update` stdout only when the
+            // GitHub fetch returned nothing (offline, rate-limited, etc.).
+            // Without this swap the AI gets a useless "No update needed,
+            // current version is X.Y.Z" line and hallucinates a summary
+            // from session memory alone.
+            var aiChangelog = entries.Count > 0
+                ? ReleaseNotesService.BuildChangelogText(entries)
+                : result.RawOutput;
             var aiUnavailable = false;
 
             if (_ai.IsEnabled)
             {
                 StatusMessage = $"Updated {result.PreviousVersion} → {result.CurrentVersion}. Generating AI summary…";
-                var summary = await _ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, result.RawOutput, ct).ConfigureAwait(true);
+                var summary = await _ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, aiChangelog, ct).ConfigureAwait(true);
                 if (!string.IsNullOrWhiteSpace(summary))
                 {
                     body = "## AI Summary\n\n" + summary.Trim() + "\n\n---\n\n" + body;
@@ -122,6 +143,12 @@ public sealed partial class BriefingViewModel : ObservableObject
                 Body = body + Environment.NewLine + "Raw output:" + Environment.NewLine + result.RawOutput,
             };
             _history.Add(entry);
+            // Two-phase commit: advance the persisted baseline only AFTER
+            // the briefing entry has been durably written. If history.Add
+            // throws, the prior baseline stays in settings and the next
+            // check will re-detect the same transition (better than losing
+            // it silently). See UpdateCheckService for full rationale.
+            _updates.CommitObservedVersion(result.CurrentVersion);
             Items.Insert(0, entry);
             if (!aiUnavailable)
                 StatusMessage = $"New briefing: {result.PreviousVersion} → {result.CurrentVersion}.";
