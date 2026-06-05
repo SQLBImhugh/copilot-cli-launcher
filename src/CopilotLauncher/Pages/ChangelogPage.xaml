@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CopilotLauncher.Pages.ChangelogPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:models="using:CopilotLauncher.Models"
+    xmlns:controls="using:CopilotLauncher.Controls"
+    FontFamily="{ThemeResource BodyFontFamily}">
+
+    <Grid Padding="{ThemeResource PagePadding}" RowSpacing="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock Text="Changelog"
+                       Style="{StaticResource TitleLargeTextBlockStyle}"
+                       FontFamily="{ThemeResource HeadingFontFamily}"
+                       FontSize="{ThemeResource PageTitleFontSize}"/>
+            <TextBlock Text="Changelogs are recorded automatically when Copilot CLI updates. AI briefings are generated on demand — they don't run unless you click Generate AI Briefing."
+                       Opacity="0.7"
+                       Style="{StaticResource BodyTextBlockStyle}"
+                       TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Sub-view selector. SelectorBar shipped in WinAppSDK 1.5; we're
+             on 1.6 so it's safe. Bound through code-behind because SelectorBar
+             doesn't expose a directly bindable enum-style SelectedItem. -->
+        <muxc:SelectorBar Grid.Row="1"
+                          x:Name="SubViewSelector"
+                          AutomationProperties.AutomationId="ChangelogSubViewSelector"
+                          SelectionChanged="OnSubViewSelectionChanged">
+            <muxc:SelectorBarItem x:Name="SubViewChangelogItem"
+                                  Text="Changelog"
+                                  Tag="changelog"
+                                  AutomationProperties.AutomationId="ChangelogSubViewItem_Changelog"/>
+            <muxc:SelectorBarItem x:Name="SubViewBriefingsItem"
+                                  Text="Briefings"
+                                  Tag="briefings"
+                                  AutomationProperties.AutomationId="ChangelogSubViewItem_Briefings"/>
+        </muxc:SelectorBar>
+
+        <!-- Sub-view: CHANGELOG -->
+        <ScrollViewer Grid.Row="2"
+                      x:Name="ChangelogSubView"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="12">
+                <!-- Action row -->
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button x:Name="CheckNowButton"
+                            AutomationProperties.AutomationId="ChangelogCheckNowButton"
+                            Click="OnCheckNowClick">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="↻"/>
+                            <TextBlock Text="Check now"/>
+                        </StackPanel>
+                    </Button>
+                    <ProgressRing x:Name="CheckSpinner" IsActive="False" Width="16" Height="16"/>
+                    <Button Content="Clear changelogs"
+                            AutomationProperties.AutomationId="ChangelogClearButton"
+                            Click="OnClearChangelogsClick"/>
+                </StackPanel>
+
+                <!-- Status -->
+                <Border Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+                        CornerRadius="{StaticResource ControlCornerRadius}"
+                        Padding="12,6">
+                    <TextBlock Text="{x:Bind ViewModel.ChangelogStatus, Mode=OneWay}"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Opacity="0.8"
+                               TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- Latest changelog: highlighted card -->
+                <Border x:Name="LatestChangelogCard"
+                        AutomationProperties.AutomationId="ChangelogLatestCard"
+                        Padding="16,12"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource AccentControlElevationBorderBrush}"
+                        BorderThickness="2"
+                        CornerRadius="{StaticResource OverlayCornerRadius}"
+                        Visibility="Collapsed">
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="Latest"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="LatestChangelogFromText"
+                                       Style="{StaticResource SubtitleTextBlockStyle}"
+                                       Opacity="0.7"/>
+                            <TextBlock Text="→" Style="{StaticResource SubtitleTextBlockStyle}" Opacity="0.5"/>
+                            <TextBlock x:Name="LatestChangelogToText"
+                                       Style="{StaticResource SubtitleTextBlockStyle}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock x:Name="LatestChangelogSourceText"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Opacity="0.6"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <controls:MarkdownTextBlock x:Name="LatestChangelogBody"
+                                                    Margin="0,4,0,0"
+                                                    Opacity="0.9"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Previous changelogs: collapsible -->
+                <muxc:Expander x:Name="PreviousChangelogsExpander"
+                               AutomationProperties.AutomationId="ChangelogPreviousExpander"
+                               HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Stretch"
+                               Visibility="Collapsed">
+                    <muxc:Expander.Header>
+                        <TextBlock x:Name="PreviousChangelogsHeader"
+                                   Text="Previous changelogs"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    </muxc:Expander.Header>
+                    <ListView x:Name="PreviousChangelogsList"
+                              AutomationProperties.AutomationId="ChangelogPreviousList"
+                              SelectionMode="None"
+                              IsItemClickEnabled="False"
+                              Padding="0">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0,0,0,8"/>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:ChangelogEntry">
+                                <Border Padding="16,12"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="{ThemeResource CardBorderThickness}"
+                                        CornerRadius="{StaticResource OverlayCornerRadius}">
+                                    <StackPanel Spacing="6">
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <TextBlock Text="{x:Bind FromVersion, Mode=OneTime}"
+                                                       Style="{StaticResource SubtitleTextBlockStyle}"
+                                                       Opacity="0.7"/>
+                                            <TextBlock Text="→" Style="{StaticResource SubtitleTextBlockStyle}" Opacity="0.5"/>
+                                            <TextBlock Text="{x:Bind ToVersion, Mode=OneTime}"
+                                                       Style="{StaticResource SubtitleTextBlockStyle}"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBlock Text="{x:Bind Source, Mode=OneTime}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Opacity="0.6"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <controls:MarkdownTextBlock Markdown="{x:Bind Body, Mode=OneTime}"
+                                                                    Margin="0,4,0,0"
+                                                                    Opacity="0.85"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </muxc:Expander>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Sub-view: BRIEFINGS -->
+        <ScrollViewer Grid.Row="2"
+                      x:Name="BriefingsSubView"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Visibility="Collapsed">
+            <StackPanel Spacing="12">
+                <!-- Action row -->
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button x:Name="GenerateBriefingButton"
+                            Style="{StaticResource AccentButtonStyle}"
+                            AutomationProperties.AutomationId="ChangelogGenerateBriefingButton"
+                            Click="OnGenerateBriefingClick">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <muxc:FontIcon Glyph="&#xE945;" FontSize="14"/>
+                            <TextBlock Text="Generate AI Briefing"/>
+                        </StackPanel>
+                    </Button>
+                    <ProgressRing x:Name="BriefingSpinner" IsActive="False" Width="16" Height="16"/>
+                    <Button Content="Clear briefings"
+                            AutomationProperties.AutomationId="ChangelogClearBriefingsButton"
+                            Click="OnClearBriefingsClick"/>
+                </StackPanel>
+
+                <!-- Status -->
+                <Border Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+                        CornerRadius="{StaticResource ControlCornerRadius}"
+                        Padding="12,6">
+                    <TextBlock Text="{x:Bind ViewModel.BriefingStatus, Mode=OneWay}"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Opacity="0.8"
+                               TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- All briefings, newest first -->
+                <ListView AutomationProperties.AutomationId="ChangelogBriefingsList"
+                          ItemsSource="{x:Bind ViewModel.Briefings, Mode=OneWay}"
+                          SelectionMode="None"
+                          IsItemClickEnabled="False"
+                          Padding="0"
+                          Background="{ThemeResource SubtleFillColorTransparentBrush}">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0,0,0,8"/>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:BriefingEntry">
+                            <Border Padding="16,12"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="{ThemeResource CardBorderThickness}"
+                                    CornerRadius="{StaticResource OverlayCornerRadius}">
+                                <StackPanel Spacing="6">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <TextBlock Text="{x:Bind FromVersion, Mode=OneTime}"
+                                                   Style="{StaticResource SubtitleTextBlockStyle}"
+                                                   Opacity="0.7"/>
+                                        <TextBlock Text="→" Style="{StaticResource SubtitleTextBlockStyle}" Opacity="0.5"/>
+                                        <TextBlock Text="{x:Bind ToVersion, Mode=OneTime}"
+                                                   Style="{StaticResource SubtitleTextBlockStyle}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="{x:Bind Source, Mode=OneTime}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Opacity="0.6"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <controls:MarkdownTextBlock Markdown="{x:Bind Body, Mode=OneTime}"
+                                                                Margin="0,4,0,0"
+                                                                Opacity="0.85"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

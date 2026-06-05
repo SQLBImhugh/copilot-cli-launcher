@@ -122,7 +122,7 @@ public sealed partial class MainWindow : Window
                 "sessions"    => typeof(SessionsPage),
                 "shortcuts"   => typeof(ShortcutsPage),
                 "newshortcut" => typeof(NewShortcutPage),
-                "briefing"    => typeof(BriefingPage),
+                "changelog"   => typeof(ChangelogPage),
                 "settings"    => typeof(SettingsPage),
                 _             => typeof(SessionsPage),
             };
@@ -275,7 +275,7 @@ public sealed partial class MainWindow : Window
             {
                 "shortcuts"   => typeof(ShortcutsPage),
                 "newshortcut" => typeof(NewShortcutPage),
-                "briefing"    => typeof(BriefingPage),
+                "changelog"   => typeof(ChangelogPage),
                 "settings"    => typeof(SettingsPage),
                 _             => typeof(SessionsPage),
             };

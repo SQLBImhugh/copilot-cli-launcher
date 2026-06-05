@@ -56,11 +56,8 @@
                     BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="AI Summary" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource SectionTitleFontSize}"/>
-                    <TextBlock Text="Default agents.md context file used to tailor Copilot's summary on version bumps. Each Shortcut can override this with its own context file."
+                    <TextBlock Text="Default agents.md context file used to tailor Copilot's AI briefing when you click Generate AI Briefing on the Changelog tab. Each Shortcut can override this with its own context file."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
-                    <ToggleSwitch Header="Generate AI summary on version bump"
-                                  AutomationProperties.AutomationId="SettingsAISummaryOnBumpToggle"
-                                  IsOn="{x:Bind ViewModel.AISummaryOnBump, Mode=TwoWay}"/>
                     <Grid ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -81,18 +78,18 @@
                              AutomationProperties.AutomationId="SettingsBriefingSessionNameTextBox"
                              Text="{x:Bind ViewModel.BriefingSessionName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              PlaceholderText="(empty — each briefing is stateless)"/>
-                    <TextBlock Text="When set, briefings reuse the named Copilot CLI session so the AI has cumulative context across version bumps. Created on first run, resumed thereafter. Leave empty for one-shot summaries."
+                    <TextBlock Text="When set, AI briefings reuse the named Copilot CLI session so the AI has cumulative context across briefings. Created on first run, resumed thereafter. Leave empty for one-shot summaries."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 
-            <!-- Briefings -->
+            <!-- Changelog -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="Briefings" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource SectionTitleFontSize}"/>
-                    <ToggleSwitch Header="Show briefing on Copilot CLI version bumps"
+                    <TextBlock Text="Changelog" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource SectionTitleFontSize}"/>
+                    <ToggleSwitch Header="Record changelog entries on Copilot CLI version bumps"
                                   AutomationProperties.AutomationId="SettingsShowVersionBumpBriefingToggle"
                                   IsOn="{x:Bind ViewModel.ShowVersionBumpBriefing, Mode=TwoWay}"/>
                     <ToggleSwitch Header="Append to rolling briefing-history.log"
@@ -107,7 +104,7 @@
                             <ComboBoxItem Tag="everyLaunch" Content="Every launch"/>
                             <ComboBoxItem Tag="daily" Content="Once per day"/>
                             <ComboBoxItem Tag="weekly" Content="Once per week"/>
-                            <ComboBoxItem Tag="manual" Content="Manual only (Briefing tab → Check now)"/>
+                            <ComboBoxItem Tag="manual" Content="Manual only (Changelog tab → Check now)"/>
                         </ComboBox>
                     </StackPanel>
                 </StackPanel>

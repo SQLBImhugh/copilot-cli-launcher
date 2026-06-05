@@ -79,6 +79,8 @@ public partial class App : Application
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
         services.AddSingleton<IBriefingService, BriefingService>();
         services.AddSingleton<IBriefingHistoryService, BriefingHistoryService>();
+        services.AddSingleton<IChangelogHistoryService, ChangelogHistoryService>();
+        services.AddSingleton<IBriefingsSplitMigration, BriefingsSplitMigration>();
         services.AddSingleton<IReleaseNotesService, ReleaseNotesService>();
         services.AddSingleton<IShortcutExportService, ShortcutExportService>();
         services.AddSingleton<IMigrationService, MigrationService>();
@@ -187,6 +189,14 @@ public partial class App : Application
                 if (settings.Current.Repair.AutoRepairDanglingToolUse)
                     Services.GetRequiredService<ISessionRepairService>().RepairAll();
 
+                // v0.2.0 one-shot migration: split pre-v0.2.0 briefings.json
+                // entries (which conflated AI summaries and raw changelogs)
+                // into changelogs.json + briefings.json. Idempotent — skips
+                // if changelogs.json already exists. Runs in the same
+                // best-effort background pass so any failure is non-fatal.
+                try { Services.GetRequiredService<IBriefingsSplitMigration>().Migrate(); }
+                catch { /* migration is best-effort */ }
+
                 // Sync the Start with Windows registry entry to whatever is
                 // currently saved in settings. Idempotent.
                 var exePath = Process.GetCurrentProcess().MainModule?.FileName;
@@ -199,12 +209,12 @@ public partial class App : Application
             }
         });
 
-        // Phase 3: check for Copilot CLI updates in the background, gated by
-        // the user's AutoUpdateFrequency policy. If a new version is detected,
-        // append a briefing entry to the rolling history. UI sees it via
-        // BriefingHistoryService.Reload() the next time the Briefing tab is
-        // opened. Single-flight + 30-second timeout so a hanging `copilot
-        // update` can't lock up the launcher.
+        // v0.2.0: the background startup update check now writes ONLY a
+        // ChangelogEntry on a detected version bump. AI briefings are
+        // generated on demand via the Changelog page's "Generate AI Briefing"
+        // button — never auto-fired here. Keeps startup latency predictable
+        // and avoids burning premium copilot CLI requests behind the user's
+        // back. Single-flight + 30-second timeout still apply.
         _ = System.Threading.Tasks.Task.Run(StartupUpdateCheckAsync);
     }
 
@@ -245,35 +255,12 @@ public partial class App : Application
             if (!settings.Current.Briefings.ShowVersionBumpBriefing) return;
 
             var briefings = Services.GetRequiredService<IBriefingService>();
-            var history = Services.GetRequiredService<IBriefingHistoryService>();
+            var changelogHistory = Services.GetRequiredService<IChangelogHistoryService>();
             var releaseNotes = Services.GetRequiredService<IReleaseNotesService>();
             var entries = await releaseNotes.FetchAsync(result.PreviousVersion, result.CurrentVersion, cts.Token).ConfigureAwait(false);
             var body = briefings.Render(result.PreviousVersion, result.CurrentVersion, entries);
-            var generateStartupAiSummary = settings.Current.Briefings.AISummaryOnStartupUpdate
-                && settings.Current.Briefings.AISummaryOnBump
-                && (string.Equals(cli.AutoUpdateFrequency, "daily", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(cli.AutoUpdateFrequency, "weekly", StringComparison.OrdinalIgnoreCase));
 
-            if (generateStartupAiSummary)
-            {
-                var ai = Services.GetRequiredService<IAISummaryService>();
-                // Only invoke AI when we actually have release notes to feed
-                // it. The raw `copilot update` stdout ("No update needed...")
-                // is useless context and historically led to session-memory
-                // hallucinations. See BriefingViewModel.ForceCheckAsync for
-                // the full rationale.
-                if (entries.Count > 0)
-                {
-                    var aiChangelog = ReleaseNotesService.BuildChangelogText(entries);
-                    var summary = await ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, aiChangelog, cts.Token).ConfigureAwait(false);
-                    if (!string.IsNullOrWhiteSpace(summary))
-                    {
-                        body = "## AI Summary\n\n" + summary.Trim() + "\n\n---\n\n" + body;
-                    }
-                }
-            }
-
-            history.Add(new BriefingEntry
+            changelogHistory.Add(new ChangelogEntry
             {
                 Id = Guid.NewGuid().ToString(),
                 Timestamp = DateTime.UtcNow,
@@ -283,7 +270,7 @@ public partial class App : Application
                 Body = body + Environment.NewLine + "Raw output:" + Environment.NewLine + result.RawOutput,
             });
             // Two-phase commit: only advance the persisted baseline AFTER the
-            // briefing entry is durably written. Mirrors BriefingViewModel.ForceCheckAsync.
+            // changelog entry is durably written.
             updates.CommitObservedVersion(result.CurrentVersion);
         }
         catch

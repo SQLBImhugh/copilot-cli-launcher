@@ -49,7 +49,13 @@ public sealed class AISummaryService : IAISummaryService
         string changelogText,
         CancellationToken ct = default)
     {
-        if (!IsEnabled || string.IsNullOrWhiteSpace(changelogText))
+        // v0.2.0: AI generation is on-demand only (Generate AI Briefing
+        // button). The act of calling this method IS the user's opt-in;
+        // we no longer gate on the legacy AISummaryOnBump setting. The
+        // IsEnabled property is preserved for backward compatibility but
+        // is no longer consulted on the generation path. The empty-input
+        // check stays as a sanity guard against feeding the model nothing.
+        if (string.IsNullOrWhiteSpace(changelogText))
             return null;
 
         try

@@ -14,6 +14,8 @@ obj/
 dist/CopilotLauncher/
 dist/CopilotLauncher-msix-loose/
 dist/release-*/
+dist/cmdpal-msix/
+dist/cmdpal-pkg/
 dist/*.zip
 
 # OS / editor noise
