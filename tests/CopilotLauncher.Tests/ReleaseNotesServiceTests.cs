@@ -45,26 +45,86 @@ public class ReleaseNotesServiceTests
     }
 
     [Fact]
-    public void ParseReleases_SkipsPreReleaseTags()
+    public void ParseReleases_KeepsPreReleaseTagsWithFullTagName()
     {
-        // copilot-cli publishes daily pre-releases like "v1.0.56-2" between
-        // stable cuts. Including them would duplicate the stable row (the
-        // parser strips the suffix) and drown the briefing in unreleased
-        // bullets. Only stable -> stable should appear.
+        // v0.1.12: copilot CLI publishes daily pre-releases like "v1.0.57-3"
+        // between stable cuts. When a user jumps from 1.0.56 (stable) to a
+        // 1.0.57-N pre-release (no stable v1.0.57 yet), skipping pre-releases
+        // produced an empty changelog and forced the AI summary to hallucinate
+        // from session memory. v0.1.12 keeps them — preserving the full tag in
+        // the Version field so the briefing displays e.g. "v1.0.57-3" rather
+        // than masquerading as the stable cut.
         var json = """
         [
-          { "tag_name": "v1.0.57-3", "body": "prerelease" },
-          { "tag_name": "v1.0.57-0", "body": "prerelease" },
+          { "tag_name": "v1.0.57-3", "body": "pre" },
+          { "tag_name": "v1.0.57-0", "body": "pre" },
           { "tag_name": "v1.0.56", "body": "stable" },
-          { "tag_name": "v1.0.56-2", "body": "prerelease" },
+          { "tag_name": "v1.0.56-2", "body": "pre" },
           { "tag_name": "v1.0.55", "body": "stable" }
         ]
         """;
         var entries = ReleaseNotesService.ParseReleases(json);
-        Assert.Equal(2, entries.Count);
-        Assert.All(entries, e => Assert.Equal("stable", e.Body));
-        Assert.Equal("1.0.56", entries[0].Version);
-        Assert.Equal("1.0.55", entries[1].Version);
+        Assert.Equal(5, entries.Count);
+        Assert.Contains(entries, e => e.Version == "1.0.57-3");
+        Assert.Contains(entries, e => e.Version == "1.0.56-2");
+        Assert.Contains(entries, e => e.Version == "1.0.56");
+    }
+
+    [Fact]
+    public void FilterRange_IncludesPreReleasesInRange_AndSortsBeforeStableOfSameBase()
+    {
+        // (1.0.56, 1.0.57] should include 1.0.57-0, -1, -2, -3 even when no
+        // stable v1.0.57 exists yet. Ordering: stable beats all pre-releases
+        // of the same base version (1.0.56 stable > all 1.0.56-N).
+        var input = new List<ReleaseEntry>
+        {
+            new() { Version = "1.0.57-3" },
+            new() { Version = "1.0.57-0" },
+            new() { Version = "1.0.57-2" },
+            new() { Version = "1.0.57-1" },
+            new() { Version = "1.0.56" },     // boundary — excluded
+            new() { Version = "1.0.56-2" },   // boundary pre — excluded
+        };
+        var filtered = ReleaseNotesService.FilterRange(input, "1.0.56", "1.0.57");
+        Assert.Equal(4, filtered.Count);
+        Assert.Equal("1.0.57-0", filtered[0].Version);
+        Assert.Equal("1.0.57-1", filtered[1].Version);
+        Assert.Equal("1.0.57-2", filtered[2].Version);
+        Assert.Equal("1.0.57-3", filtered[3].Version);
+    }
+
+    [Fact]
+    public void FilterRange_StableBeatsAllPreReleasesOfSameBase()
+    {
+        // Range (1.0.55, 1.0.56] picks 1.0.56-0, -1, -2, then stable 1.0.56.
+        var input = new List<ReleaseEntry>
+        {
+            new() { Version = "1.0.56" },
+            new() { Version = "1.0.56-1" },
+            new() { Version = "1.0.56-0" },
+            new() { Version = "1.0.56-2" },
+        };
+        var filtered = ReleaseNotesService.FilterRange(input, "1.0.55", "1.0.56");
+        Assert.Equal(4, filtered.Count);
+        Assert.Equal("1.0.56-0", filtered[0].Version);
+        Assert.Equal("1.0.56-1", filtered[1].Version);
+        Assert.Equal("1.0.56-2", filtered[2].Version);
+        Assert.Equal("1.0.56", filtered[3].Version);
+    }
+
+    [Fact]
+    public void TryParseSemVer_OrdersStableAfterItsPreReleases()
+    {
+        var preZero = ReleaseNotesService.TryParseSemVer("1.0.56-0")!.Value;
+        var preTwo = ReleaseNotesService.TryParseSemVer("1.0.56-2")!.Value;
+        var stable = ReleaseNotesService.TryParseSemVer("1.0.56")!.Value;
+        var nextPre = ReleaseNotesService.TryParseSemVer("1.0.57-0")!.Value;
+
+        Assert.True(preZero.CompareTo(preTwo) < 0);
+        Assert.True(preTwo.CompareTo(stable) < 0);
+        Assert.True(stable.CompareTo(nextPre) < 0);
+        // v-prefix tolerant.
+        Assert.Equal(stable, ReleaseNotesService.TryParseSemVer("v1.0.56")!.Value);
     }
 
     [Fact]
@@ -191,6 +251,31 @@ public class ReleaseNotesServiceTests
         Assert.Single(entries);
         Assert.Equal("1.0.56", entries[0].Version);
         Assert.Equal("from cache", entries[0].Body);
+    }
+
+    [Fact]
+    public async Task FetchAsync_FallsBackToStaleCache_WhenFreshFetchFails()
+    {
+        // v0.1.12: when the cache is past TTL and the fresh fetch returns
+        // null (network outage / rate limit / DNS hiccup), return the stale
+        // cache rather than empty. Stale release notes are infinitely better
+        // than zero — empty changelog forces the AI summary to hallucinate
+        // from session memory.
+        var settings = new FakeSettings();
+        settings.AppDataDirectory = Path.Combine(Path.GetTempPath(), "ccl-rn-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(settings.AppDataDirectory, "state"));
+        var cacheFile = Path.Combine(settings.AppDataDirectory, "state", "releases-cache.json");
+        var staleJson = """[{ "tag_name": "v1.0.56", "body": "from stale cache" }]""";
+        await File.WriteAllTextAsync(cacheFile, staleJson);
+        // Backdate so the cache appears past the 1-hour TTL.
+        File.SetLastWriteTimeUtc(cacheFile, DateTime.UtcNow.AddHours(-25));
+
+        var svc = new ReleaseNotesService(settings, _ => Task.FromResult<string?>(null));
+        var entries = await svc.FetchAsync("1.0.55", "1.0.99");
+        // Stale cache content was returned and parsed despite TTL expiry.
+        Assert.Single(entries);
+        Assert.Equal("1.0.56", entries[0].Version);
+        Assert.Equal("from stale cache", entries[0].Body);
     }
 
     private sealed class FakeSettings : ISettingsService

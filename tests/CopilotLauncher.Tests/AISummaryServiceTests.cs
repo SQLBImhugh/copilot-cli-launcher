@@ -32,7 +32,9 @@ public class AISummaryServiceTests
     [Fact]
     public void Build_TruncatesLongRepoContextWithMarker()
     {
-        var repoContext = new string('y', AISummaryPromptBuilder.RepositoryContextLimit + 500);
+        // Overflow margin is large enough to remain detectable even as the
+        // boilerplate (instructions, separators) grows in future releases.
+        var repoContext = new string('y', AISummaryPromptBuilder.RepositoryContextLimit + 5000);
 
         var prompt = AISummaryPromptBuilder.Build("1.0.0", "1.1.0", "Fixed bugs", repoContext);
 
