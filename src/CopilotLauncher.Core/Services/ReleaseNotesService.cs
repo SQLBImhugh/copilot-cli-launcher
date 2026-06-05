@@ -79,15 +79,15 @@ public sealed class ReleaseNotesService : IReleaseNotesService
     {
         var from = TryParseSemVer(fromVersion);
         var to = TryParseSemVer(toVersion);
-        var filtered = new List<(ReleaseEntry Entry, Version Parsed)>();
+        var filtered = new List<(ReleaseEntry Entry, SemVerKey Parsed)>();
         foreach (var e in all)
         {
             var v = TryParseSemVer(e.Version);
             if (v is null) continue;
             // (from, to]
-            if (from is not null && v.CompareTo(from) <= 0) continue;
-            if (to is not null && v.CompareTo(to) > 0) continue;
-            filtered.Add((e, v));
+            if (from is not null && v.Value.CompareTo(from.Value) <= 0) continue;
+            if (to is not null && v.Value.CompareTo(to.Value) > 0) continue;
+            filtered.Add((e, v.Value));
         }
         return filtered
             .OrderBy(p => p.Parsed)
@@ -115,14 +115,14 @@ public sealed class ReleaseNotesService : IReleaseNotesService
                 && DateTime.TryParse(dateEl.GetString(), out var parsedDate))
                 date = parsedDate;
             if (string.IsNullOrWhiteSpace(tag)) continue;
-            // Strip leading "v" so version compares cleanly.
+            // Keep the full tag (incl. any "-N" pre-release suffix) so the
+            // briefing displays the real tag name and the AI prompt gets
+            // accurate version labels. copilot CLI ships daily pre-release
+            // builds (v1.0.57-0, -1, -2, ...) between stable cuts; when a
+            // user is on a pre-release that has no matching stable yet,
+            // skipping them produced an empty changelog and forced the AI
+            // to hallucinate from session memory. v0.1.12 includes them.
             var version = tag.TrimStart('v', 'V');
-            // Skip pre-release tags (e.g. "1.0.56-2", "1.0.57-0"). copilot CLI
-            // publishes daily pre-releases between stable cuts, and including
-            // them would (a) duplicate the stable version's row when the
-            // parser strips the suffix and (b) drown the briefing in
-            // unreleased text. Stable users only care about stable -> stable.
-            if (version.Contains('-')) continue;
             list.Add(new ReleaseEntry
             {
                 Version = version,
@@ -158,20 +158,21 @@ public sealed class ReleaseNotesService : IReleaseNotesService
     private async Task<string?> GetCachedOrFreshJsonAsync(CancellationToken ct)
     {
         var cacheFile = Path.Combine(_settings.AppDataDirectory, "state", "releases-cache.json");
+        string? cachedContent = null;
         try
         {
             if (File.Exists(cacheFile))
             {
                 var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(cacheFile);
+                cachedContent = await File.ReadAllTextAsync(cacheFile, ct).ConfigureAwait(false);
                 if (age < CacheTtl)
-                {
-                    return await File.ReadAllTextAsync(cacheFile, ct).ConfigureAwait(false);
-                }
+                    return cachedContent;
             }
         }
         catch
         {
             // Treat unreadable cache as a miss.
+            cachedContent = null;
         }
 
         var fresh = await _fetchJson(ct).ConfigureAwait(false);
@@ -186,8 +187,15 @@ public sealed class ReleaseNotesService : IReleaseNotesService
             {
                 // Caching is best-effort.
             }
+            return fresh;
         }
-        return fresh;
+        // Fresh fetch failed (network outage, rate limit, transient API error).
+        // Fall back to stale cache rather than returning empty — stale release
+        // notes are infinitely better than zero notes, because the AI summary
+        // will otherwise have nothing to anchor on and will hallucinate from
+        // session memory. The cache JSON itself is the only ground truth the
+        // launcher has about historical releases.
+        return cachedContent;
     }
 
     private static async Task<string?> DefaultFetchAsync(CancellationToken ct)
@@ -198,7 +206,7 @@ public sealed class ReleaseNotesService : IReleaseNotesService
             // GitHub requires a User-Agent header on all API requests; anonymous
             // calls otherwise return 403. The launcher version isn't strictly
             // needed but helps with debugging if GitHub ever asks.
-            req.Headers.UserAgent.ParseAdd("CopilotLauncher/0.1.11 (+https://github.com/SQLBImhugh/copilot-cli-launcher)");
+            req.Headers.UserAgent.ParseAdd("CopilotLauncher/0.1.12 (+https://github.com/SQLBImhugh/copilot-cli-launcher)");
             req.Headers.Accept.ParseAdd("application/vnd.github+json");
             using var resp = await SharedClient.SendAsync(req, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) return null;
@@ -210,18 +218,55 @@ public sealed class ReleaseNotesService : IReleaseNotesService
         }
     }
 
-    private static Version? TryParseSemVer(string? raw)
+    /// <summary>
+    /// Parse "1.0.56", "v1.0.56", "1.0.57-3" into a comparable key that orders
+    /// pre-release tags BEFORE the stable cut of the same base version
+    /// (1.0.56-0 &lt; 1.0.56-1 &lt; 1.0.56-2 &lt; 1.0.56). copilot CLI ships
+    /// numeric pre-release suffixes (-N) so this only handles integer suffixes;
+    /// non-numeric suffixes (-beta1) are treated as pre-release zero. Public+
+    /// static so tests can exercise ordering directly.
+    /// </summary>
+    internal static SemVerKey? TryParseSemVer(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
-        // Accept "1.0.56", "v1.0.56", "1.0.56-beta1". The pre-release suffix
-        // is stripped so semver-without-pre-release ordering applies. Good
-        // enough for copilot-cli which doesn't ship pre-release tags via the
-        // Releases API.
-        var m = Regex.Match(raw.Trim().TrimStart('v', 'V'), @"^(\d+)\.(\d+)\.(\d+)");
+        var trimmed = raw.Trim().TrimStart('v', 'V');
+        var m = Regex.Match(trimmed, @"^(\d+)\.(\d+)\.(\d+)(?:-([\w\.]+))?");
         if (!m.Success) return null;
-        return new Version(
+        // Stable releases get int.MaxValue so they sort after any pre-release
+        // of the same base version. Numeric pre-release suffixes parse
+        // directly. Non-numeric suffixes fall back to 0 (rare for copilot CLI).
+        int preReleaseRank;
+        if (!m.Groups[4].Success)
+        {
+            preReleaseRank = int.MaxValue;
+        }
+        else if (!int.TryParse(m.Groups[4].Value, out preReleaseRank))
+        {
+            preReleaseRank = 0;
+        }
+        return new SemVerKey(
             int.Parse(m.Groups[1].Value),
             int.Parse(m.Groups[2].Value),
-            int.Parse(m.Groups[3].Value));
+            int.Parse(m.Groups[3].Value),
+            preReleaseRank);
+    }
+}
+
+/// <summary>
+/// Semver comparable key with explicit pre-release ordering. Stable releases
+/// use <see cref="int.MaxValue"/> for <see cref="PreReleaseRank"/> so they
+/// always sort after every pre-release of the same major.minor.patch.
+/// Internal + nested in the same file as ReleaseNotesService since it's only
+/// used by FilterRange + tests.
+/// </summary>
+internal readonly record struct SemVerKey(int Major, int Minor, int Patch, int PreReleaseRank)
+    : IComparable<SemVerKey>
+{
+    public int CompareTo(SemVerKey other)
+    {
+        var c = Major.CompareTo(other.Major); if (c != 0) return c;
+        c = Minor.CompareTo(other.Minor); if (c != 0) return c;
+        c = Patch.CompareTo(other.Patch); if (c != 0) return c;
+        return PreReleaseRank.CompareTo(other.PreReleaseRank);
     }
 }

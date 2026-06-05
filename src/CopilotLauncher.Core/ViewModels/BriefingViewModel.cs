@@ -106,19 +106,22 @@ public sealed partial class BriefingViewModel : ObservableObject
 
             var entries = await _releaseNotes.FetchAsync(result.PreviousVersion, result.CurrentVersion, ct).ConfigureAwait(true);
             var body = _briefings.Render(result.PreviousVersion, result.CurrentVersion, entries);
-            // Build the changelog text fed to the AI. Prefer real GitHub
-            // release notes (rich, machine-readable per-version bullets);
-            // fall back to the raw `copilot update` stdout only when the
-            // GitHub fetch returned nothing (offline, rate-limited, etc.).
-            // Without this swap the AI gets a useless "No update needed,
-            // current version is X.Y.Z" line and hallucinates a summary
-            // from session memory alone.
-            var aiChangelog = entries.Count > 0
+            // Build the changelog text fed to the AI. Only feed it real
+            // GitHub release notes — when the GitHub fetch returned nothing
+            // (offline + no cache, or the range matched zero entries), SKIP
+            // the AI call entirely instead of falling back to the raw
+            // `copilot update` stdout. The raw output is just "No update
+            // needed, current version is X.Y.Z" which gives the model
+            // nothing to anchor on and historically led to it hallucinating
+            // from session memory (referencing legacy PowerShell helpers
+            // that don't exist in this product). "No AI summary" is the
+            // honest output when we have no source data.
+            string? aiChangelog = entries.Count > 0
                 ? ReleaseNotesService.BuildChangelogText(entries)
-                : result.RawOutput;
+                : null;
             var aiUnavailable = false;
 
-            if (_ai.IsEnabled)
+            if (_ai.IsEnabled && !string.IsNullOrWhiteSpace(aiChangelog))
             {
                 StatusMessage = $"Updated {result.PreviousVersion} → {result.CurrentVersion}. Generating AI summary…";
                 var summary = await _ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, aiChangelog, ct).ConfigureAwait(true);
@@ -131,6 +134,14 @@ public sealed partial class BriefingViewModel : ObservableObject
                     aiUnavailable = true;
                     StatusMessage = $"Updated {result.PreviousVersion} → {result.CurrentVersion}. AI summary unavailable; using bundled changelog.";
                 }
+            }
+            else if (_ai.IsEnabled)
+            {
+                // AI is enabled but we have nothing to summarize. Surface this
+                // so the user knows why no summary appears (offline, rate-
+                // limited GitHub API with no cache, or no releases in range).
+                aiUnavailable = true;
+                StatusMessage = $"Updated {result.PreviousVersion} → {result.CurrentVersion}. Skipped AI summary — no GitHub release notes available for this range.";
             }
 
             var entry = new BriefingEntry

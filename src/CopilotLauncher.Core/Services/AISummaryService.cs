@@ -278,6 +278,18 @@ internal static class AISummaryPromptBuilder
         sb.AppendLine($"Summarize the most important user-facing changes between GitHub Copilot CLI versions {fromVersion} and {toVersion} in 4-6 concise bullets.");
         sb.AppendLine("Focus on practical impact, notable fixes, and anything a Copilot CLI Launcher user should notice.");
         sb.AppendLine();
+        // Strong guard against session-memory contamination. The briefing
+        // session is reused across version bumps for cumulative context, so
+        // prior turns may include hallucinated context (e.g. the legacy
+        // PowerShell launcher's Launch-Copilot.ps1 / Get-RemoteChangelogEntries
+        // helpers, which the WinUI rewrite has not had since v0.1.0). Without
+        // this clause, when the changelog is thin the model defaults to those
+        // memorized hallucinations instead of saying "no notes available".
+        sb.AppendLine("IMPORTANT INSTRUCTIONS:");
+        sb.AppendLine("- Base your summary STRICTLY on the changelog text below. Do not invent items.");
+        sb.AppendLine("- Do not reference any prior turns in this session, any PowerShell scripts (Launch-Copilot.ps1, Get-RemoteChangelogEntries, etc.), any wrapper, or any cache files on the Desktop — none of those exist in this product.");
+        sb.AppendLine("- If the changelog below is empty or contains only updater status lines like \"No update needed\" / \"Checking for updates...\", respond with exactly: \"No release notes available for this transition.\" and nothing else.");
+        sb.AppendLine();
         sb.AppendLine("Changelog:");
         sb.AppendLine(normalizedChangelog);
 

@@ -257,16 +257,19 @@ public partial class App : Application
             if (generateStartupAiSummary)
             {
                 var ai = Services.GetRequiredService<IAISummaryService>();
-                // Same swap as BriefingViewModel: feed the AI real release notes
-                // when we have them, fall back to raw `copilot update` stdout
-                // otherwise. See BriefingViewModel.ForceCheckAsync for rationale.
-                var aiChangelog = entries.Count > 0
-                    ? ReleaseNotesService.BuildChangelogText(entries)
-                    : result.RawOutput;
-                var summary = await ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, aiChangelog, cts.Token).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(summary))
+                // Only invoke AI when we actually have release notes to feed
+                // it. The raw `copilot update` stdout ("No update needed...")
+                // is useless context and historically led to session-memory
+                // hallucinations. See BriefingViewModel.ForceCheckAsync for
+                // the full rationale.
+                if (entries.Count > 0)
                 {
-                    body = "## AI Summary\n\n" + summary.Trim() + "\n\n---\n\n" + body;
+                    var aiChangelog = ReleaseNotesService.BuildChangelogText(entries);
+                    var summary = await ai.GenerateAsync(result.PreviousVersion, result.CurrentVersion, aiChangelog, cts.Token).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(summary))
+                    {
+                        body = "## AI Summary\n\n" + summary.Trim() + "\n\n---\n\n" + body;
+                    }
                 }
             }
 
