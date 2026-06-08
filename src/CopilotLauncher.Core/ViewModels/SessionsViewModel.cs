@@ -168,13 +168,18 @@ public sealed partial class SessionsViewModel : ObservableObject
                 ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
                 : row.Cwd;
             var terminal = ResolveDefaultTerminal();
-            var cli = _settings.Current.CopilotCli;
+            // Mirror the ▶ Resume button's flags (the adjacent Sessions-tab
+            // launch action) so a fresh session opens with the same allow-all /
+            // extra-args behavior. Without --allow-all, copilot re-prompts for
+            // every extension's elevated-permission request on a new session.
+            var resumeDefaults = _settings.Current.SessionsResume;
             _launch.Spawn(new LaunchRequest
             {
                 WorkingDirectory = dir,
                 ResumeTarget = null,
-                EnableAllowAll = cli.DefaultAllowAll,
-                ExtraCopilotArgs = cli.DefaultExtraArgs,
+                EnableAISummary = resumeDefaults.EnableAISummary,
+                EnableAllowAll = resumeDefaults.EnableAllowAll,
+                ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
                 Terminal = terminal,
             });
             StatusMessage = $"Started new session in {dir}…";
@@ -248,8 +253,9 @@ public sealed partial class SessionsViewModel : ObservableObject
 
         rows = ApplySort(rows);
 
+        var showFullId = _settings.Current.SessionListing.ShowFullSessionId;
         foreach (var s in rows)
-            Visible.Add(SessionRow.From(s));
+            Visible.Add(SessionRow.From(s, showFullId));
 
         StatusMessage = $"{Visible.Count} of {_all.Count} session(s) visible.";
         OnPropertyChanged(nameof(VisibleCount));
@@ -384,7 +390,7 @@ public sealed class SessionRow
     public bool UserNamed { get; init; }
     public bool HeavyUse { get; init; }
 
-    public static SessionRow From(CopilotSession s)
+    public static SessionRow From(CopilotSession s, bool showFullId = false)
     {
         var ago = HumanizeRelative(s.LastModified);
         var tags = new List<string>();
@@ -404,10 +410,16 @@ public sealed class SessionRow
         var hasAutoName = !s.UserNamed && hasAnyName;
         var title = hasAnyName ? CleanForDisplay(rawName!, maxLen: hasAutoName ? 90 : 120) : string.Empty;
 
+        var shortId = s.Id.Length >= 8 ? s.Id[..8] : s.Id;
+        // When the "Show full session id" setting is on, surface the entire id
+        // (no ellipsis) so it can be read / copied in full; otherwise keep the
+        // compact 8-char prefix.
+        var idDisplay = showFullId ? s.Id : $"{shortId}…";
+
         return new SessionRow
         {
             SessionId = s.Id,
-            ShortId = s.Id.Length >= 8 ? s.Id[..8] : s.Id,
+            ShortId = shortId,
             Title = title,
             HasUserName = hasUserName,
             HasAutoName = hasAutoName,
@@ -415,7 +427,7 @@ public sealed class SessionRow
             RepoBranch = string.IsNullOrEmpty(s.Repository)
                 ? "(no git repo)"
                 : (string.IsNullOrEmpty(s.Branch) ? s.Repository : $"{s.Repository} · {s.Branch}"),
-            LastOpenedDisplay = $"{ago} · id {(s.Id.Length >= 8 ? s.Id[..8] : s.Id)}…",
+            LastOpenedDisplay = $"{ago} · id {idDisplay}",
             Tags = string.Join(" · ", tags),
             UserNamed = s.UserNamed,
             HeavyUse = s.SummaryCount >= 10,

@@ -59,8 +59,8 @@ public class SessionsViewModelTests
         var captured = (LaunchRequest?)null;
         var fakeLaunch = new FakeLaunch(req => captured = req);
         var fakeSettings = new FakeSettings();
-        fakeSettings.Current.CopilotCli.DefaultAllowAll = true;
-        fakeSettings.Current.CopilotCli.DefaultExtraArgs = "--model test";
+        fakeSettings.Current.SessionsResume.EnableAllowAll = true;
+        fakeSettings.Current.SessionsResume.ExtraCopilotArgs = "--model test";
         var vm = new SessionsViewModel(new FakeDiscovery(), new FakeTerminals(), fakeLaunch, fakeSettings);
 
         var ok = vm.StartNewSessionAt(RowWithCwd(@"C:\some\proj"));
@@ -91,6 +91,33 @@ public class SessionsViewModelTests
         Assert.NotNull(captured);
         Assert.Null(captured!.ResumeTarget);
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), captured.WorkingDirectory);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SessionRow_From_ShowFullSessionId_ControlsIdDisplay(bool showFullId)
+    {
+        var session = new CopilotSession
+        {
+            Id = "7406ade6-1111-2222-3333-444444444444",
+            FolderPath = @"C:\fake",
+            LastModified = DateTime.UtcNow,
+            Cwd = @"C:\proj",
+        };
+
+        var row = SessionRow.From(session, showFullId);
+
+        if (showFullId)
+        {
+            Assert.Contains("7406ade6-1111-2222-3333-444444444444", row.LastOpenedDisplay);
+            Assert.DoesNotContain("…", row.LastOpenedDisplay);
+        }
+        else
+        {
+            Assert.Contains("7406ade6…", row.LastOpenedDisplay);
+            Assert.DoesNotContain("7406ade6-1111", row.LastOpenedDisplay);
+        }
     }
 
     [Fact]
