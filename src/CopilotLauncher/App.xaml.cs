@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 using Windows.UI.ViewManagement;
@@ -116,9 +117,18 @@ public partial class App : Application
                 // Apply the user's last non-compact window size so resizes
                 // survive across launches. Done BEFORE Activate so there's
                 // no visible resize from the WinUI default 800x600.
-                nm.ApplyNormalSize(
-                    settings.Current.LauncherBehavior.LastNormalWindowWidth,
-                    settings.Current.LauncherBehavior.LastNormalWindowHeight);
+                var behavior = settings.Current.LauncherBehavior;
+                var (width, height) = WindowSizing.ClampNormalSize(
+                    behavior.LastNormalWindowWidth,
+                    behavior.LastNormalWindowHeight);
+                if (width != behavior.LastNormalWindowWidth || height != behavior.LastNormalWindowHeight)
+                {
+                    behavior.LastNormalWindowWidth = width;
+                    behavior.LastNormalWindowHeight = height;
+                    settings.Save();
+                }
+
+                nm.ApplyNormalSize(width, height);
             }
         }
         catch
@@ -279,5 +289,4 @@ public partial class App : Application
         }
     }
 }
-
 

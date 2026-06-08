@@ -7,8 +7,10 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Pages;
 using CopilotLauncher.Services;
+using WinRT.Interop;
 
 namespace CopilotLauncher;
 
@@ -16,6 +18,9 @@ public sealed partial class MainWindow : Window
 {
     private SizeInt32? _savedNormalSize;
     private string? _savedNormalNavTag;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     public MainWindow()
     {
@@ -240,9 +245,15 @@ public sealed partial class MainWindow : Window
             // already true).
             if (!behavior.CompactMode && AppWindow is not null)
             {
-                _savedNormalSize = AppWindow.Size;
-                behavior.LastNormalWindowWidth  = AppWindow.Size.Width;
-                behavior.LastNormalWindowHeight = AppWindow.Size.Height;
+                var scale = GetWindowRasterizationScale();
+                var effectiveWidth = (int)Math.Round(AppWindow.Size.Width / scale);
+                var effectiveHeight = (int)Math.Round(AppWindow.Size.Height / scale);
+                if (effectiveWidth >= WindowSizing.MinNormalWidth && effectiveHeight >= WindowSizing.MinNormalHeight)
+                {
+                    _savedNormalSize = new SizeInt32(effectiveWidth, effectiveHeight);
+                    behavior.LastNormalWindowWidth = effectiveWidth;
+                    behavior.LastNormalWindowHeight = effectiveHeight;
+                }
             }
             if (NavView.SelectedItem is NavigationViewItem item && item.Tag is string tag)
                 _savedNormalNavTag = tag;
@@ -263,8 +274,9 @@ public sealed partial class MainWindow : Window
         {
             NavView.IsPaneVisible = true;
 
-            var w = _savedNormalSize?.Width  ?? Math.Max(behavior.LastNormalWindowWidth,  640);
-            var h = _savedNormalSize?.Height ?? Math.Max(behavior.LastNormalWindowHeight, 480);
+            var (w, h) = _savedNormalSize is { } saved
+                ? WindowSizing.ClampNormalSize(saved.Width, saved.Height)
+                : WindowSizing.ClampNormalSize(behavior.LastNormalWindowWidth, behavior.LastNormalWindowHeight);
             ResizeWindow(w, h);
 
             // Explicit navigate + selection so the Frame and nav re-sync
@@ -300,12 +312,28 @@ public sealed partial class MainWindow : Window
             // AppWindow.Resize takes physical pixels. Multiply by the current
             // rasterization scale so the resulting window is roughly the
             // requested *effective* (XAML) pixel size on high-DPI displays.
-            var scale = Content?.XamlRoot?.RasterizationScale ?? 1.0;
+            var scale = GetWindowRasterizationScale();
             var w = (int)Math.Round(effectiveWidth  * scale);
             var h = (int)Math.Round(effectiveHeight * scale);
             AppWindow.Resize(new SizeInt32(w, h));
         }
         catch { }
+    }
+
+    private double GetWindowRasterizationScale()
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            if (hwnd != IntPtr.Zero)
+            {
+                var dpi = GetDpiForWindow(hwnd);
+                if (dpi != 0) return WindowSizing.ScaleFromDpi(dpi);
+            }
+        }
+        catch { }
+
+        return Content?.XamlRoot?.RasterizationScale ?? 1.0;
     }
 
     /// <summary>Apply the saved non-compact window size at startup. Called
@@ -314,7 +342,8 @@ public sealed partial class MainWindow : Window
     /// 320x640 size is intentionally hard-coded and not user-controlled).</summary>
     public void ApplyNormalSize(int effectiveWidth, int effectiveHeight)
     {
-        ResizeWindow(effectiveWidth, effectiveHeight);
+        var (normalWidth, normalHeight) = WindowSizing.ClampNormalSize(effectiveWidth, effectiveHeight);
+        ResizeWindow(normalWidth, normalHeight);
 
         // Persist size on resize. Debounce isn't strictly necessary because
         // settings.Save is already debounced via SettingsViewModel — but
@@ -331,9 +360,10 @@ public sealed partial class MainWindow : Window
                 var behavior = settings.Current.LauncherBehavior;
                 if (behavior.CompactMode) return;  // 320x640 compact size shouldn't override the saved normal size
 
-                var scale = Content?.XamlRoot?.RasterizationScale ?? 1.0;
+                var scale = GetWindowRasterizationScale();
                 var w = (int)Math.Round(sender.Size.Width  / scale);
                 var h = (int)Math.Round(sender.Size.Height / scale);
+                if (w < WindowSizing.MinNormalWidth || h < WindowSizing.MinNormalHeight) return;
                 if (w == behavior.LastNormalWindowWidth && h == behavior.LastNormalWindowHeight) return;
                 behavior.LastNormalWindowWidth = w;
                 behavior.LastNormalWindowHeight = h;

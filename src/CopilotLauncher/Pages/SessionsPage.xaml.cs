@@ -92,6 +92,31 @@ public sealed partial class SessionsPage : Page
         }
     }
 
+    private void OnCopySessionIdClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not SessionRow row) return;
+
+        try
+        {
+            var dp = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            dp.SetText(row.SessionId);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+            ViewModel.StatusMessage = $"Copied session id {row.ShortId}… to clipboard.";
+        }
+        catch (Exception ex)
+        {
+            ViewModel.StatusMessage = $"Copy session id failed: {ex.Message}";
+        }
+    }
+
+    private void OnStartNewSessionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is SessionRow row)
+        {
+            ViewModel.StartNewSessionAt(row);
+        }
+    }
+
     private void OnSaveAsLaunchClick(object sender, RoutedEventArgs e)
     {
         if (sender is not Button btn || btn.Tag is not SessionRow row) return;
@@ -141,4 +166,3 @@ public sealed partial class SessionsPage : Page
         SortDirectionGlyph.Glyph = ViewModel.SortDescending ? "\uE74B" : "\uE74A";
     }
 }
-

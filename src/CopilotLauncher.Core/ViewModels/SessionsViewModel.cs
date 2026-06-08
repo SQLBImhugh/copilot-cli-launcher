@@ -26,6 +26,12 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     public int VisibleCount => Visible.Count;
 
+    public int RecentWindowDays => Math.Max(1, _settings.Current.SessionListing.RecentWindowDays);
+
+    public string RecentFilterLabel => $"Recent ({RecentWindowDays}d)";
+
+    public string RecentFilterTooltip => $"Modified in the last {RecentWindowDays} days";
+
     [ObservableProperty]
     private bool _showRecent = true;
 
@@ -105,6 +111,9 @@ public sealed partial class SessionsViewModel : ObservableObject
                 TotalCount = _all.Count;
                 ApplyFilters();
                 OnPropertyChanged(nameof(TotalCount));
+                OnPropertyChanged(nameof(RecentWindowDays));
+                OnPropertyChanged(nameof(RecentFilterLabel));
+                OnPropertyChanged(nameof(RecentFilterTooltip));
             }).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -147,6 +156,34 @@ public sealed partial class SessionsViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"Resume failed: {ex.Message}";
+            return false;
+        }
+    }
+
+    public bool StartNewSessionAt(SessionRow row)
+    {
+        try
+        {
+            var dir = string.IsNullOrWhiteSpace(row.Cwd) || row.Cwd == "(unknown working dir)"
+                ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+                : row.Cwd;
+            var terminal = ResolveDefaultTerminal();
+            var cli = _settings.Current.CopilotCli;
+            _launch.Spawn(new LaunchRequest
+            {
+                WorkingDirectory = dir,
+                ResumeTarget = null,
+                EnableAllowAll = cli.DefaultAllowAll,
+                ExtraCopilotArgs = cli.DefaultExtraArgs,
+                Terminal = terminal,
+            });
+            StatusMessage = $"Started new session in {dir}…";
+            _afterLaunch.Apply(_settings.Current.LauncherBehavior.AfterLaunch);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"New session failed: {ex.Message}";
             return false;
         }
     }

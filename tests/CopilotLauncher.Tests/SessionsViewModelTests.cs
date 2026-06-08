@@ -8,6 +8,19 @@ namespace CopilotLauncher.Tests;
 public class SessionsViewModelTests
 {
     [Fact]
+    public void RecentFilterText_ReflectsConfiguredWindowDays()
+    {
+        var fakeSettings = new FakeSettings();
+        fakeSettings.Current.SessionListing.RecentWindowDays = 35;
+
+        var vm = new SessionsViewModel(new FakeDiscovery(), new FakeTerminals(), new FakeLaunch(_ => { }), fakeSettings);
+
+        Assert.Equal(35, vm.RecentWindowDays);
+        Assert.Equal("Recent (35d)", vm.RecentFilterLabel);
+        Assert.Equal("Modified in the last 35 days", vm.RecentFilterTooltip);
+    }
+
+    [Fact]
     public void ResumeSession_AppliesSessionsResumeDefaults_FromSettings()
     {
         var captured = (LaunchRequest?)null;
@@ -41,6 +54,46 @@ public class SessionsViewModelTests
     }
 
     [Fact]
+    public void StartNewSessionAt_SpawnsFreshSession_InRowsWorkingDirectory()
+    {
+        var captured = (LaunchRequest?)null;
+        var fakeLaunch = new FakeLaunch(req => captured = req);
+        var fakeSettings = new FakeSettings();
+        fakeSettings.Current.CopilotCli.DefaultAllowAll = true;
+        fakeSettings.Current.CopilotCli.DefaultExtraArgs = "--model test";
+        var vm = new SessionsViewModel(new FakeDiscovery(), new FakeTerminals(), fakeLaunch, fakeSettings);
+
+        var ok = vm.StartNewSessionAt(RowWithCwd(@"C:\some\proj"));
+
+        Assert.True(ok);
+        Assert.NotNull(captured);
+        Assert.Null(captured!.ResumeTarget);
+        Assert.Equal(@"C:\some\proj", captured.WorkingDirectory);
+        Assert.True(captured.EnableAllowAll);
+        Assert.Equal("--model test", captured.ExtraCopilotArgs);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("(unknown working dir)")]
+    public void StartNewSessionAt_FallsBackToUserProfile_WhenWorkingDirectoryUnknown(string cwd)
+    {
+        var captured = (LaunchRequest?)null;
+        var vm = new SessionsViewModel(
+            new FakeDiscovery(),
+            new FakeTerminals(),
+            new FakeLaunch(req => captured = req),
+            new FakeSettings());
+
+        var ok = vm.StartNewSessionAt(RowWithCwd(cwd));
+
+        Assert.True(ok);
+        Assert.NotNull(captured);
+        Assert.Null(captured!.ResumeTarget);
+        Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), captured.WorkingDirectory);
+    }
+
+    [Fact]
     public async Task RefreshAsync_DoesNotThrow_WhenSessionRootMissing()
     {
         var missingRoot = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid(), "missing");
@@ -61,6 +114,17 @@ public class SessionsViewModelTests
                             null, new[] { typeof(string) }, null);
         return (SessionDiscoveryService)ctor!.Invoke(new object[] { root });
     }
+
+    private static SessionRow RowWithCwd(string cwd) => new()
+    {
+        SessionId = "abc12345-0000-0000-0000-000000000000",
+        ShortId = "abc12345",
+        Title = string.Empty,
+        Cwd = cwd,
+        RepoBranch = "(no git repo)",
+        LastOpenedDisplay = "just now · id abc12345…",
+        Tags = string.Empty,
+    };
 
     private sealed class FakeLaunch : ILaunchService
     {
