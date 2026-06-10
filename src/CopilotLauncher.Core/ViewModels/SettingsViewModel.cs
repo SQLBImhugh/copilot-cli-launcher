@@ -62,7 +62,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public string InnerPwshArgs { get => Settings.Terminal.InnerPwshArgs; set { Settings.Terminal.InnerPwshArgs = value; OnPropertyChanged(); ScheduleSave(); } }
 
     // Sessions Resume defaults
-    public bool ResumeAISummary { get => Settings.SessionsResume.EnableAISummary; set { Settings.SessionsResume.EnableAISummary = value; OnPropertyChanged(); ScheduleSave(); } }
     public bool ResumeAllowAll { get => Settings.SessionsResume.EnableAllowAll; set { Settings.SessionsResume.EnableAllowAll = value; OnPropertyChanged(); ScheduleSave(); } }
     public string ResumeExtraArgs { get => Settings.SessionsResume.ExtraCopilotArgs ?? string.Empty; set { Settings.SessionsResume.ExtraCopilotArgs = string.IsNullOrWhiteSpace(value) ? null : value; OnPropertyChanged(); ScheduleSave(); } }
 

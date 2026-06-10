@@ -253,7 +253,7 @@ public partial class App : Application
                 if (DateTime.UtcNow - last.ToUniversalTime() < window) return;
             }
 
-            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(90));
             var updates = Services.GetRequiredService<IUpdateCheckService>();
             var result = await updates.RunAsync(cts.Token).ConfigureAwait(false);
             File.WriteAllText(stateFile, DateTime.UtcNow.ToString("o"));
@@ -267,7 +267,8 @@ public partial class App : Application
             var briefings = Services.GetRequiredService<IBriefingService>();
             var changelogHistory = Services.GetRequiredService<IChangelogHistoryService>();
             var releaseNotes = Services.GetRequiredService<IReleaseNotesService>();
-            var entries = await releaseNotes.FetchAsync(result.PreviousVersion, result.CurrentVersion, cts.Token).ConfigureAwait(false);
+            using var fetchCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var entries = await releaseNotes.FetchAsync(result.PreviousVersion, result.CurrentVersion, fetchCts.Token).ConfigureAwait(false);
             var body = briefings.Render(result.PreviousVersion, result.CurrentVersion, entries);
 
             changelogHistory.Add(new ChangelogEntry
@@ -289,4 +290,3 @@ public partial class App : Application
         }
     }
 }
-

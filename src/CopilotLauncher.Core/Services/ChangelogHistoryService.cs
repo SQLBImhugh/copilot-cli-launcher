@@ -15,6 +15,9 @@ public interface IChangelogHistoryService
     /// <summary>Append a new changelog entry. Persists immediately. Caps history at 50.</summary>
     void Add(ChangelogEntry entry);
 
+    /// <summary>Replace an existing changelog entry by Id. Persists immediately.</summary>
+    void Replace(ChangelogEntry updated);
+
     /// <summary>Wipe the on-disk history. Used by the Changelog page "Clear changelogs" action.</summary>
     void Clear();
 }
@@ -80,6 +83,18 @@ public sealed class ChangelogHistoryService : IChangelogHistoryService
     public void Add(ChangelogEntry entry)
     {
         _items.Add(entry);
+        _items = _items
+            .OrderByDescending(e => e.Timestamp)
+            .Take(MaxHistoryEntries)
+            .ToList();
+        SaveAtomic();
+    }
+
+    public void Replace(ChangelogEntry updated)
+    {
+        var index = _items.FindIndex(e => string.Equals(e.Id, updated.Id, StringComparison.Ordinal));
+        if (index < 0) return;
+        _items[index] = updated;
         _items = _items
             .OrderByDescending(e => e.Timestamp)
             .Take(MaxHistoryEntries)

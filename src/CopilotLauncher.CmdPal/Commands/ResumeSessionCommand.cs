@@ -52,7 +52,6 @@ public sealed partial class ResumeSessionCommand : InvokableCommand
                     ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
                     : _session.Cwd,
                 ResumeTarget = _session.Id,
-                EnableAISummary = resumeDefaults.EnableAISummary,
                 EnableAllowAll = resumeDefaults.EnableAllowAll,
                 ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
                 Terminal = terminal,

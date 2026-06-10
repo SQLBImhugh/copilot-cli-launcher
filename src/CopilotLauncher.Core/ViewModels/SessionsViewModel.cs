@@ -144,7 +144,6 @@ public sealed partial class SessionsViewModel : ObservableObject
             {
                 WorkingDirectory = string.IsNullOrEmpty(row.Cwd) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : row.Cwd,
                 ResumeTarget = row.SessionId,
-                EnableAISummary = resumeDefaults.EnableAISummary,
                 EnableAllowAll = resumeDefaults.EnableAllowAll,
                 ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
                 Terminal = terminal,
@@ -177,7 +176,6 @@ public sealed partial class SessionsViewModel : ObservableObject
             {
                 WorkingDirectory = dir,
                 ResumeTarget = null,
-                EnableAISummary = resumeDefaults.EnableAISummary,
                 EnableAllowAll = resumeDefaults.EnableAllowAll,
                 ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
                 Terminal = terminal,

@@ -246,11 +246,88 @@ public class ReleaseNotesServiceTests
             fetchCalled = true;
             return Task.FromResult<string?>("""[{ "tag_name": "v1.0.57", "body": "from network" }]""");
         });
-        var entries = await svc.FetchAsync("1.0.50", "1.0.99");
+        var entries = await svc.FetchAsync("1.0.50", "1.0.56");
         Assert.False(fetchCalled);  // cache was fresh, no network hit
         Assert.Single(entries);
         Assert.Equal("1.0.56", entries[0].Version);
         Assert.Equal("from cache", entries[0].Body);
+    }
+
+    [Fact]
+    public async Task FetchAsync_FreshCacheContainingToVersion_DoesNotForceRefresh()
+    {
+        var settings = new FakeSettings();
+        settings.AppDataDirectory = Path.Combine(Path.GetTempPath(), "ccl-rn-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(settings.AppDataDirectory, "state"));
+        var cacheFile = Path.Combine(settings.AppDataDirectory, "state", "releases-cache.json");
+        await File.WriteAllTextAsync(cacheFile, """[{ "tag_name": "v1.0.56", "body": "from cache" }]""");
+
+        var fetchCount = 0;
+        var svc = new ReleaseNotesService(settings, _ =>
+        {
+            fetchCount++;
+            return Task.FromResult<string?>("""[{ "tag_name": "v1.0.57", "body": "from network" }]""");
+        });
+
+        var entries = await svc.FetchAsync("1.0.55", "1.0.56");
+
+        Assert.Equal(0, fetchCount);
+        Assert.Single(entries);
+        Assert.Equal("1.0.56", entries[0].Version);
+        Assert.Equal("from cache", entries[0].Body);
+    }
+
+    [Fact]
+    public async Task FetchAsync_FreshCacheMissingToVersion_ForcesOneRefreshAndUsesFreshData()
+    {
+        var settings = new FakeSettings();
+        settings.AppDataDirectory = Path.Combine(Path.GetTempPath(), "ccl-rn-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(settings.AppDataDirectory, "state"));
+        var cacheFile = Path.Combine(settings.AppDataDirectory, "state", "releases-cache.json");
+        await File.WriteAllTextAsync(cacheFile, """[{ "tag_name": "v1.0.55", "body": "old cache" }]""");
+
+        var fetchCount = 0;
+        var svc = new ReleaseNotesService(settings, _ =>
+        {
+            fetchCount++;
+            return Task.FromResult<string?>("""
+            [
+              { "tag_name": "v1.0.56", "body": "fresh notes" },
+              { "tag_name": "v1.0.55", "body": "old cache" }
+            ]
+            """);
+        });
+
+        var entries = await svc.FetchAsync("1.0.55", "1.0.56");
+
+        Assert.Equal(1, fetchCount);
+        Assert.Single(entries);
+        Assert.Equal("1.0.56", entries[0].Version);
+        Assert.Equal("fresh notes", entries[0].Body);
+    }
+
+    [Fact]
+    public async Task FetchAsync_FreshCacheMissingToVersion_WhenForcedFetchReturnsNull_FallsBackToCache()
+    {
+        var settings = new FakeSettings();
+        settings.AppDataDirectory = Path.Combine(Path.GetTempPath(), "ccl-rn-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(settings.AppDataDirectory, "state"));
+        var cacheFile = Path.Combine(settings.AppDataDirectory, "state", "releases-cache.json");
+        await File.WriteAllTextAsync(cacheFile, """[{ "tag_name": "v1.0.55", "body": "old cache" }]""");
+
+        var fetchCount = 0;
+        var svc = new ReleaseNotesService(settings, _ =>
+        {
+            fetchCount++;
+            return Task.FromResult<string?>(null);
+        });
+
+        var entries = await svc.FetchAsync("1.0.54", "1.0.56");
+
+        Assert.Equal(1, fetchCount);
+        Assert.Single(entries);
+        Assert.Equal("1.0.55", entries[0].Version);
+        Assert.Equal("old cache", entries[0].Body);
     }
 
     [Fact]

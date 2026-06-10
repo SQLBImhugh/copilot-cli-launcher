@@ -71,6 +71,27 @@ public class ChangelogHistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public void Replace_UpdatesExistingEntryAndPersists()
+    {
+        var svc = NewSvc();
+        var entry = MakeEntry("1.0.0", "1.0.1");
+        svc.Add(entry);
+
+        svc.Replace(new ChangelogEntry
+        {
+            Id = entry.Id,
+            Timestamp = entry.Timestamp,
+            FromVersion = entry.FromVersion,
+            ToVersion = entry.ToVersion,
+            Source = entry.Source,
+            Body = "updated body",
+        });
+
+        Assert.Equal("updated body", svc.All[0].Body);
+        Assert.Equal("updated body", NewSvc().All[0].Body);
+    }
+
+    [Fact]
     public void Reload_RecoversFromCorruptJson_WithBackup()
     {
         File.WriteAllText(_filePath, "this is not valid json");

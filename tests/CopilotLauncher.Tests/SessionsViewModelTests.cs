@@ -29,8 +29,7 @@ public class SessionsViewModelTests
         var fakeDiscovery = new FakeDiscovery();
         var fakeSettings = new FakeSettings();
 
-        // Configure settings: AI summary on, allow-all on, custom extra args.
-        fakeSettings.Current.SessionsResume.EnableAISummary = true;
+        // Configure settings: allow-all on, custom extra args.
         fakeSettings.Current.SessionsResume.EnableAllowAll = true;
         fakeSettings.Current.SessionsResume.ExtraCopilotArgs = "--max-autopilot-continues 100";
 
@@ -46,8 +45,7 @@ public class SessionsViewModelTests
         var ok = vm.ResumeSession(row);
         Assert.True(ok);
         Assert.NotNull(captured);
-        Assert.True(captured!.EnableAISummary);
-        Assert.True(captured.EnableAllowAll);
+        Assert.True(captured!.EnableAllowAll);
         Assert.Equal("--max-autopilot-continues 100", captured.ExtraCopilotArgs);
         Assert.Equal(@"C:\some\proj", captured.WorkingDirectory);
         Assert.Equal("abc12345-0000-0000-0000-000000000000", captured.ResumeTarget);

@@ -40,7 +40,6 @@ public sealed partial class LaunchShortcutCommand : InvokableCommand
             {
                 WorkingDirectory = _shortcut.WorkingDirectory,
                 ResumeTarget = _shortcut.ResumeTarget,
-                EnableAISummary = _shortcut.EnableAISummary,
                 EnableAllowAll = _shortcut.EnableAllowAll,
                 ExtraCopilotArgs = _shortcut.ExtraCopilotArgs,
                 Terminal = terminal,

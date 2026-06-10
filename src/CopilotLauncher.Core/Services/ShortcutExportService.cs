@@ -55,7 +55,6 @@ public sealed class ShortcutExportService : IShortcutExportService
         {
             WorkingDirectory = validatedWorkingDirectory,
             ResumeTarget = shortcut.ResumeTarget,
-            EnableAISummary = shortcut.EnableAISummary,
             EnableAllowAll = shortcut.EnableAllowAll,
             ExtraCopilotArgs = shortcut.ExtraCopilotArgs,
             Terminal = terminal,

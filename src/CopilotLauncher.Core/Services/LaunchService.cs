@@ -14,7 +14,6 @@ public sealed class LaunchRequest
     /// <summary>Empty/null means no --resume flag (fresh session).</summary>
     public string? ResumeTarget { get; init; }
 
-    public bool EnableAISummary { get; init; }
     public bool EnableAllowAll { get; init; }
     public string? ExtraCopilotArgs { get; init; }
 
@@ -73,7 +72,6 @@ public sealed class LaunchService : ILaunchService
         var copilotArgs = new List<string>(copilot.PrefixArgs);
         // PrefixArgs already contains pwsh -NoProfile -File <copilot.ps1> when .ps1 fallback is used;
         // append the user-facing copilot flags after.
-        if (request.EnableAISummary) { /* AI summary is a launcher-side concern, not a copilot flag — handled elsewhere */ }
         if (request.EnableAllowAll) copilotArgs.Add("--allow-all");
         if (!string.IsNullOrWhiteSpace(request.ResumeTarget)) copilotArgs.Add($"--resume={request.ResumeTarget}");
         if (!string.IsNullOrWhiteSpace(request.ExtraCopilotArgs))
@@ -103,7 +101,6 @@ public sealed class LaunchService : ILaunchService
         {
             WorkingDirectory = validatedWorkingDirectory,
             ResumeTarget = request.ResumeTarget,
-            EnableAISummary = request.EnableAISummary,
             EnableAllowAll = request.EnableAllowAll,
             ExtraCopilotArgs = request.ExtraCopilotArgs,
             Terminal = request.Terminal,

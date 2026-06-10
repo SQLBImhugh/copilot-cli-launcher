@@ -42,7 +42,6 @@ public sealed partial class CopilotSettingsPage : ContentPage
 
             DataJson = JsonSerializer.Serialize(new
             {
-                enableAISummary = resume.EnableAISummary ? "true" : "false",
                 enableAllowAll = resume.EnableAllowAll ? "true" : "false",
                 extraCopilotArgs = resume.ExtraCopilotArgs ?? string.Empty,
             });
@@ -58,7 +57,6 @@ public sealed partial class CopilotSettingsPage : ContentPage
                 var root = document.RootElement;
                 var resume = _settings.Current.SessionsResume;
 
-                resume.EnableAISummary = ReadBool(root, "enableAISummary");
                 resume.EnableAllowAll = ReadBool(root, "enableAllowAll");
                 resume.ExtraCopilotArgs = NullIfWhiteSpace(ReadString(root, "extraCopilotArgs"));
 
@@ -86,15 +84,6 @@ public sealed partial class CopilotSettingsPage : ContentPage
                         ["text"] = "Resume defaults",
                         ["weight"] = "Bolder",
                         ["wrap"] = true,
-                    },
-                    new Dictionary<string, object?>
-                    {
-                        ["type"] = "Input.Toggle",
-                        ["id"] = "enableAISummary",
-                        ["title"] = "AI summary on resume",
-                        ["valueOn"] = "true",
-                        ["valueOff"] = "false",
-                        ["value"] = resume.EnableAISummary ? "true" : "false",
                     },
                     new Dictionary<string, object?>
                     {

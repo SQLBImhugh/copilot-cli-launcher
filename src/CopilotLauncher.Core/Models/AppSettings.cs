@@ -72,7 +72,6 @@ public sealed class CopilotCliSettings
 /// </summary>
 public sealed class SessionsResumeSettings
 {
-    public bool EnableAISummary { get; set; }
     public bool EnableAllowAll { get; set; }
     public string? ExtraCopilotArgs { get; set; }
 }

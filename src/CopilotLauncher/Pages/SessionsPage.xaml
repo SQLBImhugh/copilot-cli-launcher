@@ -189,28 +189,25 @@
                                        Margin="0,-2,0,0"
                                        Visibility="{x:Bind local:SessionsPage.BoolToVisibility(HasAutoName), Mode=OneTime}"/>
 
-                            <Grid ColumnSpacing="6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                           Text="{x:Bind Cwd, Mode=OneTime}"
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{x:Bind Cwd, Mode=OneTime}"
                                            Opacity="{x:Bind CwdOpacity, Mode=OneTime}"
                                            Style="{StaticResource BodyTextBlockStyle}"
-                                           TextTrimming="CharacterEllipsis"/>
-                                <Button Grid.Column="1"
-                                        Background="{ThemeResource SubtleFillColorTransparentBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"
+                                           MaxWidth="520"/>
+                                <Button Background="{ThemeResource SubtleFillColorTransparentBrush}"
                                         BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
                                         MinWidth="0"
                                         Padding="4,2"
+                                        VerticalAlignment="Center"
                                         ToolTipService.ToolTip="Start a new Copilot session in this folder"
                                         AutomationProperties.AutomationId="SessionNewHereButton"
                                         Tag="{x:Bind Mode=OneTime}"
                                         Click="OnStartNewSessionClick">
                                     <FontIcon Glyph="&#xE8A7;" FontSize="12"/>
                                 </Button>
-                            </Grid>
+                            </StackPanel>
                             <TextBlock Text="{x:Bind RepoBranch, Mode=OneTime}"
                                        Opacity="0.7"
                                        Style="{StaticResource CaptionTextBlockStyle}"/>

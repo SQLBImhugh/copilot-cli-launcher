@@ -308,6 +308,58 @@ public sealed partial class ChangelogPageViewModel : ObservableObject
         }
     }
 
+    public async Task BackfillMissingReleaseNotesAsync(CancellationToken ct = default)
+    {
+        var backfilled = 0;
+        for (var i = 0; i < Changelogs.Count; i++)
+        {
+            var entry = Changelogs[i];
+            if (!NeedsReleaseNotesBackfill(entry))
+                continue;
+
+            try
+            {
+                var entries = await _releaseNotes.FetchAsync(entry.FromVersion, entry.ToVersion, ct).ConfigureAwait(true);
+                if (entries.Count == 0)
+                    continue;
+
+                var renderedNotes = _briefings.Render(entry.FromVersion, entry.ToVersion, entries);
+                var rawMarkerIndex = entry.Body.IndexOf("Raw output:", StringComparison.Ordinal);
+                var newBody = rawMarkerIndex >= 0
+                    ? renderedNotes + Environment.NewLine + entry.Body[rawMarkerIndex..]
+                    : renderedNotes;
+
+                var updated = new ChangelogEntry
+                {
+                    Id = entry.Id,
+                    Timestamp = entry.Timestamp,
+                    FromVersion = entry.FromVersion,
+                    ToVersion = entry.ToVersion,
+                    Source = entry.Source,
+                    Body = newBody,
+                };
+                _changelogHistory.Replace(updated);
+                Changelogs[i] = updated;
+                backfilled++;
+            }
+            catch
+            {
+                // Best-effort: one bad historical entry must not abort the page load.
+            }
+        }
+
+        if (backfilled > 0)
+            ChangelogStatus = backfilled == 1
+                ? "Backfilled release notes for 1 changelog."
+                : $"Backfilled release notes for {backfilled} changelog(s).";
+    }
+
+    private static bool NeedsReleaseNotesBackfill(ChangelogEntry entry)
+        => !string.IsNullOrWhiteSpace(entry.FromVersion)
+           && !string.IsNullOrWhiteSpace(entry.ToVersion)
+           && !string.Equals(entry.FromVersion, entry.ToVersion, StringComparison.Ordinal)
+           && !entry.Body.Contains("## v", StringComparison.Ordinal);
+
     public void ClearChangelogs()
     {
         _changelogHistory.Clear();

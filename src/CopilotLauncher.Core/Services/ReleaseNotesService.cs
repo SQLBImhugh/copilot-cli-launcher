@@ -53,10 +53,28 @@ public sealed class ReleaseNotesService : IReleaseNotesService
     {
         try
         {
-            var json = await GetCachedOrFreshJsonAsync(ct).ConfigureAwait(false);
+            var (json, isFreshCache) = await GetCachedOrFreshJsonAsync(ct).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(json)) return Array.Empty<ReleaseEntry>();
 
             var all = ParseReleases(json);
+            var to = TryParseSemVer(toVersion);
+            if (isFreshCache
+                && to is not null
+                && !ContainsVersion(all, to.Value))
+            {
+                var freshJson = await ForceFreshJsonAsync(ct).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(freshJson))
+                {
+                    try
+                    {
+                        all = ParseReleases(freshJson);
+                    }
+                    catch
+                    {
+                        // Keep the cached parse when the forced refresh is unusable.
+                    }
+                }
+            }
             return FilterRange(all, fromVersion, toVersion);
         }
         catch
@@ -155,7 +173,18 @@ public sealed class ReleaseNotesService : IReleaseNotesService
         return sb.ToString().TrimEnd();
     }
 
-    private async Task<string?> GetCachedOrFreshJsonAsync(CancellationToken ct)
+    private static bool ContainsVersion(IReadOnlyList<ReleaseEntry> all, SemVerKey version)
+    {
+        foreach (var entry in all)
+        {
+            var parsed = TryParseSemVer(entry.Version);
+            if (parsed is not null && parsed.Value.CompareTo(version) == 0)
+                return true;
+        }
+        return false;
+    }
+
+    private async Task<(string? Json, bool IsFreshCache)> GetCachedOrFreshJsonAsync(CancellationToken ct)
     {
         var cacheFile = Path.Combine(_settings.AppDataDirectory, "state", "releases-cache.json");
         string? cachedContent = null;
@@ -166,7 +195,7 @@ public sealed class ReleaseNotesService : IReleaseNotesService
                 var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(cacheFile);
                 cachedContent = await File.ReadAllTextAsync(cacheFile, ct).ConfigureAwait(false);
                 if (age < CacheTtl)
-                    return cachedContent;
+                    return (cachedContent, true);
             }
         }
         catch
@@ -175,27 +204,38 @@ public sealed class ReleaseNotesService : IReleaseNotesService
             cachedContent = null;
         }
 
-        var fresh = await _fetchJson(ct).ConfigureAwait(false);
+        var fresh = await ForceFreshJsonAsync(ct).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(fresh))
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
-                await File.WriteAllTextAsync(cacheFile, fresh, ct).ConfigureAwait(false);
-            }
-            catch
-            {
-                // Caching is best-effort.
-            }
-            return fresh;
-        }
+            return (fresh, false);
         // Fresh fetch failed (network outage, rate limit, transient API error).
         // Fall back to stale cache rather than returning empty — stale release
         // notes are infinitely better than zero notes, because the AI summary
         // will otherwise have nothing to anchor on and will hallucinate from
         // session memory. The cache JSON itself is the only ground truth the
         // launcher has about historical releases.
-        return cachedContent;
+        return (cachedContent, false);
+    }
+
+    private async Task<string?> ForceFreshJsonAsync(CancellationToken ct)
+    {
+        var fresh = await _fetchJson(ct).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(fresh))
+            await WriteCacheAsync(fresh, ct).ConfigureAwait(false);
+        return fresh;
+    }
+
+    private async Task WriteCacheAsync(string json, CancellationToken ct)
+    {
+        try
+        {
+            var cacheFile = Path.Combine(_settings.AppDataDirectory, "state", "releases-cache.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+            await File.WriteAllTextAsync(cacheFile, json, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Caching is best-effort.
+        }
     }
 
     private static async Task<string?> DefaultFetchAsync(CancellationToken ct)
@@ -206,7 +246,7 @@ public sealed class ReleaseNotesService : IReleaseNotesService
             // GitHub requires a User-Agent header on all API requests; anonymous
             // calls otherwise return 403. The launcher version isn't strictly
             // needed but helps with debugging if GitHub ever asks.
-            req.Headers.UserAgent.ParseAdd("CopilotLauncher/0.2.2 (+https://github.com/SQLBImhugh/copilot-cli-launcher)");
+            req.Headers.UserAgent.ParseAdd("CopilotLauncher/0.2.3 (+https://github.com/SQLBImhugh/copilot-cli-launcher)");
             req.Headers.Accept.ParseAdd("application/vnd.github+json");
             using var resp = await SharedClient.SendAsync(req, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) return null;

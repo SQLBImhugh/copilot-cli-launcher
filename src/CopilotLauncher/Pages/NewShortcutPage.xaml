@@ -66,12 +66,6 @@
 
                 <!-- Toggles -->
                 <StackPanel Spacing="6">
-                    <ToggleSwitch Header="AI summary on launch"
-                                  AutomationProperties.AutomationId="NewShortcutAISummaryToggle"
-                                  OffContent="Off — plain changelog briefing only"
-                                  OnContent="On — Copilot writes a contextual summary on version bumps (one premium request)"
-                                  IsOn="{x:Bind ViewModel.EnableAISummary, Mode=TwoWay}"/>
-
                     <ToggleSwitch Header="Pass --allow-all to copilot"
                                   AutomationProperties.AutomationId="NewShortcutAllowAllToggle"
                                   OffContent="Off — confirm each tool call"
@@ -98,27 +92,6 @@
                               AutomationProperties.AutomationId="NewShortcutTerminalCombo"
                               SelectionChanged="OnTerminalChanged"
                               MinWidth="320"/>
-                </StackPanel>
-
-                <!-- AGENTS.md override -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="AGENTS.md override" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                    <TextBlock Text="Optional. Per-shortcut AGENTS.md context file used by the AI summary on version bumps. Empty = inherit the global default from Settings."
-                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6" TextWrapping="Wrap"/>
-                    <Grid ColumnSpacing="6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0"
-                                 AutomationProperties.AutomationId="NewShortcutAgentsContextOverrideTextBox"
-                                 Text="{x:Bind ViewModel.AgentsContextOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="(blank — inherit global)"/>
-                        <Button Grid.Column="1"
-                                Content="Browse…"
-                                AutomationProperties.AutomationId="NewShortcutBrowseAgentsButton"
-                                Click="OnBrowseAgentsClick"/>
-                    </Grid>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

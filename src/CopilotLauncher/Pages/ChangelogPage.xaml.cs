@@ -31,6 +31,7 @@ public sealed partial class ChangelogPage : Page
         ViewModel.Reload();
         ApplySelectedSubView();
         RefreshLatestChangelogCard();
+        _ = DispatchBackfillAsync();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -104,6 +105,13 @@ public sealed partial class ChangelogPage : Page
             PreviousChangelogsExpander.Visibility = Visibility.Collapsed;
             PreviousChangelogsList.ItemsSource = null;
         }
+    }
+
+    private async System.Threading.Tasks.Task DispatchBackfillAsync()
+    {
+        try { await ViewModel.BackfillMissingReleaseNotesAsync(); }
+        catch { }
+        RefreshLatestChangelogCard();
     }
 
     // ---------- Button click handlers ----------

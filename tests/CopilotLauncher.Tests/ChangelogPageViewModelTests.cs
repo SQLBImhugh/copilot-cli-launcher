@@ -271,6 +271,96 @@ public class ChangelogPageViewModelTests
         Assert.Single(vm.Briefings);
     }
 
+    [Fact]
+    public async Task BackfillMissingReleaseNotes_RebuildsBodyWithNotesAndPreservesRawOutput()
+    {
+        var changelogHistory = new FakeChangelogHistory();
+        changelogHistory.Add(new ChangelogEntry
+        {
+            Id = "c1",
+            Timestamp = DateTime.UtcNow,
+            FromVersion = "1.0.60",
+            ToVersion = "1.0.61",
+            Source = "startup-update",
+            Body = "Copilot CLI updated: 1.0.60 -> 1.0.61" + Environment.NewLine
+                + "Raw output:" + Environment.NewLine
+                + "Checking for updates...",
+        });
+        var notes = new FakeReleaseNotes
+        {
+            CannedEntries = new List<ReleaseEntry>
+            {
+                new() { Version = "1.0.61", Date = DateTime.UtcNow, Body = "Real release notes" },
+            },
+        };
+        var vm = NewVm(changelogs: changelogHistory, briefingRender: new BriefingService(), notes: notes);
+        vm.Reload();
+
+        await vm.BackfillMissingReleaseNotesAsync();
+
+        Assert.Equal(1, notes.CallCount);
+        Assert.Single(vm.Changelogs);
+        Assert.Contains("## v1.0.61", vm.Changelogs[0].Body);
+        Assert.Contains("Real release notes", vm.Changelogs[0].Body);
+        Assert.Contains("Raw output:" + Environment.NewLine + "Checking for updates...", vm.Changelogs[0].Body);
+        Assert.Contains("Backfilled release notes for 1 changelog", vm.ChangelogStatus);
+        Assert.Contains("## v1.0.61", changelogHistory.All[0].Body);
+    }
+
+    [Fact]
+    public async Task BackfillMissingReleaseNotes_SkipsEntryThatAlreadyHasReleaseNotes()
+    {
+        var changelogHistory = new FakeChangelogHistory();
+        changelogHistory.Add(new ChangelogEntry
+        {
+            Id = "c1",
+            Timestamp = DateTime.UtcNow,
+            FromVersion = "1.0.60",
+            ToVersion = "1.0.61",
+            Source = "startup-update",
+            Body = "Copilot CLI updated: 1.0.60 -> 1.0.61" + Environment.NewLine + "## v1.0.61",
+        });
+        var notes = new FakeReleaseNotes
+        {
+            CannedEntries = new List<ReleaseEntry>
+            {
+                new() { Version = "1.0.61", Body = "Real release notes" },
+            },
+        };
+        var vm = NewVm(changelogs: changelogHistory, notes: notes);
+        vm.Reload();
+        var originalBody = vm.Changelogs[0].Body;
+
+        await vm.BackfillMissingReleaseNotesAsync();
+
+        Assert.Equal(0, notes.CallCount);
+        Assert.Equal(originalBody, vm.Changelogs[0].Body);
+    }
+
+    [Fact]
+    public async Task BackfillMissingReleaseNotes_EmptyFetchLeavesEntryUntouched()
+    {
+        var changelogHistory = new FakeChangelogHistory();
+        changelogHistory.Add(new ChangelogEntry
+        {
+            Id = "c1",
+            Timestamp = DateTime.UtcNow,
+            FromVersion = "1.0.60",
+            ToVersion = "1.0.61",
+            Source = "startup-update",
+            Body = "Copilot CLI updated: 1.0.60 -> 1.0.61" + Environment.NewLine + "Raw output:",
+        });
+        var notes = new FakeReleaseNotes { CannedEntries = Array.Empty<ReleaseEntry>() };
+        var vm = NewVm(changelogs: changelogHistory, notes: notes);
+        vm.Reload();
+        var originalBody = vm.Changelogs[0].Body;
+
+        await vm.BackfillMissingReleaseNotesAsync();
+
+        Assert.Equal(1, notes.CallCount);
+        Assert.Equal(originalBody, vm.Changelogs[0].Body);
+    }
+
     // ---------- Helpers ----------
 
     private static ChangelogPageViewModel NewVm(
@@ -380,6 +470,13 @@ public class ChangelogPageViewModelTests
         public void Add(ChangelogEntry entry)
         {
             _items.Add(entry);
+            _items.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
+        }
+        public void Replace(ChangelogEntry updated)
+        {
+            var index = _items.FindIndex(e => e.Id == updated.Id);
+            if (index >= 0)
+                _items[index] = updated;
             _items.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
         }
         public void Clear() => _items.Clear();

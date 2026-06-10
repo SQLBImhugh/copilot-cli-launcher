@@ -45,14 +45,13 @@ public class AppSettingsTests
     [Fact]
     public void Roundtrip_OldSettingsJson_DoesNotNull_NewFields()
     {
-        // Simulate an old settings.json that pre-dates SessionsResume + AgentsContextOverride.
+        // Simulate an old settings.json that pre-dates the SessionsResume section.
         var oldJson = "{\"terminal\":{},\"briefings\":{}}";
         var parsed = JsonSerializer.Deserialize<AppSettings>(oldJson,
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         Assert.NotNull(parsed);
         parsed!.Normalize();
         Assert.NotNull(parsed.SessionsResume);
-        Assert.False(parsed.SessionsResume.EnableAISummary);
         Assert.False(parsed.SessionsResume.EnableAllowAll);
         Assert.Null(parsed.SessionsResume.ExtraCopilotArgs);
     }

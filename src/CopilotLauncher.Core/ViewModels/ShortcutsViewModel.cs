@@ -66,7 +66,6 @@ public sealed partial class ShortcutsViewModel : ObservableObject
             {
                 WorkingDirectory = entry.WorkingDirectory,
                 ResumeTarget = entry.ResumeTarget,
-                EnableAISummary = entry.EnableAISummary,
                 EnableAllowAll = entry.EnableAllowAll,
                 ExtraCopilotArgs = entry.ExtraCopilotArgs,
                 Terminal = terminal,

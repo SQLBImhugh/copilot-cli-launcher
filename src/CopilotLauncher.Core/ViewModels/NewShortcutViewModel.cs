@@ -38,18 +38,12 @@ public sealed partial class NewShortcutViewModel : ObservableObject
     private string _resumeTarget = string.Empty;
 
     [ObservableProperty]
-    private bool _enableAISummary;
-
-    [ObservableProperty]
     private bool _enableAllowAll;
 
     private string _extraArgs;
     private string _terminalOverride = string.Empty;
-    private string _agentsContextOverride = string.Empty;
     private string _statusMessage = string.Empty;
     private string _commandPreview = string.Empty;
-
-    partial void OnEnableAISummaryChanged(bool value) => RecalcPreview();
 
     partial void OnEnableAllowAllChanged(bool value) => RecalcPreview();
 
@@ -82,17 +76,6 @@ public sealed partial class NewShortcutViewModel : ObservableObject
     {
         get => _terminalOverride;
         set { if (_terminalOverride != value) { _terminalOverride = value ?? string.Empty; OnPropertyChanged(); RecalcPreview(); } }
-    }
-
-    /// <summary>
-    /// Optional override for the AGENTS.md file used to context the AI summary
-    /// when this shortcut launches. Empty = inherit the global default from
-    /// Settings.Briefings.AgentsContextFilePath.
-    /// </summary>
-    public string AgentsContextOverride
-    {
-        get => _agentsContextOverride;
-        set { if (_agentsContextOverride != value) { _agentsContextOverride = value ?? string.Empty; OnPropertyChanged(); } }
     }
 
     public string StatusMessage
@@ -168,11 +151,9 @@ public sealed partial class NewShortcutViewModel : ObservableObject
             Label = _label.Trim(),
             WorkingDirectory = validatedWorkingDirectory,
             ResumeTarget = string.IsNullOrWhiteSpace(_resumeTarget) ? null : _resumeTarget.Trim(),
-            EnableAISummary = this.EnableAISummary,
             EnableAllowAll = this.EnableAllowAll,
             ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs.Trim(),
             TerminalOverride = string.IsNullOrEmpty(_terminalOverride) || _terminalOverride == "auto" ? null : _terminalOverride,
-            AgentsContextOverride = string.IsNullOrWhiteSpace(_agentsContextOverride) ? null : _agentsContextOverride.Trim(),
         };
         _store.Add(entry);
         StatusMessage = $"Saved '{entry.Label}'.";
@@ -202,11 +183,9 @@ public sealed partial class NewShortcutViewModel : ObservableObject
     {
         Label = string.Empty;
         ResumeTarget = string.Empty;
-        EnableAISummary = false;
         EnableAllowAll = _settings.Current.CopilotCli.DefaultAllowAll;
         ExtraArgs = _settings.Current.CopilotCli.DefaultExtraArgs ?? string.Empty;
         TerminalOverride = string.Empty;
-        AgentsContextOverride = string.Empty;
         // Keep WorkingDirectory as-is — user might be queuing several launches in the same dir.
         StatusMessage = "Form reset.";
     }
@@ -224,7 +203,6 @@ public sealed partial class NewShortcutViewModel : ObservableObject
     {
         WorkingDirectory = _workingDirectory,
         ResumeTarget = string.IsNullOrWhiteSpace(_resumeTarget) ? null : _resumeTarget,
-        EnableAISummary = this.EnableAISummary,
         EnableAllowAll = this.EnableAllowAll,
         ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs,
         Terminal = terminal,

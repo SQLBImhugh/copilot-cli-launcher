@@ -33,9 +33,6 @@
                     <TextBlock Text="Sessions Resume defaults" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource SectionTitleFontSize}"/>
                     <TextBlock Text="Used when you click ▶ Resume on a session card. Saved Shortcuts use their own per-shortcut config instead."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
-                    <ToggleSwitch Header="AI summary on resume"
-                                  AutomationProperties.AutomationId="SettingsResumeAISummaryToggle"
-                                  IsOn="{x:Bind ViewModel.ResumeAISummary, Mode=TwoWay}"/>
                     <ToggleSwitch Header="Pass --allow-all"
                                   AutomationProperties.AutomationId="SettingsResumeAllowAllToggle"
                                   IsOn="{x:Bind ViewModel.ResumeAllowAll, Mode=TwoWay}"/>
@@ -56,7 +53,7 @@
                     BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
                 <StackPanel Spacing="10">
                     <TextBlock Text="AI Summary" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource SectionTitleFontSize}"/>
-                    <TextBlock Text="Default agents.md context file used to tailor Copilot's AI briefing when you click Generate AI Briefing on the Changelog tab. Each Shortcut can override this with its own context file."
+                    <TextBlock Text="Default agents.md context file used to tailor Copilot's AI briefing when you click Generate AI Briefing on the Changelog tab."
                                Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
                     <Grid ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
