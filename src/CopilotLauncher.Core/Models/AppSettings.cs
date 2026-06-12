@@ -115,6 +115,19 @@ public sealed class RepairSettings
 {
     public bool AutoRepairDanglingToolUse { get; set; } = true;
     public List<int> TrackedGitHubIssues { get; set; } = new();
+
+    /// <summary>Days to keep <c>events.jsonl.bak-*</c> backups created by the
+    /// repair pass before pruning them. 0 (or negative) = keep forever.
+    /// Default 7 — long enough to recover from a bad repair, short enough that
+    /// multi-hundred-MB backups don't pile up (a single repaired session can
+    /// leave a 700 MB+ backup).</summary>
+    public int BackupRetentionDays { get; set; } = 7;
+
+    /// <summary>When true (default), the repair pass records each session's
+    /// events.jsonl size+mtime and skips re-scanning sessions that are
+    /// unchanged since the last launch — avoids re-reading gigabytes of
+    /// session logs on every startup.</summary>
+    public bool SkipUnchangedSessions { get; set; } = true;
 }
 
 public sealed class SessionListingSettings

@@ -7,16 +7,23 @@ namespace CopilotLauncher.Tests;
 public class SessionRepairServiceTests : IDisposable
 {
     private readonly string _tmpRoot;
+    private readonly string _stateRoot;
 
     public SessionRepairServiceTests()
     {
         _tmpRoot = Path.Combine(Path.GetTempPath(), "copilot-launcher-repair-tests-" + Guid.NewGuid());
         Directory.CreateDirectory(_tmpRoot);
+        // State dir lives OUTSIDE the session root so it isn't enumerated as a
+        // session by RepairAll.
+        _stateRoot = Path.Combine(Path.GetTempPath(), "copilot-launcher-repair-state-" + Guid.NewGuid());
+        Directory.CreateDirectory(_stateRoot);
     }
 
     public void Dispose()
     {
         try { Directory.Delete(_tmpRoot, recursive: true); }
+        catch { /* best effort */ }
+        try { Directory.Delete(_stateRoot, recursive: true); }
         catch { /* best effort */ }
     }
 
@@ -236,6 +243,103 @@ public class SessionRepairServiceTests : IDisposable
         // assert it's a non-empty plausible model name.
         var m = SessionRepairService.DetectModel(events);
         Assert.False(string.IsNullOrEmpty(m));
+    }
+
+    // ─── Skip-unchanged cache ───────────────────────────────────────────────
+
+    [Fact]
+    public void RepairAll_SkipsUnchangedSessions_OnSecondRun()
+    {
+        // A clean session (tool completed) — nothing to patch.
+        MakeSession("clean",
+            AssistantWithToolRequest("call-abc", "intx-1") + "\n" +
+            ExecStart("call-abc", "ts", "evt") + "\n" +
+            ExecComplete("call-abc"));
+
+        var svc = new SessionRepairService(_tmpRoot, _stateRoot, backupRetentionDays: 0, skipUnchanged: true);
+
+        var first = Assert.Single(svc.RepairAll());
+        Assert.False(first.Skipped);                 // scanned this run
+        Assert.Equal(0, first.DanglingCount);
+
+        var second = Assert.Single(svc.RepairAll());
+        Assert.True(second.Skipped);                 // unchanged → not re-read
+        Assert.Equal("unchanged since last scan", second.SkipReason);
+    }
+
+    [Fact]
+    public void RepairAll_ReScansSession_AfterEventsFileChanges()
+    {
+        var dir = MakeSession("changed",
+            AssistantWithToolRequest("call-abc", "intx-1") + "\n" +
+            ExecStart("call-abc", "ts", "evt") + "\n" +
+            ExecComplete("call-abc"));
+
+        var svc = new SessionRepairService(_tmpRoot, _stateRoot, backupRetentionDays: 0, skipUnchanged: true);
+        svc.RepairAll();   // populate the cache
+
+        // Mutate the log so its size (and mtime) change.
+        File.AppendAllText(Path.Combine(dir, "events.jsonl"), "\n" + BareEvent("session.heartbeat"));
+
+        var rescan = Assert.Single(svc.RepairAll());
+        Assert.False(rescan.Skipped);                            // re-scanned because it changed
+        Assert.NotEqual("unchanged since last scan", rescan.SkipReason);
+    }
+
+    [Fact]
+    public void RepairAll_DoesNotSkip_WhenSkipUnchangedDisabled()
+    {
+        MakeSession("nocache",
+            AssistantWithToolRequest("call-abc", "intx-1") + "\n" +
+            ExecStart("call-abc", "ts", "evt") + "\n" +
+            ExecComplete("call-abc"));
+
+        var svc = new SessionRepairService(_tmpRoot, _stateRoot, backupRetentionDays: 0, skipUnchanged: false);
+        svc.RepairAll();
+        var second = Assert.Single(svc.RepairAll());
+        Assert.False(second.Skipped);                // no caching → always scans
+    }
+
+    // ─── Backup pruning ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void RepairAll_PrunesBackupsOlderThanRetention()
+    {
+        // Clean session (requested + completed, no start) so RepairAll itself
+        // creates no new backup — we control the backups under test.
+        var dir = MakeSession("prune",
+            AssistantWithToolRequest("call-abc", "intx-1") + "\n" +
+            ExecComplete("call-abc"));
+
+        var oldBak = Path.Combine(dir, "events.jsonl.bak-20200101-000000");
+        var newBak = Path.Combine(dir, "events.jsonl.bak-20990101-000000");
+        File.WriteAllText(oldBak, "old");
+        File.WriteAllText(newBak, "new");
+        File.SetLastWriteTimeUtc(oldBak, DateTime.UtcNow.AddDays(-30));
+        File.SetLastWriteTimeUtc(newBak, DateTime.UtcNow.AddDays(-1));
+
+        var svc = new SessionRepairService(_tmpRoot, stateDir: null, backupRetentionDays: 7, skipUnchanged: false);
+        svc.RepairAll();
+
+        Assert.False(File.Exists(oldBak));   // older than 7 days → pruned
+        Assert.True(File.Exists(newBak));    // within the window → kept
+    }
+
+    [Fact]
+    public void RepairAll_KeepsAllBackups_WhenRetentionZero()
+    {
+        var dir = MakeSession("keep",
+            AssistantWithToolRequest("call-abc", "intx-1") + "\n" +
+            ExecComplete("call-abc"));
+
+        var oldBak = Path.Combine(dir, "events.jsonl.bak-20200101-000000");
+        File.WriteAllText(oldBak, "old");
+        File.SetLastWriteTimeUtc(oldBak, DateTime.UtcNow.AddDays(-365));
+
+        var svc = new SessionRepairService(_tmpRoot, stateDir: null, backupRetentionDays: 0, skipUnchanged: false);
+        svc.RepairAll();
+
+        Assert.True(File.Exists(oldBak));    // retention 0 = keep forever
     }
 
     // ─── Fixture helpers ────────────────────────────────────────────────────

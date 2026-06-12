@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -61,17 +62,45 @@ public sealed class SessionRepairService : ISessionRepairService
 
     private readonly string _sessionRoot;
 
-    public SessionRepairService()
+    /// <summary>Path to the skip-unchanged scan cache, or null to disable
+    /// caching (the bare-root test ctor sets this to null).</summary>
+    private readonly string? _scanCachePath;
+
+    /// <summary>Days to keep events.jsonl.bak-* backups. 0 = keep forever.</summary>
+    private readonly int _backupRetentionDays;
+
+    /// <summary>Whether to skip re-scanning sessions whose events.jsonl is
+    /// unchanged since the last run.</summary>
+    private readonly bool _skipUnchanged;
+
+    public SessionRepairService(ISettingsService settings)
     {
         _sessionRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".copilot", "session-state");
+        var repair = settings.Current.Repair;
+        _skipUnchanged = repair.SkipUnchangedSessions;
+        _scanCachePath = _skipUnchanged
+            ? Path.Combine(settings.AppDataDirectory, "state", "repair-scan-cache.json")
+            : null;
+        _backupRetentionDays = repair.BackupRetentionDays;
     }
 
-    /// <summary>Test-only ctor.</summary>
+    /// <summary>Test-only ctor — bare session root, no scan cache, no pruning.</summary>
     internal SessionRepairService(string sessionRoot)
+        : this(sessionRoot, stateDir: null, backupRetentionDays: 0, skipUnchanged: false)
+    {
+    }
+
+    /// <summary>Test-only ctor with the full set of knobs.</summary>
+    internal SessionRepairService(string sessionRoot, string? stateDir, int backupRetentionDays, bool skipUnchanged)
     {
         _sessionRoot = sessionRoot;
+        _skipUnchanged = skipUnchanged;
+        _scanCachePath = (skipUnchanged && stateDir is not null)
+            ? Path.Combine(stateDir, "repair-scan-cache.json")
+            : null;
+        _backupRetentionDays = backupRetentionDays;
     }
 
     public IReadOnlyList<RepairResult> RepairAll()
@@ -79,11 +108,143 @@ public sealed class SessionRepairService : ISessionRepairService
         var results = new List<RepairResult>();
         if (!Directory.Exists(_sessionRoot)) return results;
 
+        // Skip-unchanged cache: events.jsonl fingerprint (mtime+size) from the
+        // last scan. A session whose log is byte-for-byte unchanged was already
+        // found clean (or already repaired) and need not be re-streamed — this
+        // avoids re-reading gigabytes of session logs on every launch.
+        var priorCache = _skipUnchanged ? LoadScanCache() : EmptyCache();
+        var nextCache = EmptyCache();
+
+        DateTime? backupCutoff = _backupRetentionDays > 0
+            ? DateTime.UtcNow.AddDays(-_backupRetentionDays)
+            : null;
+
         foreach (var dir in Directory.EnumerateDirectories(_sessionRoot))
         {
-            results.Add(RepairOne(dir));
+            // Prune stale backups regardless of whether we re-scan the session.
+            if (backupCutoff is DateTime cutoff)
+                PruneBackupsInDir(dir, cutoff);
+
+            var eventsPath = Path.Combine(dir, "events.jsonl");
+            var fingerprint = TryFingerprint(eventsPath);
+
+            if (_skipUnchanged
+                && fingerprint is not null
+                && priorCache.TryGetValue(eventsPath, out var prior)
+                && string.Equals(prior, fingerprint, StringComparison.Ordinal))
+            {
+                // Unchanged since last scan → carry the fingerprint forward and
+                // skip the read entirely.
+                nextCache[eventsPath] = fingerprint;
+                results.Add(new RepairResult
+                {
+                    SessionId = new DirectoryInfo(dir).Name,
+                    EventsFilePath = eventsPath,
+                    DanglingCount = 0,
+                    Skipped = true,
+                    SkipReason = "unchanged since last scan",
+                    Patched = false,
+                });
+                continue;
+            }
+
+            var result = RepairOne(dir);
+            results.Add(result);
+
+            // Remember the post-scan fingerprint for sessions we actually
+            // processed (clean or patched). Lock / not-found / failure skips are
+            // NOT cached, so they're retried on the next launch.
+            if (_skipUnchanged && !result.Skipped)
+            {
+                var after = TryFingerprint(eventsPath);
+                if (after is not null) nextCache[eventsPath] = after;
+            }
         }
+
+        if (_skipUnchanged) SaveScanCache(nextCache);
         return results;
+    }
+
+    private static Dictionary<string, string> EmptyCache() =>
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>events.jsonl identity = "&lt;lastWriteUtcTicks&gt;:&lt;length&gt;".
+    /// Null when the file is missing or unreadable.</summary>
+    private static string? TryFingerprint(string eventsPath)
+    {
+        try
+        {
+            var fi = new FileInfo(eventsPath);
+            if (!fi.Exists) return null;
+            return fi.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture)
+                + ":" + fi.Length.ToString(CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private Dictionary<string, string> LoadScanCache()
+    {
+        if (_scanCachePath is null) return EmptyCache();
+        try
+        {
+            if (!File.Exists(_scanCachePath)) return EmptyCache();
+            var json = File.ReadAllText(_scanCachePath);
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            return parsed is null
+                ? EmptyCache()
+                : new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // Corrupt/unreadable cache → treat as empty (everything re-scans).
+            return EmptyCache();
+        }
+    }
+
+    private void SaveScanCache(Dictionary<string, string> cache)
+    {
+        if (_scanCachePath is null) return;
+        try
+        {
+            var dir = Path.GetDirectoryName(_scanCachePath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(cache);
+            var tmp = _scanCachePath + ".tmp";
+            File.WriteAllText(tmp, json);
+            if (File.Exists(_scanCachePath))
+                File.Replace(tmp, _scanCachePath, destinationBackupFileName: null);
+            else
+                File.Move(tmp, _scanCachePath);
+        }
+        catch
+        {
+            // Best-effort — a missed cache write just means a re-scan next time.
+        }
+    }
+
+    /// <summary>Delete <c>events.jsonl.bak-*</c> backups older than the cutoff.
+    /// Best-effort; backups within the retention window stay as a recovery net.</summary>
+    private static void PruneBackupsInDir(string sessionDir, DateTime cutoffUtc)
+    {
+        IEnumerable<string> backups;
+        try { backups = Directory.EnumerateFiles(sessionDir, "events.jsonl.bak-*"); }
+        catch { return; }
+
+        foreach (var bak in backups)
+        {
+            try
+            {
+                if (File.GetLastWriteTimeUtc(bak) < cutoffUtc)
+                    File.Delete(bak);
+            }
+            catch
+            {
+                // Best-effort — skip files we can't stat or delete.
+            }
+        }
     }
 
     /// <summary>

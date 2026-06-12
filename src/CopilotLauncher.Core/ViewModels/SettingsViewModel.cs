@@ -86,6 +86,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     // Repair
     public bool AutoRepairDanglingToolUse { get => Settings.Repair.AutoRepairDanglingToolUse; set { Settings.Repair.AutoRepairDanglingToolUse = value; OnPropertyChanged(); ScheduleSave(); } }
+    public bool SkipUnchangedSessions { get => Settings.Repair.SkipUnchangedSessions; set { Settings.Repair.SkipUnchangedSessions = value; OnPropertyChanged(); ScheduleSave(); } }
+    public int BackupRetentionDays { get => Settings.Repair.BackupRetentionDays; set { Settings.Repair.BackupRetentionDays = value; OnPropertyChanged(); ScheduleSave(); } }
 
     // Launcher behavior
     public string AfterLaunch { get => Settings.LauncherBehavior.AfterLaunch; set { Settings.LauncherBehavior.AfterLaunch = value; OnPropertyChanged(); ScheduleSave(); } }

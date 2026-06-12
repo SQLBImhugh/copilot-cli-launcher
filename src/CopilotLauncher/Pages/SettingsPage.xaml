@@ -158,6 +158,21 @@
                                   OffContent="Off — sessions with interrupted tool calls may fail on --resume"
                                   OnContent="On — silently fix dangling events at startup (default, recommended)"
                                   IsOn="{x:Bind ViewModel.AutoRepairDanglingToolUse, Mode=TwoWay}"/>
+                    <ToggleSwitch Header="Skip unchanged sessions on startup"
+                                  AutomationProperties.AutomationId="SettingsSkipUnchangedToggle"
+                                  OffContent="Off — re-scan every session's event log on each launch"
+                                  OnContent="On — only re-scan sessions whose log changed (faster startup, default)"
+                                  IsOn="{x:Bind ViewModel.SkipUnchangedSessions, Mode=TwoWay}"/>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Keep repair backups for (days)" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="events.jsonl.bak-* files created when repairing a session are deleted after this many days. 0 = keep forever. A single large session can leave a 700 MB+ backup."
+                                   Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
+                        <muxc:NumberBox AutomationProperties.AutomationId="SettingsBackupRetentionDaysNumberBox"
+                                        Minimum="0"
+                                        Maximum="3650"
+                                        SpinButtonPlacementMode="Compact"
+                                        Value="{x:Bind ViewModel.BackupRetentionDays, Mode=TwoWay}"/>
+                    </StackPanel>
                 </StackPanel>
             </muxc:Expander>
 
