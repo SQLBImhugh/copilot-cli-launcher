@@ -119,24 +119,31 @@ public sealed class SessionRepairService : ISessionRepairService
             };
         }
 
-        // Load + parse all events into memory. Tolerate bad lines (skip them
-        // but keep going) so a partial corruption doesn't take down the whole
-        // file. The legacy .py does the same.
-        var events = new List<JsonObject>();
-        foreach (var rawLine in File.ReadLines(eventsPath))
+        // PASS 1 — stream-scan for dangling tool calls WITHOUT materializing
+        // the file. events.jsonl can be hundreds of MB (multi-hundred-MB
+        // sessions are real). The previous approach parsed every line into a
+        // List<JsonObject> and then copied that list, ballooning the working
+        // set into the gigabytes at startup (and the OS never reclaimed it).
+        // We now retain only small per-tool-call metadata (ids, the start line
+        // number, and the start's timestamp/id), so memory stays proportional
+        // to the number of tool calls — not the file size.
+        DanglingScan scan;
+        try
         {
-            if (string.IsNullOrWhiteSpace(rawLine)) continue;
-            try
-            {
-                if (JsonNode.Parse(rawLine) is JsonObject obj)
-                    events.Add(obj);
-            }
-            catch (JsonException)
-            {
-                // Tolerate malformed lines.
-            }
+            scan = ScanForDangling(eventsPath);
         }
-        if (events.Count == 0)
+        catch (IOException)
+        {
+            return new RepairResult
+            {
+                SessionId = sessionId,
+                EventsFilePath = eventsPath,
+                Skipped = true,
+                SkipReason = "read failed",
+            };
+        }
+
+        if (scan.Dangling.Count == 0)
         {
             return new RepairResult
             {
@@ -147,27 +154,18 @@ public sealed class SessionRepairService : ISessionRepairService
             };
         }
 
-        var dangling = FindDangling(events);
-        if (dangling.Count == 0)
+        var model = scan.LastModel ?? DefaultModel;
+
+        // Map raw-line-number -> synthetic completion line to write AFTER it.
+        // Keyed by the raw line ordinal (every line counts, including blank/
+        // malformed ones) so PASS 2 can stream and insert without re-parsing.
+        // Each start has a distinct line number, so there are no collisions.
+        var insertAfter = new Dictionary<long, string>();
+        foreach (var d in scan.Dangling)
         {
-            return new RepairResult
-            {
-                SessionId = sessionId,
-                EventsFilePath = eventsPath,
-                DanglingCount = 0,
-                Patched = false,
-            };
+            var synthetic = SynthesizeComplete(d.ToolCallId, d.InteractionId, model, d.StartTimestamp, d.StartId);
+            insertAfter[d.StartLineNo] = synthetic.ToJsonString();
         }
-
-        var model = DetectModel(events);
-
-        // Build the synthetic events keyed by the start_idx where they should
-        // be inserted. We walk inserts in reverse-index order so each insert
-        // doesn't shift the indices of subsequent ones.
-        var inserts = dangling
-            .Select(d => (StartIdx: d.StartIdx, Synthetic: SynthesizeComplete(d.ToolCallId, d.InteractionId, model, events[d.StartIdx])))
-            .OrderByDescending(t => t.StartIdx)
-            .ToList();
 
         // Backup before mutating.
         var backup = eventsPath + ".bak-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
@@ -182,29 +180,30 @@ public sealed class SessionRepairService : ISessionRepairService
             {
                 SessionId = sessionId,
                 EventsFilePath = eventsPath,
-                DanglingCount = dangling.Count,
+                DanglingCount = scan.Dangling.Count,
                 Skipped = true,
                 SkipReason = "backup creation failed",
             };
         }
 
-        var newEvents = new List<JsonObject>(events);
-        foreach (var ins in inserts)
-        {
-            newEvents.Insert(ins.StartIdx + 1, ins.Synthetic);
-        }
-
-        // Atomic write: temp + replace. Restore from backup on write failure.
+        // PASS 2 — stream-rewrite to a temp file, inserting each synthetic
+        // completion immediately after its tool.execution_start line. Original
+        // lines are copied verbatim (lossless — unlike the old path this never
+        // drops blank/malformed lines); we only ADD synthetic lines. Memory
+        // stays flat (one line at a time). Restore from backup on failure.
         var tmp = eventsPath + ".tmp";
         try
         {
             using (var writer = new StreamWriter(tmp, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
             {
                 writer.NewLine = "\n";
-                foreach (var e in newEvents)
+                long lineNo = 0;
+                foreach (var rawLine in File.ReadLines(eventsPath))
                 {
-                    // Compact JSON to match the legacy script's output.
-                    writer.WriteLine(e.ToJsonString());
+                    writer.WriteLine(rawLine);
+                    if (insertAfter.TryGetValue(lineNo, out var synthetic))
+                        writer.WriteLine(synthetic);
+                    lineNo++;
                 }
             }
 
@@ -224,7 +223,7 @@ public sealed class SessionRepairService : ISessionRepairService
             {
                 SessionId = sessionId,
                 EventsFilePath = eventsPath,
-                DanglingCount = dangling.Count,
+                DanglingCount = scan.Dangling.Count,
                 Skipped = true,
                 SkipReason = "write failed; restored from backup",
             };
@@ -234,28 +233,59 @@ public sealed class SessionRepairService : ISessionRepairService
         {
             SessionId = sessionId,
             EventsFilePath = eventsPath,
-            DanglingCount = dangling.Count,
+            DanglingCount = scan.Dangling.Count,
             Patched = true,
         };
     }
 
     /// <summary>
-    /// One dangling tool call: the index of its start event, the toolCallId,
-    /// and the interactionId from the originating assistant.message.
+    /// One dangling tool call discovered while streaming: the raw line number
+    /// of its <c>tool.execution_start</c> (counting every line so PASS 2 can
+    /// insert without re-parsing), the toolCallId, the interactionId from the
+    /// originating assistant.message, and the start event's timestamp + id
+    /// (echoed into the synthetic completion).
     /// </summary>
-    internal readonly record struct DanglingToolCall(int StartIdx, string ToolCallId, string InteractionId);
+    private readonly record struct DanglingInfo(
+        long StartLineNo, string ToolCallId, string InteractionId, string StartTimestamp, string? StartId);
 
-    internal static List<DanglingToolCall> FindDangling(IReadOnlyList<JsonObject> events)
+    /// <summary>Result of the streaming scan: the dangling calls plus the most
+    /// recent model seen (used for the synthetic completion's <c>model</c>).</summary>
+    private sealed class DanglingScan
+    {
+        public List<DanglingInfo> Dangling { get; } = new();
+        public string? LastModel { get; set; }
+    }
+
+    /// <summary>
+    /// Stream <c>events.jsonl</c> exactly once, retaining only small per-tool-
+    /// call metadata, to find tool calls that were requested + started but
+    /// never completed. Never holds more than one parsed line at a time, so a
+    /// multi-hundred-MB session no longer costs gigabytes of RAM. The raw line
+    /// numbers recorded here line up with PASS 2's <see cref="File.ReadLines(string)"/>
+    /// enumeration (same primitive, same file) so synthetic completions are
+    /// inserted in the right place even past blank/malformed lines.
+    /// </summary>
+    private static DanglingScan ScanForDangling(string eventsPath)
     {
         // toolCallId -> interactionId (from assistant.message.toolRequests[])
         var requested = new Dictionary<string, string>(StringComparer.Ordinal);
-        // toolCallId -> index in events where its tool.execution_start lives
-        var starts = new Dictionary<string, int>(StringComparer.Ordinal);
+        // toolCallId -> (raw line number of its start, start timestamp, start id)
+        var starts = new Dictionary<string, (long LineNo, string Ts, string? Id)>(StringComparer.Ordinal);
         var completed = new HashSet<string>(StringComparer.Ordinal);
+        string? lastModel = null;
 
-        for (int i = 0; i < events.Count; i++)
+        long lineNo = 0;
+        foreach (var rawLine in File.ReadLines(eventsPath))
         {
-            var ev = events[i];
+            var idx = lineNo;
+            lineNo++;
+            if (string.IsNullOrWhiteSpace(rawLine)) continue;
+
+            JsonObject? ev;
+            try { ev = JsonNode.Parse(rawLine) as JsonObject; }
+            catch (JsonException) { continue; }
+            if (ev is null) continue;
+
             var type = ev["type"]?.GetValue<string>();
             if (string.IsNullOrEmpty(type)) continue;
             if (ev["data"] is not JsonObject data) continue;
@@ -282,26 +312,34 @@ public sealed class SessionRepairService : ISessionRepairService
                 case "tool.execution_start":
                     {
                         if (data["toolCallId"]?.GetValue<string>() is string tid && !string.IsNullOrEmpty(tid))
-                            starts[tid] = i;
+                            starts[tid] = (idx, ev["timestamp"]?.GetValue<string>() ?? "", ev["id"]?.GetValue<string>());
                         break;
                     }
                 case "tool.execution_complete":
                     {
                         if (data["toolCallId"]?.GetValue<string>() is string tid && !string.IsNullOrEmpty(tid))
                             completed.Add(tid);
+                        if (data["model"]?.GetValue<string>() is string m && !string.IsNullOrEmpty(m))
+                            lastModel = m;
+                        break;
+                    }
+                case "session.model_change":
+                    {
+                        if (data["newModel"]?.GetValue<string>() is string m && !string.IsNullOrEmpty(m))
+                            lastModel = m;
                         break;
                     }
             }
         }
 
-        var result = new List<DanglingToolCall>();
+        var scan = new DanglingScan { LastModel = lastModel };
         foreach (var (tid, iid) in requested)
         {
             if (completed.Contains(tid)) continue;
-            if (!starts.TryGetValue(tid, out var startIdx)) continue;
-            result.Add(new DanglingToolCall(startIdx, tid, iid));
+            if (!starts.TryGetValue(tid, out var s)) continue;
+            scan.Dangling.Add(new DanglingInfo(s.LineNo, tid, iid, s.Ts, s.Id));
         }
-        return result;
+        return scan;
     }
 
     /// <summary>Find the most recent model used in this session, falling back to a default.</summary>
@@ -328,11 +366,8 @@ public sealed class SessionRepairService : ISessionRepairService
     }
 
     /// <summary>Build the synthetic completion event matching the legacy .py output.</summary>
-    internal static JsonObject SynthesizeComplete(string toolCallId, string interactionId, string model, JsonObject startEvent)
+    internal static JsonObject SynthesizeComplete(string toolCallId, string interactionId, string model, string startTimestamp, string? startId)
     {
-        var startTimestamp = startEvent["timestamp"]?.GetValue<string>() ?? "";
-        var startId = startEvent["id"]?.GetValue<string>();
-
         return new JsonObject
         {
             ["type"] = "tool.execution_complete",

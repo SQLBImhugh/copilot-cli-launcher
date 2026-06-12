@@ -182,6 +182,38 @@ public class SessionRepairServiceTests : IDisposable
     }
 
     [Fact]
+    public void RepairOne_PreservesMalformedAndBlankLines_WhenPatching()
+    {
+        // A malformed line and a blank line sit between the real events. The
+        // streaming repair copies every original line verbatim (it only ADDS
+        // the synthetic completion) and still inserts at the correct position
+        // despite the unparseable/blank lines shifting raw line numbers — this
+        // guards the PASS-1/PASS-2 raw-line-number parity.
+        var dir = MakeSession("preserve",
+            AssistantWithToolRequest("call-abc", "intx-1") + "\n" +
+            "this is not json\n" +
+            "\n" +
+            ExecStart("call-abc", "2026-05-15T10:00:00.000Z", "evt-start-1"));
+
+        var result = SessionRepairService.RepairOne(dir);
+        Assert.True(result.Patched);
+        Assert.Equal(1, result.DanglingCount);
+
+        var lines = File.ReadAllLines(Path.Combine(dir, "events.jsonl"));
+        // assistant, garbage, blank, start, synthetic = 5
+        Assert.Equal(5, lines.Length);
+        Assert.Equal("assistant.message", JsonNode.Parse(lines[0])!["type"]!.GetValue<string>());
+        Assert.Equal("this is not json", lines[1]);   // malformed line preserved verbatim
+        Assert.Equal("", lines[2]);                    // blank line preserved
+        Assert.Equal("tool.execution_start", JsonNode.Parse(lines[3])!["type"]!.GetValue<string>());
+        var synthetic = JsonNode.Parse(lines[4])!.AsObject();  // inserted AFTER the start
+        Assert.Equal("tool.execution_complete", synthetic["type"]!.GetValue<string>());
+        Assert.Equal("call-abc", synthetic["data"]!["toolCallId"]!.GetValue<string>());
+        Assert.Equal("2026-05-15T10:00:00.000Z", synthetic["timestamp"]!.GetValue<string>());
+        Assert.Equal("evt-start-1", synthetic["parentId"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void DetectModel_PrefersMostRecentToolCompletion()
     {
         var events = new List<JsonObject>

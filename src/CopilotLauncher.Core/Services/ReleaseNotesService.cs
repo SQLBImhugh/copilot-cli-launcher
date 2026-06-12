@@ -246,7 +246,7 @@ public sealed class ReleaseNotesService : IReleaseNotesService
             // GitHub requires a User-Agent header on all API requests; anonymous
             // calls otherwise return 403. The launcher version isn't strictly
             // needed but helps with debugging if GitHub ever asks.
-            req.Headers.UserAgent.ParseAdd("CopilotLauncher/0.2.3 (+https://github.com/SQLBImhugh/copilot-cli-launcher)");
+            req.Headers.UserAgent.ParseAdd("CopilotLauncher/0.2.4 (+https://github.com/SQLBImhugh/copilot-cli-launcher)");
             req.Headers.Accept.ParseAdd("application/vnd.github+json");
             using var resp = await SharedClient.SendAsync(req, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) return null;
