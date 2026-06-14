@@ -169,8 +169,16 @@ public sealed partial class SessionsViewModel : ObservableObject
             var terminal = ResolveDefaultTerminal();
             // Mirror the ▶ Resume button's flags (the adjacent Sessions-tab
             // launch action) so a fresh session opens with the same allow-all /
-            // extra-args behavior. Without --allow-all, copilot re-prompts for
-            // every extension's elevated-permission request on a new session.
+            // extra-args behavior. --allow-all auto-approves copilot's tool /
+            // path / URL permission prompts.
+            // NOTE: --allow-all does NOT cover an extension's "elevated
+            // permissions" ("skip tool permission prompts") request. copilot
+            // gates those per-directory in ~/.copilot/permissions-config.json
+            // via "extension-permission-access" grants, written when the user
+            // picks "Yes, and always allow <ext> in this repo". There is no CLI
+            // flag to pre-grant them, so a copilot update that resets that store
+            // (or a newly-added extension) re-prompts once per extension+repo
+            // regardless of --allow-all.
             var resumeDefaults = _settings.Current.SessionsResume;
             _launch.Spawn(new LaunchRequest
             {
