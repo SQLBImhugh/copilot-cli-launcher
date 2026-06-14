@@ -63,6 +63,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     // Sessions Resume defaults
     public bool ResumeAllowAll { get => Settings.SessionsResume.EnableAllowAll; set { Settings.SessionsResume.EnableAllowAll = value; OnPropertyChanged(); ScheduleSave(); } }
+    public bool ResumePreApproveExtensions { get => Settings.SessionsResume.PreApproveExtensions; set { Settings.SessionsResume.PreApproveExtensions = value; OnPropertyChanged(); ScheduleSave(); } }
     public string ResumeExtraArgs { get => Settings.SessionsResume.ExtraCopilotArgs ?? string.Empty; set { Settings.SessionsResume.ExtraCopilotArgs = string.IsNullOrWhiteSpace(value) ? null : value; OnPropertyChanged(); ScheduleSave(); } }
 
     // Copilot CLI defaults (used by New Shortcut form pre-fill)

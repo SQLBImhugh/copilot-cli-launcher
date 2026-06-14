@@ -77,6 +77,7 @@ public partial class App : Application
         services.AddSingleton<ILaunchService, LaunchService>();
         services.AddSingleton<IShortcutsService, ShortcutsService>();
         services.AddSingleton<ISessionRepairService, SessionRepairService>();
+        services.AddSingleton<IExtensionPermissionService, ExtensionPermissionService>();
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
         services.AddSingleton<IBriefingService, BriefingService>();
         services.AddSingleton<IBriefingHistoryService, BriefingHistoryService>();

@@ -43,7 +43,8 @@ public sealed partial class SessionsPage : Page
             App.Services.GetRequiredService<ILaunchService>(),
             App.Services.GetRequiredService<ISettingsService>(),
             App.Services.GetRequiredService<IAfterLaunchAction>(),
-            marshal);
+            marshal,
+            App.Services.GetRequiredService<IExtensionPermissionService>());
         _migration = App.Services.GetRequiredService<IMigrationService>();
         InitializeComponent();
         Loaded += async (_, _) =>

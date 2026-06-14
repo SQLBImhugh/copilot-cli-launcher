@@ -17,6 +17,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     private readonly ILaunchService _launch;
     private readonly ISettingsService _settings;
     private readonly IAfterLaunchAction _afterLaunch;
+    private readonly IExtensionPermissionService? _extPerms;
     private Func<Action, Task>? _marshalToUi;
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
@@ -68,7 +69,8 @@ public sealed partial class SessionsViewModel : ObservableObject
         ILaunchService launch,
         ISettingsService settings,
         IAfterLaunchAction? afterLaunch = null,
-        Func<Action, Task>? marshalToUi = null)
+        Func<Action, Task>? marshalToUi = null,
+        IExtensionPermissionService? extPerms = null)
     {
         _discovery = discovery;
         _terminals = terminals;
@@ -76,6 +78,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         _settings = settings;
         _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
         _marshalToUi = marshalToUi ?? (SynchronizationContext.Current is not null ? CreateUiMarshaller(SynchronizationContext.Current) : null);
+        _extPerms = extPerms;
     }
 
     partial void OnShowRecentChanged(bool value) => ApplyFilters();
@@ -140,9 +143,12 @@ public sealed partial class SessionsViewModel : ObservableObject
         {
             var terminal = ResolveDefaultTerminal();
             var resumeDefaults = _settings.Current.SessionsResume;
+            var dir = string.IsNullOrEmpty(row.Cwd) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : row.Cwd;
+            if (resumeDefaults.PreApproveExtensions)
+                _extPerms?.EnsureExtensionGrants(dir);
             _launch.Spawn(new LaunchRequest
             {
-                WorkingDirectory = string.IsNullOrEmpty(row.Cwd) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : row.Cwd,
+                WorkingDirectory = dir,
                 ResumeTarget = row.SessionId,
                 EnableAllowAll = resumeDefaults.EnableAllowAll,
                 ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
@@ -180,6 +186,8 @@ public sealed partial class SessionsViewModel : ObservableObject
             // (or a newly-added extension) re-prompts once per extension+repo
             // regardless of --allow-all.
             var resumeDefaults = _settings.Current.SessionsResume;
+            if (resumeDefaults.PreApproveExtensions)
+                _extPerms?.EnsureExtensionGrants(dir);
             _launch.Spawn(new LaunchRequest
             {
                 WorkingDirectory = dir,

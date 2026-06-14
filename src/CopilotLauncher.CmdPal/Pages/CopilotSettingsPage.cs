@@ -43,6 +43,7 @@ public sealed partial class CopilotSettingsPage : ContentPage
             DataJson = JsonSerializer.Serialize(new
             {
                 enableAllowAll = resume.EnableAllowAll ? "true" : "false",
+                preApproveExtensions = resume.PreApproveExtensions ? "true" : "false",
                 extraCopilotArgs = resume.ExtraCopilotArgs ?? string.Empty,
             });
             StateJson = DataJson;
@@ -58,6 +59,7 @@ public sealed partial class CopilotSettingsPage : ContentPage
                 var resume = _settings.Current.SessionsResume;
 
                 resume.EnableAllowAll = ReadBool(root, "enableAllowAll");
+                resume.PreApproveExtensions = ReadBool(root, "preApproveExtensions");
                 resume.ExtraCopilotArgs = NullIfWhiteSpace(ReadString(root, "extraCopilotArgs"));
 
                 _settings.Save();
@@ -93,6 +95,15 @@ public sealed partial class CopilotSettingsPage : ContentPage
                         ["valueOn"] = "true",
                         ["valueOff"] = "false",
                         ["value"] = resume.EnableAllowAll ? "true" : "false",
+                    },
+                    new Dictionary<string, object?>
+                    {
+                        ["type"] = "Input.Toggle",
+                        ["id"] = "preApproveExtensions",
+                        ["title"] = "Pre-approve installed extensions in the session's repo",
+                        ["valueOn"] = "true",
+                        ["valueOff"] = "false",
+                        ["value"] = resume.PreApproveExtensions ? "true" : "false",
                     },
                     new Dictionary<string, object?>
                     {

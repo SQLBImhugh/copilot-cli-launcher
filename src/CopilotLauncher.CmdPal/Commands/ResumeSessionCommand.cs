@@ -46,11 +46,14 @@ public sealed partial class ResumeSessionCommand : InvokableCommand
         {
             var terminal = PickTerminal();
             var resumeDefaults = _settings.Current.SessionsResume;
+            var dir = string.IsNullOrEmpty(_session.Cwd)
+                ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+                : _session.Cwd;
+            if (resumeDefaults.PreApproveExtensions)
+                new ExtensionPermissionService().EnsureExtensionGrants(dir);
             _launch.Spawn(new LaunchRequest
             {
-                WorkingDirectory = string.IsNullOrEmpty(_session.Cwd)
-                    ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-                    : _session.Cwd,
+                WorkingDirectory = dir,
                 ResumeTarget = _session.Id,
                 EnableAllowAll = resumeDefaults.EnableAllowAll,
                 ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,

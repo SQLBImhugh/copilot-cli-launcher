@@ -36,6 +36,13 @@
                     <ToggleSwitch Header="Pass --allow-all"
                                   AutomationProperties.AutomationId="SettingsResumeAllowAllToggle"
                                   IsOn="{x:Bind ViewModel.ResumeAllowAll, Mode=TwoWay}"/>
+                    <StackPanel Spacing="2">
+                        <ToggleSwitch Header="Pre-approve installed extensions in the session's repo"
+                                      AutomationProperties.AutomationId="SettingsResumePreApproveExtensionsToggle"
+                                      IsOn="{x:Bind ViewModel.ResumePreApproveExtensions, Mode=TwoWay}"/>
+                        <TextBlock Text="Writes copilot's permissions-config.json so it doesn't prompt &quot;Extension X wants elevated permissions&quot; for each installed extension when you resume/start a session. --allow-all does not cover these. Off by default since it auto-approves an extension security gate."
+                                   Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
+                    </StackPanel>
                     <StackPanel Spacing="4">
                         <TextBlock Text="Extra copilot args"
                                    Style="{StaticResource BodyStrongTextBlockStyle}"/>

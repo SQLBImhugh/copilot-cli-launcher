@@ -74,6 +74,15 @@ public sealed class SessionsResumeSettings
 {
     public bool EnableAllowAll { get; set; }
     public string? ExtraCopilotArgs { get; set; }
+
+    /// <summary>When true, before resuming/starting a session the launcher
+    /// writes <c>extension-permission-access</c> grants for every installed
+    /// user extension into copilot's <c>~/.copilot/permissions-config.json</c>
+    /// for the session's working directory, so copilot doesn't re-prompt
+    /// "Extension X wants elevated permissions" for each one. Opt-in (default
+    /// off) because it auto-approves an extension security gate. Distinct from
+    /// <see cref="EnableAllowAll"/>, which only covers tool/path/URL prompts.</summary>
+    public bool PreApproveExtensions { get; set; }
 }
 
 public sealed class BriefingSettings
