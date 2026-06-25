@@ -147,14 +147,38 @@ public sealed partial class ChangelogPage : Page
         }
     }
 
-    private void OnClearChangelogsClick(object sender, RoutedEventArgs e)
+    private async void OnClearChangelogsClick(object sender, RoutedEventArgs e)
     {
+        var confirmed = await ConfirmClearAsync(
+            "Clear changelogs?",
+            "This permanently removes all saved changelog history. This can't be undone.");
+        if (!confirmed) return;
         ViewModel.ClearChangelogs();
         RefreshLatestChangelogCard();
     }
 
-    private void OnClearBriefingsClick(object sender, RoutedEventArgs e)
+    private async void OnClearBriefingsClick(object sender, RoutedEventArgs e)
     {
+        var confirmed = await ConfirmClearAsync(
+            "Clear briefings?",
+            "This permanently removes all saved AI briefing history. This can't be undone.");
+        if (!confirmed) return;
         ViewModel.ClearBriefings();
+    }
+
+    private async System.Threading.Tasks.Task<bool> ConfirmClearAsync(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = message,
+            PrimaryButtonText = "Clear",
+            CloseButtonText = "Cancel",
+            // Default to Cancel so an accidental Enter press doesn't wipe history.
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary;
     }
 }
