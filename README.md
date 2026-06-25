@@ -8,6 +8,7 @@ A modern WinUI 3 desktop app to manage and resume GitHub Copilot CLI sessions on
 ## What it does
 
 - **Sessions browser** — every `~/.copilot/session-state/` session in one list with filter chips (Recent / Named / Heavily used / Show all), search across path / repo / branch / id, multi-key sort, and one-click **Resume** in your preferred terminal. Includes a *Save as shortcut…* button so any session becomes a reusable launch.
+- **New Session** — pick a folder (browse or type), add optional launcher args / `--allow-all` / terminal override, and start a fresh Copilot CLI session there. Live command preview; nothing is saved (use *New Shortcut* for a reusable launch).
 - **Saved Shortcuts** — pinned project + workdir + flags + terminal combos. One click to launch; one click to export to a Windows `.lnk` so you can pin to taskbar / start menu.
 - **New Shortcut wizard** — live command preview as you set the working dir, resume target, `--allow-all`, extra copilot args, and terminal.
 - **Changelog tab** — two sub-views: **Changelog** lists every version-bump notes entry (latest highlighted, previous collapsible). **Briefings** lists AI-generated 4-6 bullet "what changed for you" summaries. *Check now* runs `copilot update` and captures the release notes only (never spends AI credit). *Generate AI Briefing* is fully on-demand: if you're already briefed on the current version it just re-displays the existing summary, otherwise it summarizes everything since the last briefing.
