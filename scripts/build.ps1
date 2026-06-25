@@ -92,11 +92,41 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     /v:minimal
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+# --- Stage resources.pri next to the .exe --------------------------------
+# PublishSingleFile bundles managed + native DLLs into the self-extracting
+# .exe, but it does NOT emit resources.pri (it's loose MRT content, never
+# bundled). Without resources.pri beside the .exe, Microsoft.UI.Xaml
+# fail-fasts at startup (exit 0xC000027B, "Cannot locate resource from
+# ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml") and the window
+# never appears. Copy the merged PRI the build produced in the intermediate
+# output. EnableMsixTooling=true (above + in the .csproj) makes that PRI
+# include the framework theme resources, so it's ~1.3 MB; an un-merged,
+# app-only PRI is ~38 KB and crashes the exact same way — hence the size
+# guard below, which fails the build loudly rather than shipping a crasher.
+$binPri = Get-ChildItem (Join-Path $repoRoot "src\CopilotLauncher\bin\x64\$Configuration") `
+            -Recurse -Filter 'resources.pri' -ErrorAction SilentlyContinue |
+          Where-Object { $_.FullName -like "*\$Runtime\resources.pri" } |
+          Sort-Object Length -Descending | Select-Object -First 1
+if (-not $binPri) {
+    Write-Host "ERROR: resources.pri not found in build output." -ForegroundColor Red
+    Write-Host "  Without it the published .exe crashes at startup (0xC000027B)." -ForegroundColor Red
+    exit 1
+}
+if ($binPri.Length -lt 200KB) {
+    Write-Host "ERROR: resources.pri is only $([math]::Round($binPri.Length/1KB)) KB — the Windows App SDK" -ForegroundColor Red
+    Write-Host "  framework theme resources were NOT merged in, so the .exe would crash at" -ForegroundColor Red
+    Write-Host "  startup (0xC000027B). This usually means a stale obj/ from a build that ran" -ForegroundColor Red
+    Write-Host "  with EnableMsixTooling=false. Delete src\CopilotLauncher\obj and re-run." -ForegroundColor Red
+    exit 1
+}
+Copy-Item $binPri.FullName (Join-Path $absOutDir 'resources.pri') -Force
+Write-Host "  staged resources.pri ($([math]::Round($binPri.Length/1KB)) KB) next to the .exe" -ForegroundColor DarkGray
+
 $exe = Join-Path $absOutDir 'CopilotLauncher.exe'
 if (Test-Path $exe) {
     $sizeMB = [math]::Round((Get-Item $exe).Length / 1MB, 1)
     Write-Host ''
     Write-Host "✓ Built $exe ($sizeMB MB)" -ForegroundColor Green
-    Write-Host '  Double-click the .exe to test, or zip the dist/CopilotLauncher folder to share.' -ForegroundColor DarkGray
+    Write-Host '  Ship the whole dist/CopilotLauncher folder (the .exe needs resources.pri beside it).' -ForegroundColor DarkGray
 }
 
