@@ -86,6 +86,12 @@
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
 
+                <muxc:NavigationViewItem Tag="newsession" Content="New Session" AutomationProperties.AutomationId="NavNewSession">
+                    <muxc:NavigationViewItem.Icon>
+                        <muxc:FontIcon Glyph="&#xE756;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
                 <muxc:NavigationViewItem Tag="shortcuts" Content="Shortcuts" AutomationProperties.AutomationId="NavShortcuts">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE734;"/>

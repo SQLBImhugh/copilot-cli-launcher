@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CopilotLauncher.Pages.NewSessionPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    FontFamily="{ThemeResource BodyFontFamily}">
+
+    <Grid Padding="{ThemeResource PagePadding}" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock Text="New Session" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource PageTitleFontSize}"/>
+            <TextBlock Text="Pick a folder and start a fresh Copilot CLI session there. Nothing is saved — use New Shortcut if you want a reusable launch."
+                       Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
+
+                <!-- Folder -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Folder" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock Text="Where the new session starts. Usually your project root."
+                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 AutomationProperties.AutomationId="NewSessionFolderTextBox"
+                                 Text="{x:Bind ViewModel.WorkingDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="C:\code\my-project"/>
+                        <Button Grid.Column="1"
+                                Content="Browse…"
+                                AutomationProperties.AutomationId="NewSessionBrowseFolderButton"
+                                Click="OnBrowseFolderClick"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Launcher args -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Launcher args" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock Text="Optional. Verbatim flags appended to the copilot command, e.g. '--model claude-opus-4.8'. Quoted values preserved."
+                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                    <TextBox AutomationProperties.AutomationId="NewSessionArgsTextBox"
+                             Text="{x:Bind ViewModel.ExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="(blank for none)"/>
+                </StackPanel>
+
+                <!-- Allow-all -->
+                <StackPanel Spacing="6">
+                    <ToggleSwitch Header="Pass --allow-all to copilot"
+                                  AutomationProperties.AutomationId="NewSessionAllowAllToggle"
+                                  OffContent="Off — confirm each tool call"
+                                  OnContent="On — auto-approve every tool call (use with care)"
+                                  IsOn="{x:Bind ViewModel.EnableAllowAll, Mode=TwoWay}"/>
+                </StackPanel>
+
+                <!-- Terminal -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Terminal" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock Text="Override the default terminal from Settings just for this launch."
+                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                    <ComboBox x:Name="TerminalCombo"
+                              AutomationProperties.AutomationId="NewSessionTerminalCombo"
+                              SelectionChanged="OnTerminalChanged"
+                              MinWidth="320"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Live command preview -->
+        <Border Grid.Row="2"
+                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="{ThemeResource CardBorderThickness}"
+                CornerRadius="{StaticResource ControlCornerRadius}"
+                Padding="12">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Command preview" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                <TextBlock Text="{x:Bind ViewModel.CommandPreview, Mode=OneWay}"
+                           FontFamily="Consolas, 'Cascadia Mono', monospace"
+                           TextWrapping="Wrap"
+                           IsTextSelectionEnabled="True"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Action buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="Start session"
+                    AutomationProperties.AutomationId="NewSessionStartButton"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Click="OnStartClick"
+                    IsEnabled="{x:Bind ViewModel.CanLaunch, Mode=OneWay}"/>
+        </StackPanel>
+
+        <Border Grid.Row="4"
+                Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+                CornerRadius="{StaticResource ControlCornerRadius}"
+                Padding="12,6">
+            <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Opacity="0.8"/>
+        </Border>
+    </Grid>
+</Page>

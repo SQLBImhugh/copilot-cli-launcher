@@ -125,6 +125,7 @@ public sealed partial class MainWindow : Window
             var page = tag switch
             {
                 "sessions"    => typeof(SessionsPage),
+                "newsession"  => typeof(NewSessionPage),
                 "shortcuts"   => typeof(ShortcutsPage),
                 "newshortcut" => typeof(NewShortcutPage),
                 "changelog"   => typeof(ChangelogPage),
@@ -285,6 +286,7 @@ public sealed partial class MainWindow : Window
             var restoreTag = _savedNormalNavTag ?? "sessions";
             var page = restoreTag switch
             {
+                "newsession"  => typeof(NewSessionPage),
                 "shortcuts"   => typeof(ShortcutsPage),
                 "newshortcut" => typeof(NewShortcutPage),
                 "changelog"   => typeof(ChangelogPage),
