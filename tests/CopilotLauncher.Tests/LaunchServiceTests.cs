@@ -208,6 +208,118 @@ public class LaunchServiceTests
         }));
     }
 
+    [Fact]
+    public void Build_Capabilities_DisablesMcpServers_BuiltinAndAgent()
+    {
+        var svc = NewSvc(CmdResolver);
+        var cmd = svc.Build(new LaunchRequest
+        {
+            WorkingDirectory = @"C:\p",
+            Capabilities = new LaunchCapabilities
+            {
+                DisabledMcpServers = new() { "azure", "ms-learn" },
+                DisableBuiltinMcps = true,
+                Agent = "research",
+            },
+        });
+        var list = cmd.ArgumentList.ToList();
+        Assert.Equal(2, list.Count(a => a == "--disable-mcp-server"));
+        var azureIdx = list.IndexOf("--disable-mcp-server");
+        Assert.Equal("azure", list[azureIdx + 1]);
+        Assert.Contains("ms-learn", list);
+        Assert.Contains("--disable-builtin-mcps", list);
+        var agentIdx = list.IndexOf("--agent");
+        Assert.Equal("research", list[agentIdx + 1]);
+    }
+
+    [Fact]
+    public void Build_Capabilities_ExcludeTools_EmitsExcludedToolsLast()
+    {
+        var svc = NewSvc(CmdResolver);
+        var cmd = svc.Build(new LaunchRequest
+        {
+            WorkingDirectory = @"C:\p",
+            Capabilities = new LaunchCapabilities
+            {
+                Agent = "research",
+                ToolMode = ToolFilterMode.ExcludeThese,
+                Tools = new() { "write", "shell(git push)" },
+            },
+        });
+        var list = cmd.ArgumentList.ToList();
+        var excIdx = list.IndexOf("--excluded-tools");
+        Assert.True(excIdx >= 0);
+        Assert.Equal(new[] { "write", "shell(git push)" }, list.Skip(excIdx + 1).ToArray());
+        // Variadic tool list must come after the agent flag.
+        Assert.True(excIdx > list.IndexOf("--agent"));
+    }
+
+    [Fact]
+    public void Build_Capabilities_OnlyTools_EmitsAvailableTools()
+    {
+        var svc = NewSvc(CmdResolver);
+        var cmd = svc.Build(new LaunchRequest
+        {
+            WorkingDirectory = @"C:\p",
+            Capabilities = new LaunchCapabilities
+            {
+                ToolMode = ToolFilterMode.OnlyThese,
+                Tools = new() { "view", "write" },
+            },
+        });
+        var list = cmd.ArgumentList.ToList();
+        var idx = list.IndexOf("--available-tools");
+        Assert.True(idx >= 0);
+        Assert.Equal(new[] { "view", "write" }, list.Skip(idx + 1).ToArray());
+    }
+
+    [Fact]
+    public void Build_Capabilities_DisableAllSkills_ExcludesSkillTool()
+    {
+        var svc = NewSvc(CmdResolver);
+        var cmd = svc.Build(new LaunchRequest
+        {
+            WorkingDirectory = @"C:\p",
+            Capabilities = new LaunchCapabilities { DisableAllSkills = true },
+        });
+        var list = cmd.ArgumentList.ToList();
+        var idx = list.IndexOf("--excluded-tools");
+        Assert.True(idx >= 0);
+        Assert.Equal("skill", list[idx + 1]);
+    }
+
+    [Fact]
+    public void Build_Capabilities_DisableAllSkills_AddsSkillToExcludeList()
+    {
+        var svc = NewSvc(CmdResolver);
+        var cmd = svc.Build(new LaunchRequest
+        {
+            WorkingDirectory = @"C:\p",
+            Capabilities = new LaunchCapabilities
+            {
+                ToolMode = ToolFilterMode.ExcludeThese,
+                Tools = new() { "write" },
+                DisableAllSkills = true,
+            },
+        });
+        var list = cmd.ArgumentList.ToList();
+        Assert.Single(list, a => a == "--excluded-tools");
+        var idx = list.IndexOf("--excluded-tools");
+        Assert.Contains("write", list.Skip(idx + 1));
+        Assert.Contains("skill", list.Skip(idx + 1));
+    }
+
+    [Fact]
+    public void Build_NoCapabilities_EmitsNoCapabilityFlags()
+    {
+        var svc = NewSvc(CmdResolver);
+        var cmd = svc.Build(new LaunchRequest { WorkingDirectory = @"C:\p" });
+        Assert.DoesNotContain("--disable-mcp-server", cmd.ArgumentList);
+        Assert.DoesNotContain("--agent", cmd.ArgumentList);
+        Assert.DoesNotContain("--excluded-tools", cmd.ArgumentList);
+        Assert.DoesNotContain("--available-tools", cmd.ArgumentList);
+    }
+
     private static LaunchService NewSvc(Func<string, string?> resolver)
     {
         var ctor = typeof(LaunchService)

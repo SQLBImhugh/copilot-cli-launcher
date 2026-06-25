@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="CopilotLauncher.Controls.CapabilitiesEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CopilotLauncher.ViewModels"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
+
+    <StackPanel Spacing="14">
+
+        <!-- Header + refresh -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="Capabilities" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                <muxc:ProgressRing x:Name="LoadingRing" IsActive="False" Width="16" Height="16"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Refresh"
+                    AutomationProperties.AutomationId="CapabilitiesRefreshButton"
+                    Click="OnRefreshClick"/>
+        </Grid>
+
+        <!-- MCP servers -->
+        <StackPanel Spacing="6">
+            <TextBlock Text="MCP servers" Style="{StaticResource BodyStrongTextBlockStyle}" Opacity="0.9"/>
+            <TextBlock Text="Checked servers load; unchecked ones are disabled for this launch."
+                       Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+            <TextBlock Text="No MCP servers detected (or still loading)."
+                       Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"
+                       Visibility="{x:Bind BoolToVis(ViewModel.HasNoMcpServers), Mode=OneWay}"/>
+            <ItemsControl ItemsSource="{x:Bind ViewModel.McpServers}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:McpServerToggle">
+                        <CheckBox IsChecked="{x:Bind IsEnabled, Mode=TwoWay}" MinWidth="0" Margin="0,-2,0,-2"
+                                  AutomationProperties.Name="{x:Bind Name}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{x:Bind Name}"/>
+                                <TextBlock Text="{x:Bind SourceLabel}" Opacity="0.5"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource CaptionTextBlockStyle}"/>
+                            </StackPanel>
+                        </CheckBox>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <CheckBox Content="Disable built-in GitHub MCP server"
+                      AutomationProperties.AutomationId="CapabilitiesDisableBuiltinMcp"
+                      IsChecked="{x:Bind ViewModel.DisableBuiltinGitHubMcp, Mode=TwoWay}"/>
+        </StackPanel>
+
+        <!-- Agent -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="Custom agent" Style="{StaticResource BodyStrongTextBlockStyle}" Opacity="0.9"/>
+            <TextBlock Text="Launch with a single custom agent (--agent). Blank = none; type a name if it isn't listed."
+                       Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+            <ComboBox IsEditable="True" MinWidth="280"
+                      AutomationProperties.AutomationId="CapabilitiesAgentCombo"
+                      ItemsSource="{x:Bind ViewModel.AgentOptions}"
+                      Text="{x:Bind ViewModel.SelectedAgent, Mode=TwoWay}"
+                      PlaceholderText="(none)"/>
+        </StackPanel>
+
+        <!-- Tools -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="Tools" Style="{StaticResource BodyStrongTextBlockStyle}" Opacity="0.9"/>
+            <StackPanel Orientation="Horizontal" Spacing="14">
+                <RadioButton Content="All tools" GroupName="ToolMode"
+                             IsChecked="{x:Bind ViewModel.ToolModeNone, Mode=TwoWay}"/>
+                <RadioButton Content="Only these" GroupName="ToolMode"
+                             IsChecked="{x:Bind ViewModel.ToolModeOnly, Mode=TwoWay}"/>
+                <RadioButton Content="Exclude these" GroupName="ToolMode"
+                             IsChecked="{x:Bind ViewModel.ToolModeExclude, Mode=TwoWay}"/>
+            </StackPanel>
+            <TextBox AcceptsReturn="True" Height="74" TextWrapping="Wrap"
+                     AutomationProperties.AutomationId="CapabilitiesToolsTextBox"
+                     IsEnabled="{x:Bind ViewModel.ToolListEnabled, Mode=OneWay}"
+                     Text="{x:Bind ViewModel.ToolsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     PlaceholderText="One tool per line, e.g.&#x0a;write&#x0a;shell(git push)"/>
+        </StackPanel>
+
+        <!-- Skills -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="Skills" Style="{StaticResource BodyStrongTextBlockStyle}" Opacity="0.9"/>
+            <TextBlock Text="{x:Bind ViewModel.SkillSummary, Mode=OneWay}"
+                       Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+            <ToggleSwitch Header="Disable all skills"
+                          AutomationProperties.AutomationId="CapabilitiesDisableSkillsToggle"
+                          OffContent="Skills enabled"
+                          OnContent="Skills disabled (excludes the skill tool)"
+                          IsOn="{x:Bind ViewModel.DisableAllSkills, Mode=TwoWay}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

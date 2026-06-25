@@ -21,6 +21,9 @@ public sealed class Shortcut
     /// </summary>
     public string? TerminalOverride { get; set; }
 
+    /// <summary>Optional per-launch capability selection (which MCPs / agent / tools / skills load).</summary>
+    public LaunchCapabilities? Capabilities { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

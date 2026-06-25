@@ -22,7 +22,15 @@ public sealed partial class NewSessionPage : Page
             App.Services.GetRequiredService<IExtensionPermissionService>());
         InitializeComponent();
         PopulateTerminals();
+        CapEditor.WorkingDirectoryProvider = () => ViewModel.WorkingDirectory;
+        CapEditor.Changed += (_, _) => ViewModel.Capabilities = CapEditor.ReadCapabilities();
+        Loaded += OnPageLoaded;
         ViewModel.RecalcPreview();
+    }
+
+    private async void OnPageLoaded(object sender, RoutedEventArgs e)
+    {
+        await CapEditor.LoadAsync(ViewModel.WorkingDirectory, ViewModel.Capabilities);
     }
 
     private void PopulateTerminals()
@@ -59,5 +67,9 @@ public sealed partial class NewSessionPage : Page
         }
     }
 
-    private void OnStartClick(object sender, RoutedEventArgs e) => ViewModel.StartSession();
+    private void OnStartClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.Capabilities = CapEditor.ReadCapabilities();
+        ViewModel.StartSession();
+    }
 }

@@ -31,6 +31,7 @@ public sealed partial class NewShortcutViewModel : ObservableObject
         _workingDirectory = Environment.CurrentDirectory;
         _enableAllowAll = settings.Current.CopilotCli.DefaultAllowAll;
         _extraArgs = settings.Current.CopilotCli.DefaultExtraArgs ?? string.Empty;
+        _capabilities = settings.Current.DefaultCapabilities.IsEmpty ? null : settings.Current.DefaultCapabilities.Clone();
     }
 
     private string _label = string.Empty;
@@ -44,6 +45,7 @@ public sealed partial class NewShortcutViewModel : ObservableObject
     private string _terminalOverride = string.Empty;
     private string _statusMessage = string.Empty;
     private string _commandPreview = string.Empty;
+    private LaunchCapabilities? _capabilities;
 
     partial void OnEnableAllowAllChanged(bool value) => RecalcPreview();
 
@@ -91,6 +93,13 @@ public sealed partial class NewShortcutViewModel : ObservableObject
     }
 
     public bool CanSave => !string.IsNullOrWhiteSpace(_label) && !string.IsNullOrWhiteSpace(_workingDirectory);
+
+    /// <summary>Per-launch capability selection saved with the shortcut. Set by the editor.</summary>
+    public LaunchCapabilities? Capabilities
+    {
+        get => _capabilities;
+        set { _capabilities = value; OnPropertyChanged(); RecalcPreview(); }
+    }
 
     /// <summary>List of {id,displayName} for the Terminal dropdown including 'Auto-detect'.</summary>
     public IReadOnlyList<(string Id, string DisplayName)> TerminalOptions
@@ -154,6 +163,7 @@ public sealed partial class NewShortcutViewModel : ObservableObject
             EnableAllowAll = this.EnableAllowAll,
             ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs.Trim(),
             TerminalOverride = string.IsNullOrEmpty(_terminalOverride) || _terminalOverride == "auto" ? null : _terminalOverride,
+            Capabilities = _capabilities,
         };
         _store.Add(entry);
         StatusMessage = $"Saved '{entry.Label}'.";
@@ -205,6 +215,7 @@ public sealed partial class NewShortcutViewModel : ObservableObject
         ResumeTarget = string.IsNullOrWhiteSpace(_resumeTarget) ? null : _resumeTarget,
         EnableAllowAll = this.EnableAllowAll,
         ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs,
+        Capabilities = _capabilities,
         Terminal = terminal,
     };
 

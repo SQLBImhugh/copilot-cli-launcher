@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:controls="using:CopilotLauncher.Controls"
     FontFamily="{ThemeResource BodyFontFamily}">
     <ScrollViewer>
         <StackPanel Padding="{ThemeResource PagePadding}" Spacing="14" MaxWidth="900" HorizontalAlignment="Left">
@@ -51,6 +52,18 @@
                         <TextBox AutomationProperties.AutomationId="SettingsResumeExtraArgsTextBox"
                                  Text="{x:Bind ViewModel.ResumeExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                     </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Default capabilities -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="{ThemeResource CardBorderThickness}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Default capabilities" Style="{StaticResource SubtitleTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource SectionTitleFontSize}"/>
+                    <TextBlock Text="Pre-fills the New Session and New Shortcut forms with these MCP / agent / tool / skill choices. Per-launch edits don't change these defaults."
+                               Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
+                    <controls:CapabilitiesEditor x:Name="CapEditor"/>
                 </StackPanel>
             </Border>
 

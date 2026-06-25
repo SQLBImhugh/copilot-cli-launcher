@@ -22,8 +22,16 @@ public sealed partial class NewShortcutPage : Page
             App.Services.GetRequiredService<ISettingsService>());
         InitializeComponent();
         PopulateTerminals();
-        Loaded += (_, _) => ConsumePendingHandoff();
+        CapEditor.WorkingDirectoryProvider = () => ViewModel.WorkingDirectory;
+        CapEditor.Changed += (_, _) => ViewModel.Capabilities = CapEditor.ReadCapabilities();
+        Loaded += OnPageLoaded;
         ViewModel.RecalcPreview();
+    }
+
+    private async void OnPageLoaded(object sender, RoutedEventArgs e)
+    {
+        ConsumePendingHandoff();
+        await CapEditor.LoadAsync(ViewModel.WorkingDirectory, ViewModel.Capabilities);
     }
 
     private void ConsumePendingHandoff()
@@ -71,12 +79,14 @@ public sealed partial class NewShortcutPage : Page
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        ViewModel.Capabilities = CapEditor.ReadCapabilities();
         if (ViewModel.Save() is not null)
             ViewModel.Reset();
     }
 
     private void OnSaveAndLaunchClick(object sender, RoutedEventArgs e)
     {
+        ViewModel.Capabilities = CapEditor.ReadCapabilities();
         if (ViewModel.SaveAndLaunch())
             ViewModel.Reset();
     }

@@ -3,6 +3,8 @@
     x:Class="CopilotLauncher.Pages.NewSessionPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CopilotLauncher.Controls"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     FontFamily="{ThemeResource BodyFontFamily}">
 
     <Grid Padding="{ThemeResource PagePadding}" RowSpacing="16">
@@ -73,6 +75,14 @@
                               SelectionChanged="OnTerminalChanged"
                               MinWidth="320"/>
                 </StackPanel>
+
+                <!-- Capabilities (which MCPs / agent / tools / skills load) -->
+                <muxc:Expander x:Name="CapabilitiesExpander"
+                               HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Stretch"
+                               Header="Capabilities (MCP servers, agent, tools, skills)">
+                    <controls:CapabilitiesEditor x:Name="CapEditor" Margin="0,4,0,0"/>
+                </muxc:Expander>
             </StackPanel>
         </ScrollViewer>
 

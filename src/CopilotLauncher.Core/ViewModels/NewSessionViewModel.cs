@@ -35,6 +35,7 @@ public sealed partial class NewSessionViewModel : ObservableObject
         _extPerms = extPerms;
         _enableAllowAll = settings.Current.CopilotCli.DefaultAllowAll;
         _extraArgs = settings.Current.CopilotCli.DefaultExtraArgs ?? string.Empty;
+        _capabilities = settings.Current.DefaultCapabilities.IsEmpty ? null : settings.Current.DefaultCapabilities.Clone();
     }
 
     private string _workingDirectory = string.Empty;
@@ -42,6 +43,7 @@ public sealed partial class NewSessionViewModel : ObservableObject
     private string _terminalOverride = string.Empty;
     private string _statusMessage = string.Empty;
     private string _commandPreview = string.Empty;
+    private LaunchCapabilities? _capabilities;
 
     [ObservableProperty]
     private bool _enableAllowAll;
@@ -82,6 +84,13 @@ public sealed partial class NewSessionViewModel : ObservableObject
     }
 
     public bool CanLaunch => !string.IsNullOrWhiteSpace(_workingDirectory);
+
+    /// <summary>Per-launch capability selection (which MCPs / agent / tools / skills load). Set by the editor.</summary>
+    public LaunchCapabilities? Capabilities
+    {
+        get => _capabilities;
+        set { _capabilities = value; OnPropertyChanged(); RecalcPreview(); }
+    }
 
     /// <summary>List of {id,displayName} for the Terminal dropdown including 'Auto-detect'.</summary>
     public IReadOnlyList<(string Id, string DisplayName)> TerminalOptions
@@ -162,6 +171,7 @@ public sealed partial class NewSessionViewModel : ObservableObject
         ResumeTarget = null, // always a fresh session
         EnableAllowAll = this.EnableAllowAll,
         ExtraCopilotArgs = string.IsNullOrWhiteSpace(_extraArgs) ? null : _extraArgs,
+        Capabilities = _capabilities,
         Terminal = terminal,
     };
 

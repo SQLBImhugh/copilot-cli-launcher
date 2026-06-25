@@ -63,7 +63,23 @@ public sealed partial class SettingsPage : Page
 
         _initializing = false;
 
+        CapEditor.WorkingDirectoryProvider = () => null;
+        Loaded += OnSettingsPageLoaded;
         Unloaded += (_, _) => ViewModel.Flush();
+    }
+
+    private async void OnSettingsPageLoaded(object sender, RoutedEventArgs e)
+    {
+        // Subscribe to Changed only AFTER the initial load so seeding the form
+        // doesn't trigger a save on every checkbox.
+        await CapEditor.LoadAsync(null, _settings.Current.DefaultCapabilities);
+        CapEditor.Changed += OnDefaultCapabilitiesChanged;
+    }
+
+    private void OnDefaultCapabilitiesChanged(object? sender, EventArgs e)
+    {
+        _settings.Current.DefaultCapabilities = CapEditor.ReadCapabilities() ?? new CopilotLauncher.Models.LaunchCapabilities();
+        _settings.Save();
     }
 
     private void PopulateTerminals()

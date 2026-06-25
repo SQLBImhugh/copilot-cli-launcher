@@ -16,6 +16,10 @@ public sealed class AppSettings
     public LauncherBehaviorSettings LauncherBehavior { get; set; } = new();
     public StorageSettings Storage { get; set; } = new();
 
+    /// <summary>Default capability selection (which MCPs / agent / tools / skills load) used to
+    /// seed the New Session and New Shortcut forms.</summary>
+    public LaunchCapabilities DefaultCapabilities { get; set; } = new();
+
     public bool MigrationCompleted { get; set; }
 
     /// <summary>

@@ -68,6 +68,7 @@ public sealed partial class ShortcutsViewModel : ObservableObject
                 ResumeTarget = entry.ResumeTarget,
                 EnableAllowAll = entry.EnableAllowAll,
                 ExtraCopilotArgs = entry.ExtraCopilotArgs,
+                Capabilities = entry.Capabilities,
                 Terminal = terminal,
             });
             StatusMessage = $"Launched '{entry.Label}' in {terminal?.DisplayName ?? "direct"}.";
