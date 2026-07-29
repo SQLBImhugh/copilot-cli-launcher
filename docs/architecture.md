@@ -96,6 +96,13 @@ Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLau
 
 `SessionsViewModel.ResumeSession` and `StartNewSessionAt` both funnel through one private `LaunchAt`, so a project always starts identically regardless of which button opened it.
 
+`ProjectImportPlanner` (also in `Helpers/`, pure static) powers the **Import from sessions** button:
+
+- Groups sessions by `git_root` when the session recorded one, else by `cwd` — so a project covers the whole repo rather than whichever subfolder a session happened to start in.
+- Names the project after the git repo: `repository` is `owner/repo`, so the label is the `repo` part (`.git` stripped). Falls back to the folder name when there's no remote, and to the full path for a drive root.
+- Skips the user-profile root (that's where session with no project land).
+- Lists everything but only pre-ticks rows that aren't already a project, still exist on disk, and aren't under an install/tooling root (`~/AppData`, `~/.copilot`, `~/.vscode`, `~/.nuget`, `~/.dotnet`, `%ProgramData%`, Program Files, Windows).
+
 ### In-repo vs. startup-flag settings
 
 Verified against the `@github/copilot` bundle (v1.0.x). The CLI merges `.github/copilot/settings.json` over the user config at session start, so anything expressible there applies to *every* session in that folder — including ones started outside this launcher.
@@ -124,6 +131,7 @@ Verified against the `@github/copilot` bundle (v1.0.x). The CLI merges `.github/
 
 - **`ArgQuoter`** — direct port of the legacy PS launcher's `Format-ShortcutArgs`. `Format(args)` → quoted command-line string for `.lnk` Arguments. `Split(line)` → tokenize a user-entered command-line fragment preserving quoted spans. Round-trip safe; covered by `ArgQuoterTests`.
 - **`ProjectMatcher`** — pure static path matching + override merging for `ProjectProfile`. Returns a `ResolvedLaunchProfile`. Covered by `ProjectMatcherTests`.
+- **`ProjectImportPlanner`** — turns past-session history into de-duplicated `ProjectImportCandidate`s for the Projects tab's bulk import. Covered by `ProjectImportPlannerTests`.
 
 ## Cross-cutting concerns
 

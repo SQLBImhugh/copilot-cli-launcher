@@ -35,6 +35,21 @@ public sealed class RepoConfigRow
     public double RowOpacity => Exists ? 1.0 : 0.45;
 }
 
+/// <summary>One importable working directory, with its tick box.</summary>
+public sealed partial class ProjectImportRow : ObservableObject
+{
+    public required ProjectImportCandidate Candidate { get; init; }
+
+    [ObservableProperty]
+    private bool _isSelected;
+
+    public string SuggestedName => Candidate.SuggestedName;
+    public string Path => Candidate.Path;
+    public string Caption => Candidate.Caption;
+    public bool CanImport => !Candidate.AlreadyImported;
+    public double RowOpacity => Candidate.AlreadyImported ? 0.5 : 1.0;
+}
+
 /// <summary>
 /// ViewModel for the Projects page: CRUD over <see cref="IProjectsService"/>
 /// plus the in-repo config panel backed by <see cref="IRepoConfigService"/>.
@@ -47,10 +62,12 @@ public sealed partial class ProjectsViewModel : ObservableObject
     private readonly ISessionCapabilityService _capabilities;
     private readonly ISettingsService _settings;
     private readonly ITerminalDiscoveryService _terminals;
+    private readonly ISessionDiscoveryService? _sessions;
 
     public ObservableCollection<ProjectProfile> Items { get; } = new();
     public ObservableCollection<RepoPluginToggle> RepoPlugins { get; } = new();
     public ObservableCollection<RepoConfigRow> RepoConfigFiles { get; } = new();
+    public ObservableCollection<ProjectImportRow> ImportCandidates { get; } = new();
 
     /// <summary>Terminal ids offered in the override picker; "" = inherit the global default.</summary>
     public ObservableCollection<string> TerminalOptions { get; } = new();
@@ -97,13 +114,15 @@ public sealed partial class ProjectsViewModel : ObservableObject
         IRepoConfigService repoConfig,
         ISessionCapabilityService capabilities,
         ISettingsService settings,
-        ITerminalDiscoveryService terminals)
+        ITerminalDiscoveryService terminals,
+        ISessionDiscoveryService? sessions = null)
     {
         _store = store;
         _repoConfig = repoConfig;
         _capabilities = capabilities;
         _settings = settings;
         _terminals = terminals;
+        _sessions = sessions;
     }
 
     partial void OnSelectedChanged(ProjectProfile? value)
@@ -471,4 +490,122 @@ public sealed partial class ProjectsViewModel : ObservableObject
     /// <summary>Capabilities to seed the shared CapabilitiesEditor with for the current edit.</summary>
     public LaunchCapabilities? CapabilitiesForEditor() =>
         Selected?.Capabilities ?? _settings.Current.DefaultCapabilities;
+
+    // ---- bulk import from past sessions ----
+
+    [ObservableProperty] private string _importMessage = string.Empty;
+
+    public bool HasImportCandidates => ImportCandidates.Count > 0;
+
+    public int SelectedImportCount => ImportCandidates.Count(r => r.IsSelected && r.CanImport);
+
+    /// <summary>
+    /// Scan past sessions for working directories that could become projects. Groups by git
+    /// root where one is known, skips the user-profile root, and pre-ticks everything that
+    /// isn't already a project, missing from disk, or an install/tooling folder.
+    /// </summary>
+    public void LoadImportCandidates()
+    {
+        ImportCandidates.Clear();
+        OnPropertyChanged(nameof(HasImportCandidates));
+
+        if (_sessions is null)
+        {
+            ImportMessage = "Session discovery is unavailable.";
+            return;
+        }
+
+        IReadOnlyList<ProjectImportCandidate> candidates;
+        try
+        {
+            candidates = ProjectImportPlanner.BuildCandidates(_sessions.Enumerate().ToList(), _store.All);
+        }
+        catch (Exception ex)
+        {
+            ImportMessage = $"Could not scan sessions: {ex.Message}";
+            return;
+        }
+
+        foreach (var c in candidates)
+        {
+            var row = new ProjectImportRow { Candidate = c, IsSelected = c.RecommendedByDefault };
+            row.PropertyChanged += OnImportRowChanged;
+            ImportCandidates.Add(row);
+        }
+
+        OnPropertyChanged(nameof(HasImportCandidates));
+        var importable = ImportCandidates.Count(r => r.CanImport);
+        ImportMessage = candidates.Count == 0
+            ? "No session working directories found to import."
+            : $"{importable} folder(s) available, {SelectedImportCount} selected.";
+        OnPropertyChanged(nameof(SelectedImportCount));
+    }
+
+    private void OnImportRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ProjectImportRow.IsSelected)) return;
+        OnPropertyChanged(nameof(SelectedImportCount));
+        ImportMessage = $"{ImportCandidates.Count(r => r.CanImport)} folder(s) available, {SelectedImportCount} selected.";
+    }
+
+    public void SetAllImportSelections(bool selected)
+    {
+        foreach (var row in ImportCandidates)
+            if (row.CanImport) row.IsSelected = selected;
+    }
+
+    /// <summary>
+    /// Create a project for each ticked candidate. Names come from the git repo when known.
+    /// Returns the number created; skips anything already covered so a double-click can't
+    /// create duplicates.
+    /// </summary>
+    public int ImportSelected()
+    {
+        var chosen = ImportCandidates.Where(r => r.IsSelected && r.CanImport).ToList();
+        if (chosen.Count == 0)
+        {
+            ImportMessage = "Nothing selected.";
+            return 0;
+        }
+
+        var created = 0;
+        var failed = 0;
+        foreach (var row in chosen)
+        {
+            // Re-check against the live store: the list is a snapshot.
+            if (_store.All.Any(p => string.Equals(ProjectMatcher.Normalize(p.Path), row.Path, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var project = new ProjectProfile
+            {
+                Id = Guid.NewGuid().ToString(),
+                Label = row.SuggestedName,
+                Path = row.Path,
+            };
+
+            try
+            {
+                _store.Add(project);
+                Items.Add(project);
+                created++;
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        StatusMessage = created switch
+        {
+            0 => "No projects imported.",
+            1 => "Imported 1 project.",
+            _ => $"Imported {created} projects.",
+        };
+        if (failed > 0) StatusMessage += $" {failed} failed to save.";
+
+        ImportMessage = StatusMessage;
+        OnPropertyChanged(nameof(HasItems));
+        OnPropertyChanged(nameof(HasNoItems));
+        return created;
+    }
 }

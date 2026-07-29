@@ -37,7 +37,8 @@ public sealed partial class ProjectsPage : Page
             App.Services.GetRequiredService<IRepoConfigService>(),
             App.Services.GetRequiredService<ISessionCapabilityService>(),
             App.Services.GetRequiredService<ISettingsService>(),
-            App.Services.GetRequiredService<ITerminalDiscoveryService>());
+            App.Services.GetRequiredService<ITerminalDiscoveryService>(),
+            App.Services.GetRequiredService<ISessionDiscoveryService>());
         InitializeComponent();
         CapEditor.WorkingDirectoryProvider = () => ViewModel.EditPath;
         Loaded += OnPageLoaded;
@@ -123,6 +124,39 @@ public sealed partial class ProjectsPage : Page
         ProjectList.SelectedItem = null;
         _suppressSelectionChanged = false;
         PopulateTerminals(ViewModel.EditTerminal);
+    }
+
+    // ---- bulk import ----
+
+    private async void OnImportClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.LoadImportCandidates();
+        ImportDialog.XamlRoot = XamlRoot;
+        await ImportDialog.ShowAsync();
+    }
+
+    private void OnImportSelectAll(object sender, RoutedEventArgs e) =>
+        ViewModel.SetAllImportSelections(true);
+
+    /// <summary>Keeps the dialog open so the user can see the new selection state.</summary>
+    private void OnImportDialogSelectNone(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
+        args.Cancel = true;
+        ViewModel.SetAllImportSelections(false);
+    }
+
+    private void OnImportDialogPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
+        if (ViewModel.ImportSelected() == 0)
+        {
+            // Nothing was created — keep the dialog up rather than silently closing.
+            args.Cancel = true;
+            return;
+        }
+
+        _suppressSelectionChanged = true;
+        ProjectList.SelectedItem = null;
+        _suppressSelectionChanged = false;
     }
 
     /// <summary>Load the capability catalog + in-repo config for whatever folder is
