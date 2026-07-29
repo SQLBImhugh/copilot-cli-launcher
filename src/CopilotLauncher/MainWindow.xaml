@@ -97,10 +97,15 @@
                         <muxc:FontIcon Glyph="&#xE734;"/>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
-
                 <muxc:NavigationViewItem Tag="newshortcut" Content="New Shortcut" AutomationProperties.AutomationId="NavNewShortcut">
                     <muxc:NavigationViewItem.Icon>
                         <muxc:FontIcon Glyph="&#xE710;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem Tag="projects" Content="Projects" AutomationProperties.AutomationId="NavProjects">
+                    <muxc:NavigationViewItem.Icon>
+                        <muxc:FontIcon Glyph="&#xE8B7;"/>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
 

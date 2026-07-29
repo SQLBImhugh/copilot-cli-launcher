@@ -81,6 +81,140 @@ public sealed class SessionCapabilityServiceTests : IDisposable
     }
 
     [Fact]
+    public void ScanAgents_StripsAgentMdSuffix_AndSkipsDisabledFiles()
+    {
+        var agentsDir = Path.Combine(_tmpRoot, ".github", "agents");
+        Directory.CreateDirectory(agentsDir);
+        File.WriteAllText(Path.Combine(agentsDir, "winui-dev.agent.md"), "# winui");
+        File.WriteAllText(Path.Combine(agentsDir, "retired.md.disabled"), "# off");
+
+        var agents = SessionCapabilityService.ScanAgents(_tmpRoot, copilotHome: NewDir("copilot"), claudeHome: null);
+
+        Assert.Contains("winui-dev", agents);
+        Assert.DoesNotContain("retired", agents);
+        Assert.DoesNotContain("winui-dev.agent", agents);
+    }
+
+    [Fact]
+    public void ScanAgents_FindsPluginAgents_NamespacedByPlugin()
+    {
+        var copilotHome = NewDir("copilot");
+        WritePlugin(copilotHome, "market", "winui", agentFiles: new[] { "winui-dev.agent.md" });
+        WritePlugin(copilotHome, "market", "pbip", agentFiles: new[] { "pbip-validator.md" });
+        WritePlugin(copilotHome, "market", "off-plugin", agentFiles: new[] { "nope.md" }, enabled: false);
+        WriteConfig(copilotHome);
+
+        var agents = SessionCapabilityService.ScanAgents(null, copilotHome, claudeHome: null);
+
+        Assert.Contains("winui:winui-dev", agents);
+        Assert.Contains("pbip:pbip-validator", agents);
+        Assert.DoesNotContain("off-plugin:nope", agents);
+    }
+
+    [Fact]
+    public void ScanAgents_HonorsPluginManifestAgentsList()
+    {
+        var copilotHome = NewDir("copilot");
+        var dir = WritePlugin(copilotHome, "market", "msbuild", agentFiles: new[] { "msbuild.agent.md", "extra.md" });
+        File.WriteAllText(Path.Combine(dir, "plugin.json"),
+            """{ "name": "msbuild", "agents": ["./agents/msbuild.agent.md"] }""");
+        WriteConfig(copilotHome);
+
+        var agents = SessionCapabilityService.ScanAgents(null, copilotHome, claudeHome: null);
+
+        Assert.Contains("msbuild:msbuild", agents);
+        Assert.DoesNotContain("msbuild:extra", agents);
+    }
+
+    [Fact]
+    public void PluginAgentPaths_RejectsPathsEscapingPluginDir()
+    {
+        var copilotHome = NewDir("copilot");
+        var dir = WritePlugin(copilotHome, "market", "evil", agentFiles: Array.Empty<string>());
+        File.WriteAllText(Path.Combine(dir, "plugin.json"),
+            """{ "name": "evil", "agents": { "paths": ["../../elsewhere"], "exclusive": true } }""");
+
+        var paths = SessionCapabilityService.PluginAgentPaths(dir);
+
+        Assert.Equal(new[] { Path.Combine(dir, "agents") }, paths);
+    }
+
+    [Fact]
+    public void EnumerateInstalledPlugins_KeepsEntriesWithNoMarketplaceOrCachePath()
+    {
+        // Directory is only needed for agent scanning. Dropping such an entry would
+        // omit it from the per-repo enabledPlugins allowlist and silently disable it.
+        var copilotHome = NewDir("copilot");
+        File.WriteAllText(Path.Combine(copilotHome, "config.json"), """
+        {
+          "installedPlugins": [
+            { "name": "solo" },
+            { "name": "winui", "marketplace": "market", "enabled": false }
+          ]
+        }
+        """);
+
+        var plugins = SessionCapabilityService.EnumerateInstalledPlugins(copilotHome);
+
+        Assert.Equal(2, plugins.Count);
+        var solo = plugins.Single(p => p.Name == "solo");
+        Assert.Equal("solo", solo.Key);
+        Assert.Equal(string.Empty, solo.Directory);
+        Assert.True(solo.Enabled);          // absent "enabled" means enabled
+
+        var winui = plugins.Single(p => p.Name == "winui");
+        Assert.Equal("winui@market", winui.Key);
+        Assert.False(winui.Enabled);
+    }
+
+    [Fact]
+    public void ScanAgents_ParsesJsoncConfig_WithCommentsAndTrailingCommas()
+    {
+        var copilotHome = NewDir("copilot");
+        WritePlugin(copilotHome, "market", "winui", agentFiles: new[] { "winui-dev.agent.md" });
+        // The CLI writes config.json with a leading // banner comment.
+        File.WriteAllText(Path.Combine(copilotHome, "config.json"), """
+        // User configuration for the Copilot CLI.
+        {
+          "installedPlugins": [
+            { "name": "winui", "marketplace": "market", "enabled": true },
+          ],
+        }
+        """);
+
+        var agents = SessionCapabilityService.ScanAgents(null, copilotHome, claudeHome: null);
+
+        Assert.Contains("winui:winui-dev", agents);
+    }
+
+    private string NewDir(string name)
+    {
+        var dir = Path.Combine(_tmpRoot, name);
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>Creates &lt;copilotHome&gt;/installed-plugins/&lt;market&gt;/&lt;plugin&gt;/agents/* and records it for WriteConfig.</summary>
+    private string WritePlugin(string copilotHome, string marketplace, string plugin, string[] agentFiles, bool enabled = true)
+    {
+        var dir = Path.Combine(copilotHome, "installed-plugins", marketplace, plugin);
+        var agentsDir = Path.Combine(dir, "agents");
+        Directory.CreateDirectory(agentsDir);
+        foreach (var f in agentFiles) File.WriteAllText(Path.Combine(agentsDir, f), "# agent");
+        _plugins.Add((plugin, marketplace, enabled));
+        return dir;
+    }
+
+    private void WriteConfig(string copilotHome)
+    {
+        var entries = string.Join(",", _plugins.Select(p =>
+            $$"""{ "name": "{{p.Name}}", "marketplace": "{{p.Marketplace}}", "enabled": {{(p.Enabled ? "true" : "false")}} }"""));
+        File.WriteAllText(Path.Combine(copilotHome, "config.json"), $$"""{ "installedPlugins": [{{entries}}] }""");
+    }
+
+    private readonly List<(string Name, string Marketplace, bool Enabled)> _plugins = new();
+
+    [Fact]
     public async Task DiscoverAsync_ComposesCatalog_AndCaches()
     {
         var calls = 0;

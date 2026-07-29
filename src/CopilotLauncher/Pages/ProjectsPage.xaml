@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CopilotLauncher.Pages.ProjectsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:CopilotLauncher.Models"
+    xmlns:vm="using:CopilotLauncher.ViewModels"
+    xmlns:controls="using:CopilotLauncher.Controls"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    FontFamily="{ThemeResource BodyFontFamily}">
+
+    <Grid Padding="{ThemeResource PagePadding}" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock Text="Projects" Style="{StaticResource TitleLargeTextBlockStyle}" FontFamily="{ThemeResource HeadingFontFamily}" FontSize="{ThemeResource PageTitleFontSize}"/>
+            <TextBlock Text="Pin how a folder always starts. Resuming any session under a project's path applies these settings automatically."
+                       Opacity="0.7" Style="{StaticResource BodyTextBlockStyle}"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+            <Button Content="+ Add project"
+                    AutomationProperties.AutomationId="ProjectsAddButton"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Click="OnAddClick"/>
+            <Button Content="↻ Refresh"
+                    AutomationProperties.AutomationId="ProjectsRefreshButton"
+                    Click="OnRefreshClick"/>
+        </StackPanel>
+
+        <!-- List + editor -->
+        <Grid Grid.Row="2" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" MinWidth="260"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Saved projects -->
+            <Grid Grid.Column="0" RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <ListView Grid.Row="0"
+                          x:Name="ProjectList"
+                          AutomationProperties.AutomationId="ProjectsList"
+                          ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                          SelectionMode="Single"
+                          SelectionChanged="OnProjectSelectionChanged"
+                          Padding="0"
+                          Background="{ThemeResource SubtleFillColorTransparentBrush}">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0,0,0,6"/>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:ProjectProfile">
+                            <StackPanel Padding="12,10"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="{ThemeResource CardBorderThickness}"
+                                        CornerRadius="{StaticResource OverlayCornerRadius}"
+                                        Spacing="2">
+                                <TextBlock Text="{x:Bind Label, Mode=OneTime}"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{x:Bind Path, Mode=OneTime}"
+                                           Opacity="0.65"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <TextBlock Grid.Row="1"
+                           Text="No projects yet. Click “Add project” to pin a folder's startup behavior."
+                           Visibility="{x:Bind BoolToVis(ViewModel.HasNoItems), Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           Opacity="0.6"
+                           Style="{StaticResource CaptionTextBlockStyle}"/>
+            </Grid>
+
+            <!-- Editor -->
+            <ScrollViewer Grid.Column="1"
+                          VerticalScrollBarVisibility="Auto"
+                          Visibility="{x:Bind BoolToVis(ViewModel.IsEditing), Mode=OneWay}">
+                <StackPanel Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Name" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBox AutomationProperties.AutomationId="ProjectLabelTextBox"
+                                 Text="{x:Bind ViewModel.EditLabel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="Defaults to the folder name"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Project folder" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Any session whose working directory is this folder gets these settings."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     AutomationProperties.AutomationId="ProjectPathTextBox"
+                                     Text="{x:Bind ViewModel.EditPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     PlaceholderText="C:\code\my-project"/>
+                            <Button Grid.Column="1" Content="Browse…"
+                                    AutomationProperties.AutomationId="ProjectBrowseFolderButton"
+                                    Click="OnBrowseFolderClick"/>
+                        </Grid>
+                        <CheckBox Content="Also apply to sub-folders"
+                                  AutomationProperties.AutomationId="ProjectIncludeSubdirsCheckBox"
+                                  IsChecked="{x:Bind ViewModel.EditIncludeSubdirectories, Mode=TwoWay}"/>
+                        <CheckBox Content="Profile enabled"
+                                  AutomationProperties.AutomationId="ProjectEnabledCheckBox"
+                                  IsChecked="{x:Bind ViewModel.EditEnabled, Mode=TwoWay}"/>
+                    </StackPanel>
+
+                    <!-- Startup flags -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Startup flags" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Unchecked “Override” boxes inherit the global Sessions Resume defaults from Settings."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" Content="Override"
+                                      AutomationProperties.AutomationId="ProjectOverrideAllowAllCheckBox"
+                                      IsChecked="{x:Bind ViewModel.EditOverrideAllowAll, Mode=TwoWay}"/>
+                            <CheckBox Grid.Column="1" Content="--allow-all (auto-approve tool / path / URL prompts)"
+                                      AutomationProperties.AutomationId="ProjectAllowAllCheckBox"
+                                      IsEnabled="{x:Bind ViewModel.EditOverrideAllowAll, Mode=OneWay}"
+                                      IsChecked="{x:Bind ViewModel.EditAllowAll, Mode=TwoWay}"/>
+                        </Grid>
+
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" Content="Override"
+                                      AutomationProperties.AutomationId="ProjectOverridePreApproveCheckBox"
+                                      IsChecked="{x:Bind ViewModel.EditOverridePreApprove, Mode=TwoWay}"/>
+                            <CheckBox Grid.Column="1" Content="Pre-approve extension elevated permissions in this folder"
+                                      AutomationProperties.AutomationId="ProjectPreApproveCheckBox"
+                                      IsEnabled="{x:Bind ViewModel.EditOverridePreApprove, Mode=OneWay}"
+                                      IsChecked="{x:Bind ViewModel.EditPreApprove, Mode=TwoWay}"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Extra copilot args" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Appended to every launch of this project. Blank = inherit the global default."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                        <TextBox AutomationProperties.AutomationId="ProjectExtraArgsTextBox"
+                                 Text="{x:Bind ViewModel.EditExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="--model claude-sonnet-4.5"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Terminal" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Blank = use the default terminal from Settings."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                        <ComboBox x:Name="TerminalCombo" MinWidth="220"
+                                  AutomationProperties.AutomationId="ProjectTerminalCombo"
+                                  SelectionChanged="OnTerminalChanged"/>
+                    </StackPanel>
+
+                    <!-- Capabilities -->
+                    <StackPanel Spacing="6">
+                        <CheckBox Content="Override capabilities for this project"
+                                  AutomationProperties.AutomationId="ProjectOverrideCapabilitiesCheckBox"
+                                  IsChecked="{x:Bind ViewModel.EditOverrideCapabilities, Mode=TwoWay}"/>
+                        <TextBlock Text="MCP servers, custom agent, tool allow/exclude lists and skills. These have no in-repo equivalent, so they are always passed as startup flags."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6" TextWrapping="Wrap"/>
+                        <controls:CapabilitiesEditor x:Name="CapEditor"
+                                                     IsEnabled="{x:Bind ViewModel.EditOverrideCapabilities, Mode=OneWay}"/>
+                    </StackPanel>
+
+                    <!-- In-repo config -->
+                    <StackPanel Spacing="8"
+                                Padding="16,14"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="{ThemeResource CardBorderThickness}"
+                                CornerRadius="{StaticResource OverlayCornerRadius}">
+                        <TextBlock Text="In-repo config" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock TextWrapping="Wrap" Opacity="0.65" Style="{StaticResource CaptionTextBlockStyle}"
+                                   Text="Copilot reads these from the folder itself, so anything set here applies to every session — including ones started outside this launcher. Everything else has to be a startup flag."/>
+
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.RepoConfigFiles, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RepoConfigRow">
+                                    <Grid ColumnSpacing="8" Margin="0,2" Opacity="{x:Bind RowOpacity}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto" MinWidth="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <muxc:FontIcon Grid.Column="0" FontSize="12" Glyph="{x:Bind StatusGlyph}"/>
+                                        <TextBlock Grid.Column="1" Text="{x:Bind RelativePath}"
+                                                   FontFamily="Consolas"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"/>
+                                        <TextBlock Grid.Column="2" Text="{x:Bind Description}"
+                                                   Opacity="0.7" TextWrapping="Wrap"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Plugins for this repo" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,0"/>
+                        <TextBlock TextWrapping="Wrap" Opacity="0.65" Style="{StaticResource CaptionTextBlockStyle}"
+                                   Text="Writes an enabledPlugins allowlist to .github/copilot/settings.json. Plugins supply most MCP servers, agents and skills, so pinning them here replaces several startup flags. The CLI treats the list as an allowlist, so every installed plugin is written explicitly."/>
+
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.RepoPlugins, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RepoPluginToggle">
+                                    <CheckBox Margin="0,-4"
+                                              IsChecked="{x:Bind IsEnabled, Mode=TwoWay}">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{x:Bind DisplayName}"/>
+                                            <TextBlock Text="{x:Bind Caption}" Opacity="0.5"
+                                                       VerticalAlignment="Center"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"/>
+                                        </StackPanel>
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <CheckBox Content="Re-write this file every time the project launches"
+                                  AutomationProperties.AutomationId="ProjectSyncRepoConfigCheckBox"
+                                  IsChecked="{x:Bind ViewModel.EditSyncRepoConfig, Mode=TwoWay}"/>
+
+                        <controls:WrapPanel HorizontalSpacing="6" VerticalSpacing="6">
+                            <Button Content="Inspect folder"
+                                    AutomationProperties.AutomationId="ProjectInspectRepoButton"
+                                    Click="OnInspectRepoClick"/>
+                            <Button Content="Write to repo"
+                                    AutomationProperties.AutomationId="ProjectWriteRepoButton"
+                                    IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"
+                                    Click="OnWriteRepoClick"/>
+                            <Button Content="Clear repo pin"
+                                    AutomationProperties.AutomationId="ProjectClearRepoButton"
+                                    IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"
+                                    Click="OnClearRepoClick"/>
+                            <muxc:ProgressRing IsActive="{x:Bind ViewModel.IsLoadingEditor, Mode=OneWay}"
+                                               Width="18" Height="18"/>
+                        </controls:WrapPanel>
+
+                        <TextBlock Text="{x:Bind ViewModel.RepoConfigMessage, Mode=OneWay}"
+                                   TextWrapping="Wrap" Opacity="0.8"
+                                   Style="{StaticResource CaptionTextBlockStyle}"/>
+                    </StackPanel>
+
+                    <!-- Actions -->
+                    <controls:WrapPanel HorizontalSpacing="6" VerticalSpacing="6">
+                        <Button Content="Save"
+                                AutomationProperties.AutomationId="ProjectSaveButton"
+                                Style="{StaticResource AccentButtonStyle}"
+                                IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"
+                                Click="OnSaveClick"/>
+                        <Button Content="Cancel"
+                                AutomationProperties.AutomationId="ProjectCancelButton"
+                                Click="OnCancelClick"/>
+                        <Button Content="🗑 Delete"
+                                AutomationProperties.AutomationId="ProjectDeleteButton"
+                                Visibility="{x:Bind BoolToVis(ViewModel.HasSelection), Mode=OneWay}"
+                                Click="OnDeleteClick"/>
+                    </controls:WrapPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <Border Grid.Row="3"
+                Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+                CornerRadius="{StaticResource ControlCornerRadius}"
+                Padding="12,6">
+            <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Opacity="0.8"/>
+        </Border>
+    </Grid>
+</Page>

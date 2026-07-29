@@ -76,6 +76,8 @@ public partial class App : Application
         services.AddSingleton<ITerminalDiscoveryService, TerminalDiscoveryService>();
         services.AddSingleton<ILaunchService, LaunchService>();
         services.AddSingleton<IShortcutsService, ShortcutsService>();
+        services.AddSingleton<IProjectsService, ProjectsService>();
+        services.AddSingleton<IRepoConfigService, RepoConfigService>();
         services.AddSingleton<ISessionRepairService, SessionRepairService>();
         services.AddSingleton<IExtensionPermissionService, ExtensionPermissionService>();
         services.AddSingleton<ISessionCapabilityService, SessionCapabilityService>();

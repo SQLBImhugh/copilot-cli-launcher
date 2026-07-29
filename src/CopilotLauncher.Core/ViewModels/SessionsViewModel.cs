@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 
@@ -18,6 +19,9 @@ public sealed partial class SessionsViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly IAfterLaunchAction _afterLaunch;
     private readonly IExtensionPermissionService? _extPerms;
+    private readonly IProjectsService? _projects;
+    private readonly IRepoConfigService? _repoConfig;
+    private readonly ISessionCapabilityService? _capabilities;
     private Func<Action, Task>? _marshalToUi;
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
@@ -36,11 +40,14 @@ public sealed partial class SessionsViewModel : ObservableObject
     [ObservableProperty]
     private bool _showRecent = true;
 
+    // Named / Heavily used default to off: the chips intersect (AND), so
+    // checking all three by default hid nearly everything. "Recent" alone is
+    // the useful landing view.
     [ObservableProperty]
-    private bool _showNamed = true;
+    private bool _showNamed;
 
     [ObservableProperty]
-    private bool _showHeavy = true;
+    private bool _showHeavy;
 
     [ObservableProperty]
     private bool _showAll;
@@ -70,7 +77,10 @@ public sealed partial class SessionsViewModel : ObservableObject
         ISettingsService settings,
         IAfterLaunchAction? afterLaunch = null,
         Func<Action, Task>? marshalToUi = null,
-        IExtensionPermissionService? extPerms = null)
+        IExtensionPermissionService? extPerms = null,
+        IProjectsService? projects = null,
+        IRepoConfigService? repoConfig = null,
+        ISessionCapabilityService? capabilities = null)
     {
         _discovery = discovery;
         _terminals = terminals;
@@ -79,6 +89,9 @@ public sealed partial class SessionsViewModel : ObservableObject
         _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
         _marshalToUi = marshalToUi ?? (SynchronizationContext.Current is not null ? CreateUiMarshaller(SynchronizationContext.Current) : null);
         _extPerms = extPerms;
+        _projects = projects;
+        _repoConfig = repoConfig;
+        _capabilities = capabilities;
     }
 
     partial void OnShowRecentChanged(bool value) => ApplyFilters();
@@ -130,89 +143,107 @@ public sealed partial class SessionsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Spawn a terminal session for this row. Picks the default terminal from
-    /// settings (or auto-pick from discovered terminals). Also applies the
-    /// user's "Sessions Resume defaults" (AI summary, --allow-all, extra args)
-    /// from <see cref="ISettingsService"/> so a one-click resume from the
-    /// Sessions tab uses the same flags every time.
+    /// Spawn a terminal session for this row. Settings are resolved through the
+    /// project profile that governs the session's working directory (see
+    /// <see cref="IProjectsService"/>): the global "Sessions Resume defaults"
+    /// with that project's overrides applied on top. Directories not covered by
+    /// any project behave exactly as before.
     /// Returns true on success; false (and updates StatusMessage) on failure.
     /// </summary>
     public bool ResumeSession(SessionRow row)
     {
-        try
-        {
-            var terminal = ResolveDefaultTerminal();
-            var resumeDefaults = _settings.Current.SessionsResume;
-            var dir = string.IsNullOrEmpty(row.Cwd) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : row.Cwd;
-            if (resumeDefaults.PreApproveExtensions)
-                _extPerms?.EnsureExtensionGrants(dir);
-            _launch.Spawn(new LaunchRequest
-            {
-                WorkingDirectory = dir,
-                ResumeTarget = row.SessionId,
-                EnableAllowAll = resumeDefaults.EnableAllowAll,
-                ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
-                Terminal = terminal,
-            });
-            StatusMessage = $"Resumed {row.ShortId}… in {terminal?.DisplayName ?? "direct"}.";
-            _afterLaunch.Apply(_settings.Current.LauncherBehavior.AfterLaunch);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Resume failed: {ex.Message}";
-            return false;
-        }
+        var dir = string.IsNullOrEmpty(row.Cwd) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : row.Cwd;
+        return LaunchAt(dir, row.SessionId, $"Resumed {row.ShortId}…", "Resume failed");
     }
 
     public bool StartNewSessionAt(SessionRow row)
     {
+        var dir = string.IsNullOrWhiteSpace(row.Cwd) || row.Cwd == "(unknown working dir)"
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : row.Cwd;
+        return LaunchAt(dir, null, $"Started new session in {dir}…", "New session failed");
+    }
+
+    /// <summary>
+    /// Shared launch path for ▶ Resume and "new session here". Both apply the
+    /// same resolved project profile so a project always starts the same way
+    /// regardless of which button opened it.
+    /// </summary>
+    /// <remarks>
+    /// --allow-all auto-approves copilot's tool / path / URL permission prompts.
+    /// It does NOT cover an extension's "elevated permissions" request — copilot
+    /// gates those per-directory in ~/.copilot/permissions-config.json via
+    /// "extension-permission-access" grants, which is what PreApproveExtensions
+    /// writes.
+    /// </remarks>
+    private bool LaunchAt(string dir, string? resumeTarget, string successMessage, string failurePrefix)
+    {
         try
         {
-            var dir = string.IsNullOrWhiteSpace(row.Cwd) || row.Cwd == "(unknown working dir)"
-                ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-                : row.Cwd;
-            var terminal = ResolveDefaultTerminal();
-            // Mirror the ▶ Resume button's flags (the adjacent Sessions-tab
-            // launch action) so a fresh session opens with the same allow-all /
-            // extra-args behavior. --allow-all auto-approves copilot's tool /
-            // path / URL permission prompts.
-            // NOTE: --allow-all does NOT cover an extension's "elevated
-            // permissions" ("skip tool permission prompts") request. copilot
-            // gates those per-directory in ~/.copilot/permissions-config.json
-            // via "extension-permission-access" grants, written when the user
-            // picks "Yes, and always allow <ext> in this repo". There is no CLI
-            // flag to pre-grant them, so a copilot update that resets that store
-            // (or a newly-added extension) re-prompts once per extension+repo
-            // regardless of --allow-all.
-            var resumeDefaults = _settings.Current.SessionsResume;
-            if (resumeDefaults.PreApproveExtensions)
+            var profile = _projects?.Resolve(dir, _settings.Current)
+                          ?? ProjectMatcher.Resolve(null, _settings.Current);
+            var terminal = ResolveTerminal(profile.TerminalOverride);
+
+            if (profile.PreApproveExtensions)
                 _extPerms?.EnsureExtensionGrants(dir);
+
+            var pinned = SyncRepoConfig(profile.Project);
+
             _launch.Spawn(new LaunchRequest
             {
                 WorkingDirectory = dir,
-                ResumeTarget = null,
-                EnableAllowAll = resumeDefaults.EnableAllowAll,
-                ExtraCopilotArgs = resumeDefaults.ExtraCopilotArgs,
+                ResumeTarget = resumeTarget,
+                EnableAllowAll = profile.EnableAllowAll,
+                ExtraCopilotArgs = profile.ExtraCopilotArgs,
+                Capabilities = profile.Capabilities,
                 Terminal = terminal,
             });
-            StatusMessage = $"Started new session in {dir}…";
+
+            var via = terminal?.DisplayName ?? "direct";
+            var project = profile.Project is null ? string.Empty : $" [{profile.Project.Label}]";
+            var repo = pinned ? " (repo plugin config synced)" : string.Empty;
+            StatusMessage = $"{successMessage} in {via}{project}.{repo}";
             _afterLaunch.Apply(_settings.Current.LauncherBehavior.AfterLaunch);
             return true;
         }
         catch (Exception ex)
         {
-            StatusMessage = $"New session failed: {ex.Message}";
+            StatusMessage = $"{failurePrefix}: {ex.Message}";
             return false;
         }
     }
 
-    private TerminalProfile? ResolveDefaultTerminal()
+    /// <summary>Mirror the project's plugin allowlist into
+    /// <c>.github/copilot/settings.json</c> when the project opted in. Best-effort:
+    /// a failure never blocks the launch. Uses the synchronous plugin read rather than
+    /// <c>DiscoverAsync</c> so a launch never stalls on a CLI shell-out.</summary>
+    private bool SyncRepoConfig(ProjectProfile? project)
+    {
+        if (project is null || !project.SyncRepoConfigOnLaunch) return false;
+        if (project.RepoEnabledPlugins is null) return false;
+        if (_repoConfig is null || _capabilities is null) return false;
+
+        try
+        {
+            var plugins = _capabilities.GetInstalledPlugins();
+            if (plugins.Count == 0) return false;
+            return _repoConfig.WriteEnabledPlugins(project.Path, plugins, project.RepoEnabledPlugins);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private TerminalProfile? ResolveTerminal(string? overrideId)
     {
         var discovered = _terminals.Discovered;
         if (discovered.Count == 0) return null;
 
-        var pref = _settings.Current.Terminal.DefaultTerminal;
+        var pref = !string.IsNullOrWhiteSpace(overrideId)
+            ? overrideId
+            : _settings.Current.Terminal.DefaultTerminal;
+
         if (!string.IsNullOrEmpty(pref) && pref != "auto")
         {
             var match = discovered.FirstOrDefault(t => t.Id == pref);

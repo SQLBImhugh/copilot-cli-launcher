@@ -81,15 +81,49 @@ Output: `dist\CopilotLauncher\CopilotLauncher.exe` (~70 MB self-contained single
 
 Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLaunchesService`, `IUpdateCheckService`, `IBriefingService`, `IAISummaryService`, `ISessionRepairService`, `IKnownBugWorkaroundService`, `IMigrationService`, `IShortcutExportService`.
 
+### Per-project launch profiles
+
+| Service | Responsibility |
+|---|---|
+| `IProjectsService` | Load/save `projects.json` under `%LOCALAPPDATA%\CopilotLauncher\` (same atomic-write + corrupt-backup contract as `IShortcutsService`). Also resolves a working directory to its governing `ProjectProfile`. |
+| `IRepoConfigService` | Read/write the Copilot CLI config that lives *inside* a project directory. `Inspect(dir)` reports which config files the folder supplies; `WriteEnabledPlugins` / `ClearEnabledPlugins` manage `.github/copilot/settings.json` → `enabledPlugins`. |
+
+`ProjectMatcher` (in `Helpers/`) holds the precedence rules as pure static methods so they're testable without disk or UI:
+
+- **Match** — exact path wins; otherwise the longest ancestor path with `IncludeSubdirectories`. Case-insensitive, separator-normalized, and prefix-safe (`C:\repos\app` does not match `C:\repos\app-tools`). Disabled profiles are skipped.
+- **Resolve** — merges the profile over `AppSettings.SessionsResume`. Every override is nullable; `null` inherits. `Capabilities` replaces the global default wholesale rather than merging field-by-field, because a partial capability merge has no unambiguous meaning (is an empty tool list "inherit" or "clear"?).
+- **No match** — returns exactly the pre-Projects behavior, including a `null` capability set, so adding the feature can't change how uncovered directories launch.
+
+`SessionsViewModel.ResumeSession` and `StartNewSessionAt` both funnel through one private `LaunchAt`, so a project always starts identically regardless of which button opened it.
+
+### In-repo vs. startup-flag settings
+
+Verified against the `@github/copilot` bundle (v1.0.x). The CLI merges `.github/copilot/settings.json` over the user config at session start, so anything expressible there applies to *every* session in that folder — including ones started outside this launcher.
+
+| Capability | In-repo file | Launcher role |
+|---|---|---|
+| `enabledPlugins` | `.github/copilot/settings.json` | **Managed** — written as a complete allowlist. |
+| `hooks`, `disableAllHooks`, `mergeStrategy`, `extraKnownMarketplaces` | `.github/copilot/settings.json` | Detected only. |
+| Workspace MCP servers | `.mcp.json`, `.github/mcp.json` | Detected only. |
+| Instructions | `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md` | Detected only. |
+| Repo agents / skills | `.github/agents/`, `.github/skills/` | Detected only. |
+| Language servers | `.github/lsp.json` | Detected only. |
+| `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all`, `--disable-mcp-server` | *(none)* | Always startup flags. |
+
+> **`enabledPlugins` is an allowlist, not a patch.** The CLI keeps only the plugins whose key maps to `true`, so a partial map silently disables everything else. `RepoConfigService.WriteEnabledPlugins` therefore takes the full installed-plugin list and writes an explicit `true`/`false` for each. Keys are `name@marketplace` (e.g. `winui@awesome-copilot`).
+
 ## Models
 
 - **`CopilotSession`** — one entry per discovered session. Source: `workspace.yaml`. Includes `Id`, `Cwd`, `Repository`, `Branch`, `UserNamed`, `SummaryCount`, `IsLocked`, `SizeBytes`, paths, timestamps.
 - **`SavedLaunch`** — user-defined launch shortcut. Source: `launches.json`. Includes `Label`, `WorkingDirectory`, `ResumeTarget`, flags, optional `TerminalOverride`.
+- **`ProjectProfile`** — per-directory launch overrides. Source: `projects.json`. `Path` + `IncludeSubdirectories` are the match key; `EnableAllowAll`, `PreApproveExtensions`, `ExtraCopilotArgs`, `TerminalOverride`, and `Capabilities` are nullable overrides; `RepoEnabledPlugins` + `SyncRepoConfigOnLaunch` drive the in-repo plugin allowlist.
+- **`InstalledPluginInfo`** — one entry from `~/.copilot/config.json` → `installedPlugins`, carrying the `name@marketplace` key the CLI uses for `enabledPlugins`.
 - **`AppSettings`** — root settings object with 7 nested sub-settings groups (Terminal, CopilotCli, Briefings, Repair, SessionListing, LauncherBehavior, Storage) matching the architecture plan's Settings inventory.
 
 ## Helpers
 
 - **`ArgQuoter`** — direct port of the legacy PS launcher's `Format-ShortcutArgs`. `Format(args)` → quoted command-line string for `.lnk` Arguments. `Split(line)` → tokenize a user-entered command-line fragment preserving quoted spans. Round-trip safe; covered by `ArgQuoterTests`.
+- **`ProjectMatcher`** — pure static path matching + override merging for `ProjectProfile`. Returns a `ResolvedLaunchProfile`. Covered by `ProjectMatcherTests`.
 
 ## Cross-cutting concerns
 

@@ -39,13 +39,14 @@ This is a hard rule:
 ```
 src/
   CopilotLauncher.Core/              ← class library (testable, .NET 8)
-    Models/{CopilotSession,SavedLaunch,AppSettings}.cs
+    Models/{CopilotSession,SavedLaunch,AppSettings,ProjectProfile}.cs
     Helpers/ArgQuoter.cs             ← port of legacy Format-ShortcutArgs
-    Services/{SettingsService,SessionDiscoveryService}.cs
+    Helpers/ProjectMatcher.cs        ← per-directory profile match + override merge
+    Services/{SettingsService,SessionDiscoveryService,ProjectsService,RepoConfigService}.cs
   CopilotLauncher/                   ← WinUI 3 app
     App.xaml(.cs)                    ← DI container, App.Services
     MainWindow.xaml(.cs)             ← NavigationView shell + Mica backdrop
-    Pages/                           ← five page stubs; pages get real UI per phase
+    Pages/                           ← page stubs; pages get real UI per phase
     app.manifest                     ← PerMonitorV2 DPI awareness
     CopilotLauncher.csproj
 tests/

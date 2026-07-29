@@ -9,9 +9,20 @@ A modern WinUI 3 desktop app to manage and resume GitHub Copilot CLI sessions on
 
 - **Sessions browser** — every `~/.copilot/session-state/` session in one list with filter chips (Recent / Named / Heavily used / Show all), search across path / repo / branch / id, multi-key sort, and one-click **Resume** in your preferred terminal. Includes a *Save as shortcut…* button so any session becomes a reusable launch.
 - **New Session** — pick a folder (browse or type), add optional launcher args / `--allow-all` / terminal override, and start a fresh Copilot CLI session there. Live command preview; nothing is saved (use *New Shortcut* for a reusable launch).
-- **Capabilities selector** — on New Session, New Shortcut, and as Settings defaults: choose which MCP servers load (enumerated live via `copilot mcp list`), pick a single custom agent (`--agent`), set a tool allow/exclude list (`--available-tools` / `--excluded-tools`), or disable all skills. Saved per shortcut; reflected in the command preview.
+- **Capabilities selector** — on New Session, New Shortcut, and as Settings defaults: choose which MCP servers load (enumerated live via `copilot mcp list`), pick a single custom agent (`--agent`, discovered from `.github/agents`, `.claude/agents`, `~/.copilot/agents`, and every enabled plugin as `plugin:agent`), set a tool allow/exclude list (`--available-tools` / `--excluded-tools`), or disable all skills. Saved per shortcut; reflected in the command preview.
 - **Saved Shortcuts** — pinned project + workdir + flags + terminal combos. One click to launch; one click to export to a Windows `.lnk` so you can pin to taskbar / start menu.
 - **New Shortcut wizard** — live command preview as you set the working dir, resume target, `--allow-all`, extra copilot args, and terminal.
+- **Projects** — per-folder startup behavior. Point a project at a folder (optionally covering sub-folders) and every **Resume** or *new session here* under that path automatically applies its `--allow-all`, extra args, terminal, and capability selection. Each override is tri-state, so anything you don't set keeps inheriting the global Sessions Resume defaults, and the most specific matching folder wins. Also includes an **in-repo config** panel — see below.
+- **In-repo config (vs. startup flags)** — the Projects tab reports which Copilot CLI config the folder already supplies on its own, and can write a plugin allowlist into `.github/copilot/settings.json` so plugin selection is pinned in the repo instead of re-supplied as flags on every launch:
+
+  | Setting | Where it can live | Notes |
+  |---|---|---|
+  | Enabled plugins (and the MCP servers / agents / skills they bring) | `.github/copilot/settings.json` → `enabledPlugins` | **Launcher-managed.** Written as a complete allowlist because the CLI drops any plugin not listed as `true`. |
+  | Extra MCP servers | `.mcp.json`, `.github/mcp.json` | Detected only. Adds servers; can't switch off a user/plugin server — that still needs `--disable-mcp-server`. |
+  | Instructions | `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md` | Detected only. |
+  | Repo agents / skills | `.github/agents/`, `.github/skills/` | Detected only. |
+  | Language servers | `.github/lsp.json` | Detected only. |
+  | `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all`, `--disable-mcp-server` | *(no in-repo equivalent)* | Always passed as startup flags by the launcher. |
 - **Changelog tab** — two sub-views: **Changelog** lists every version-bump notes entry (latest highlighted, previous collapsible). **Briefings** lists AI-generated 4-6 bullet "what changed for you" summaries. *Check now* runs `copilot update` and captures the release notes only (never spends AI credit). *Generate AI Briefing* is fully on-demand: if you're already briefed on the current version it just re-displays the existing summary, otherwise it summarizes everything since the last briefing.
 - **Settings** — terminal default, Sessions Resume defaults, AI Summary context file, update-check frequency, repair/workaround toggles, launcher behavior (after-launch action, start-with-Windows, theme), storage paths, about.
 - **Compact mode** — title-bar toggle resizes the window to a 320×640 mini-launcher showing just your saved shortcuts. Great for keeping the launcher pinned to a corner.
