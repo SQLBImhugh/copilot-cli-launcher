@@ -47,7 +47,8 @@ public sealed partial class SessionsPage : Page
             App.Services.GetRequiredService<IExtensionPermissionService>(),
             App.Services.GetRequiredService<IProjectsService>(),
             App.Services.GetRequiredService<IRepoConfigService>(),
-            App.Services.GetRequiredService<ISessionCapabilityService>());
+            App.Services.GetRequiredService<ISessionCapabilityService>(),
+            App.Services.GetRequiredService<ISessionDeletionService>());
         _migration = App.Services.GetRequiredService<IMigrationService>();
         InitializeComponent();
         Loaded += async (_, _) =>
@@ -119,6 +120,27 @@ public sealed partial class SessionsPage : Page
         {
             ViewModel.StartNewSessionAt(row);
         }
+    }
+
+    /// <summary>Delete a session from its card, after an explicit confirmation.</summary>
+    private async void OnDeleteSessionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: SessionRow row }) return;
+
+        var title = string.IsNullOrWhiteSpace(row.Title) ? row.Cwd : row.Title;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Delete this session?",
+            Content = $"{title}\n\n{row.Cwd}\nid {row.SessionId}\n\n" +
+                      "This permanently removes the session folder and its full transcript. It cannot be undone.",
+            PrimaryButtonText = "Delete",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        ViewModel.DeleteSession(row);
     }
 
     private void OnSaveAsLaunchClick(object sender, RoutedEventArgs e)

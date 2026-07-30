@@ -231,19 +231,41 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="6" VerticalAlignment="Center" HorizontalAlignment="Right">
-                            <Button Content="▶ Resume"
-                                    AutomationProperties.AutomationId="SessionResumeButton"
-                                    Style="{StaticResource AccentButtonStyle}"
+                        <Grid Grid.Column="1" VerticalAlignment="Stretch" HorizontalAlignment="Right">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Vertical" Spacing="6">
+                                <Button Content="▶ Resume"
+                                        AutomationProperties.AutomationId="SessionResumeButton"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Tag="{x:Bind Mode=OneTime}"
+                                        Click="OnResumeClick"
+                                        HorizontalAlignment="Stretch"/>
+                                <Button Content="Save as shortcut…"
+                                        AutomationProperties.AutomationId="SessionSaveAsShortcutButton"
+                                        Tag="{x:Bind Mode=OneTime}"
+                                        Click="OnSaveAsLaunchClick"
+                                        HorizontalAlignment="Stretch"/>
+                            </StackPanel>
+                            <!-- Bottom-right, so it lines up with the session-id row on the
+                                 left and stays well away from Resume. -->
+                            <Button Grid.Row="2"
+                                    HorizontalAlignment="Right"
+                                    Background="{ThemeResource SubtleFillColorTransparentBrush}"
+                                    BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
+                                    MinWidth="0"
+                                    Padding="6,2"
+                                    ToolTipService.ToolTip="Delete this session permanently"
+                                    AutomationProperties.AutomationId="SessionDeleteButton"
+                                    AutomationProperties.Name="Delete this session"
                                     Tag="{x:Bind Mode=OneTime}"
-                                    Click="OnResumeClick"
-                                    HorizontalAlignment="Stretch"/>
-                            <Button Content="Save as shortcut…"
-                                    AutomationProperties.AutomationId="SessionSaveAsShortcutButton"
-                                    Tag="{x:Bind Mode=OneTime}"
-                                    Click="OnSaveAsLaunchClick"
-                                    HorizontalAlignment="Stretch"/>
-                        </StackPanel>
+                                    Click="OnDeleteSessionClick">
+                                <FontIcon Glyph="&#xE74D;" FontSize="14"/>
+                            </Button>
+                        </Grid>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>

@@ -88,6 +88,7 @@ Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLau
 | `IProjectsService` | Load/save `projects.json` under `%LOCALAPPDATA%\CopilotLauncher\` (same atomic-write + corrupt-backup contract as `IShortcutsService`). Also resolves a working directory to its governing `ProjectProfile`. |
 | `IRepoConfigService` | Read/write the Copilot CLI config that lives *inside* a project directory. `Inspect(dir)` reports which config files the folder supplies; `WriteEnabledPlugins` / `ClearEnabledPlugins` manage `.github/copilot/settings.json` → `enabledPlugins`. |
 | `IProjectLaunchService` | The single launch path: resolve the governing profile → pre-approve extensions → sync repo config → spawn → apply the after-launch action. Used by the Sessions tab (Resume / new session here) and the Projects tab's **▶ New session** button so a project starts identically from either. |
+| `ISessionDeletionService` | Permanently deletes session folders. Deliberately paranoid: refuses locked sessions, refuses any path that doesn't resolve to a *direct child* of the session root (so a malformed id can't escape the store), and appends every deletion to `~/.copilot/deleted-sessions.log`. |
 
 `ProjectMatcher` (in `Helpers/`) holds the precedence rules as pure static methods so they're testable without disk or UI:
 

@@ -16,6 +16,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     private readonly ISessionDiscoveryService _discovery;
     private readonly ISettingsService _settings;
     private readonly IProjectLaunchService _projectLaunch;
+    private readonly ISessionDeletionService? _deletion;
     private Func<Action, Task>? _marshalToUi;
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
@@ -74,10 +75,12 @@ public sealed partial class SessionsViewModel : ObservableObject
         IExtensionPermissionService? extPerms = null,
         IProjectsService? projects = null,
         IRepoConfigService? repoConfig = null,
-        ISessionCapabilityService? capabilities = null)
+        ISessionCapabilityService? capabilities = null,
+        ISessionDeletionService? deletion = null)
     {
         _discovery = discovery;
         _settings = settings;
+        _deletion = deletion;
         _marshalToUi = marshalToUi ?? (SynchronizationContext.Current is not null ? CreateUiMarshaller(SynchronizationContext.Current) : null);
 
         // Built here rather than injected so this ctor's signature (and its tests)
@@ -171,6 +174,39 @@ public sealed partial class SessionsViewModel : ObservableObject
             return false;
         }
         StatusMessage = $"{successMessage} {result.Describe()}";
+        return true;
+    }
+
+    /// <summary>
+    /// Permanently delete one session's folder and drop it from the list. The caller is
+    /// responsible for confirming with the user first — this does not prompt.
+    /// Returns true on success; false (with StatusMessage set) otherwise.
+    /// </summary>
+    public bool DeleteSession(SessionRow row)
+    {
+        if (_deletion is null)
+        {
+            StatusMessage = "Deleting sessions is unavailable.";
+            return false;
+        }
+
+        var result = _deletion.Delete(row.SessionId);
+        if (!result.Deleted)
+        {
+            StatusMessage = $"Could not delete {row.ShortId}…: {result.Error}";
+            return false;
+        }
+
+        _all.RemoveAll(s => string.Equals(s.Id, row.SessionId, StringComparison.OrdinalIgnoreCase));
+        Visible.Remove(row);
+        TotalCount = _all.Count;
+        OnPropertyChanged(nameof(TotalCount));
+        OnPropertyChanged(nameof(VisibleCount));
+
+        var freed = result.BytesFreed >= 1L << 20
+            ? $"{result.BytesFreed / (double)(1L << 20):F0} MB"
+            : $"{result.BytesFreed / (double)(1L << 10):F0} KB";
+        StatusMessage = $"Deleted session {row.ShortId}… ({freed} freed).";
         return true;
     }
 

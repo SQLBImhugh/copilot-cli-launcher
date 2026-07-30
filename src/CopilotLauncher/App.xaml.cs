@@ -88,6 +88,7 @@ public partial class App : Application
             sp.GetRequiredService<IExtensionPermissionService>(),
             sp.GetRequiredService<IAfterLaunchAction>()));
         services.AddSingleton<ISessionRepairService, SessionRepairService>();
+        services.AddSingleton<ISessionDeletionService, SessionDeletionService>();
         services.AddSingleton<IExtensionPermissionService, ExtensionPermissionService>();
         services.AddSingleton<ISessionCapabilityService, SessionCapabilityService>();
         services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
