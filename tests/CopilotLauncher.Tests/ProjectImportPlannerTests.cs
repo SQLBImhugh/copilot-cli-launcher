@@ -161,18 +161,61 @@ public sealed class ProjectImportPlannerTests
     }
 
     [Fact]
-    public void RecommendedRowsSortFirst_ThenBySessionCount()
+    public void RecommendedRowsSortFirst_ThenByMostRecentlyUsed()
     {
+        var old = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var mid = new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc);
+        var recent = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+
         var candidates = Build(new[]
         {
-            S(@"C:\Users\tester\.copilot"), S(@"C:\Users\tester\.copilot"), S(@"C:\Users\tester\.copilot"),
-            S(@"C:\repos\small"),
-            S(@"C:\repos\big"), S(@"C:\repos\big"),
+            // Tooling folder, very recent + most sessions: still sorts last.
+            S(@"C:\Users\tester\.copilot", modified: recent),
+            S(@"C:\Users\tester\.copilot", modified: recent),
+            S(@"C:\Users\tester\.copilot", modified: recent),
+            // Many sessions but stale.
+            S(@"C:\repos\busy-but-old", modified: old),
+            S(@"C:\repos\busy-but-old", modified: old),
+            // A single recent session wins on recency.
+            S(@"C:\repos\fresh", modified: recent),
+            S(@"C:\repos\middle", modified: mid),
         });
 
-        Assert.Equal("big", candidates[0].SuggestedName);
-        Assert.Equal("small", candidates[1].SuggestedName);
-        Assert.Equal(".copilot", candidates[2].SuggestedName);
+        Assert.Equal("fresh", candidates[0].SuggestedName);
+        Assert.Equal("middle", candidates[1].SuggestedName);
+        Assert.Equal("busy-but-old", candidates[2].SuggestedName);
+        Assert.Equal(".copilot", candidates[3].SuggestedName);
+    }
+
+    [Fact]
+    public void SameRepoNameInTwoFolders_IsDisambiguatedByDate()
+    {
+        // The real case: two MSXInsights checkouts. The recent one must come first
+        // and both must expose a date.
+        var stale = new DateTime(2026, 2, 3, 0, 0, 0, DateTimeKind.Utc);
+        var fresh = new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc);
+
+        var candidates = Build(new[]
+        {
+            S(@"C:\Copilot\MSXInsights", repository: "me/MSXInsights", gitRoot: @"C:\Copilot\MSXInsights", modified: stale),
+            S(@"C:\Users\tester\msxinsights", repository: "me/MSXInsights", gitRoot: @"C:\Users\tester\msxinsights", modified: fresh),
+        });
+
+        Assert.Equal(2, candidates.Count);
+        Assert.All(candidates, c => Assert.Equal("MSXInsights", c.SuggestedName));
+        Assert.Equal(@"C:\Users\tester\msxinsights", candidates[0].Path);
+        Assert.Equal(fresh.ToLocalTime().ToString("yyyy-MM-dd"), candidates[0].LastUsedDate);
+        Assert.Equal(stale.ToLocalTime().ToString("yyyy-MM-dd"), candidates[1].LastUsedDate);
+    }
+
+    [Fact]
+    public void ExposesBothAbsoluteAndRelativeDates()
+    {
+        var when = DateTime.UtcNow.AddHours(-3);
+        var candidates = Build(new[] { S(@"C:\repos\app", modified: when) });
+
+        Assert.Equal(when.ToLocalTime().ToString("yyyy-MM-dd"), candidates[0].LastUsedDate);
+        Assert.Equal("3h ago", candidates[0].LastUsedRelative);
     }
 
     [Fact]

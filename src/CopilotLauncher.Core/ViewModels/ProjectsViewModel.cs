@@ -46,12 +46,14 @@ public sealed partial class ProjectImportRow : ObservableObject
     public string SuggestedName => Candidate.SuggestedName;
     public string Path => Candidate.Path;
     public string Caption => Candidate.Caption;
+    public string LastUsedDate => Candidate.LastUsedDate;
+    public string LastUsedRelative => Candidate.LastUsedRelative;
     public bool CanImport => !Candidate.AlreadyImported;
     public double RowOpacity => Candidate.AlreadyImported ? 0.5 : 1.0;
 
     /// <summary>Single-line label for screen readers — the row's visual content is a stack of
     /// TextBlocks, which would otherwise announce as nothing.</summary>
-    public string AccessibleName => $"{SuggestedName}, {Path}, {Caption}";
+    public string AccessibleName => $"{SuggestedName}, {Path}, last used {LastUsedDate}, {Caption}";
 }
 
 /// <summary>

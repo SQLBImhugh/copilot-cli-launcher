@@ -479,15 +479,7 @@ public sealed class SessionRow
         };
     }
 
-    private static string HumanizeRelative(DateTime when)
-    {
-        var span = DateTime.UtcNow - when.ToUniversalTime();
-        if (span.TotalMinutes < 1) return "just now";
-        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
-        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
-        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
-        return when.ToLocalTime().ToString("yyyy-MM-dd");
-    }
+    private static string HumanizeRelative(DateTime when) => RelativeTime.Humanize(when);
 
     private static string FormatBytes(long bytes)
     {

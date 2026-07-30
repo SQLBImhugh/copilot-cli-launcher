@@ -25,6 +25,13 @@ public sealed class ProjectImportCandidate
 
     public DateTime LastUsed { get; init; }
 
+    /// <summary>Absolute date of the most recent session here (<c>yyyy-MM-dd</c>). The primary
+    /// disambiguator when the same repo name exists in two folders.</summary>
+    public string LastUsedDate => RelativeTime.ToLocalDate(LastUsed);
+
+    /// <summary>"3d ago" / "2026-03-14" — recency at a glance.</summary>
+    public string LastUsedRelative => RelativeTime.Humanize(LastUsed);
+
     /// <summary>True when a project already covers this exact path.</summary>
     public bool AlreadyImported { get; init; }
 
@@ -60,6 +67,9 @@ public static class ProjectImportPlanner
     /// candidate for that root (so a project covers the whole repo, not a subfolder).
     /// Sessions whose working directory is the user-profile root itself are skipped — that's
     /// the "no project" default, not a real project.
+    /// Ordered most-recently-used first (within the recommended group) so the folders you're
+    /// actually working in surface at the top; that recency is also what disambiguates two
+    /// checkouts sharing a repo name.
     /// </summary>
     /// <param name="directoryExists">Injected for tests; defaults to <c>Directory.Exists</c>.</param>
     public static IReadOnlyList<ProjectImportCandidate> BuildCandidates(
@@ -124,6 +134,7 @@ public static class ProjectImportPlanner
                 };
             })
             .OrderByDescending(c => c.RecommendedByDefault)
+            .ThenByDescending(c => c.LastUsed)
             .ThenByDescending(c => c.SessionCount)
             .ThenBy(c => c.SuggestedName, StringComparer.OrdinalIgnoreCase)
             .ToList();

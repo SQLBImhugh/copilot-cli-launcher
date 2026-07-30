@@ -102,6 +102,9 @@ Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLau
 - Names the project after the git repo: `repository` is `owner/repo`, so the label is the `repo` part (`.git` stripped). Falls back to the folder name when there's no remote, and to the full path for a drive root.
 - Skips the user-profile root (that's where session with no project land).
 - Lists everything but only pre-ticks rows that aren't already a project, still exist on disk, and aren't under an install/tooling root (`~/AppData`, `~/.copilot`, `~/.vscode`, `~/.nuget`, `~/.dotnet`, `%ProgramData%`, Program Files, Windows).
+- Orders most-recently-used first within the recommended group, and surfaces each folder's last-used date. Two checkouts can share a repo name (`C:\Copilot\MSXInsights` vs `C:\Users\me\msxinsights`), and recency is what tells them apart — session count doesn't, since a stale folder can easily have more history.
+
+Date formatting is shared with the Sessions list via `Helpers/RelativeTime`.
 
 ### In-repo vs. startup-flag settings
 
