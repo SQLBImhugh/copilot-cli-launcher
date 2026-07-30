@@ -7,23 +7,13 @@ A modern WinUI 3 desktop app to manage and resume GitHub Copilot CLI sessions on
 
 ## What it does
 
-- **Sessions browser** — every `~/.copilot/session-state/` session in one list with filter chips (Recent / Named / Heavily used / Show all), search across path / repo / branch / id, multi-key sort, and one-click **Resume** in your preferred terminal. Includes a *Save as shortcut…* button so any session becomes a reusable launch.
+- **Sessions browser** — every `~/.copilot/session-state/` session in one list with filter chips (Recent / Named / Heavily used / Show all — chips intersect, and only *Recent* is on by default), search across path / repo / branch / id, multi-key sort, and one-click **Resume** in your preferred terminal. Includes a *Save as shortcut…* button so any session becomes a reusable launch.
+- **Projects** — per-folder startup behavior, so resuming anything under a project's path always launches the same way. Has its own [section below](#projects).
 - **New Session** — pick a folder (browse, type, or **start from a saved project** to inherit its folder and settings), tick the copilot flags you want from a structured list, set `--allow-all` / terminal override, and start a fresh Copilot CLI session there. Live command preview; nothing is saved (use *New Shortcut* for a reusable launch).
-- **Structured args editor** — on New Session, New Shortcut, and the Projects editor: every supported copilot CLI flag listed with a checkbox, with dropdowns for enumerated values (`--effort`, `--log-level`, `--output-format`, …) and text/path inputs elsewhere. Collapsed by default. Anything it doesn't recognize is preserved verbatim in a passthrough box, so hand-written args are never lost.
+- **Structured args editor** — on New Session, New Shortcut, and the Projects editor: every supported copilot CLI flag listed with a checkbox, with dropdowns for enumerated values (`--effort`, `--log-level`, `--output-format`, …) and text/path/number inputs elsewhere. Grouped by category and collapsed by default. Anything it doesn't recognize is preserved verbatim in a passthrough box, so hand-written args are never lost.
 - **Capabilities selector** — on New Session, New Shortcut, and as Settings defaults: choose which MCP servers load (enumerated live via `copilot mcp list`), pick a single custom agent (`--agent`, discovered from `.github/agents`, `.claude/agents`, `~/.copilot/agents`, and every enabled plugin as `plugin:agent`), set a tool allow/exclude list (`--available-tools` / `--excluded-tools`), or disable all skills. Saved per shortcut; reflected in the command preview.
 - **Saved Shortcuts** — pinned project + workdir + flags + terminal combos. One click to launch; one click to export to a Windows `.lnk` so you can pin to taskbar / start menu.
-- **New Shortcut wizard** — live command preview as you set the working dir, resume target, `--allow-all`, extra copilot args, and terminal.
-- **Projects** — per-folder startup behavior. Point a project at a folder (optionally covering sub-folders) and every **Resume** or *new session here* under that path automatically applies its `--allow-all`, extra args, terminal, and capability selection. Each override is tri-state, so anything you don't set keeps inheriting the global Sessions Resume defaults, and the most specific matching folder wins. **Import from sessions** bulk-creates projects from the working directories of your past sessions — sessions in the same git repo are grouped under the repo root and named after the repo, rows are ordered most-recently-used first and show a last-used date (so two checkouts sharing a repo name are easy to tell apart), your user folder is skipped, and install/tooling folders are listed but left unticked. Each project card also has a **▶ New session** button that launches straight into that folder with the project's settings. Also includes an **in-repo config** panel — see below.
-- **In-repo config (vs. startup flags)** — the Projects tab reports which Copilot CLI config the folder already supplies on its own, and can write a plugin allowlist into `.github/copilot/settings.json` so plugin selection is pinned in the repo instead of re-supplied as flags on every launch:
-
-  | Setting | Where it can live | Notes |
-  |---|---|---|
-  | Enabled plugins (and the MCP servers / agents / skills they bring) | `.github/copilot/settings.json` → `enabledPlugins` | **Launcher-managed.** Written as a complete allowlist because the CLI drops any plugin not listed as `true`. |
-  | Extra MCP servers | `.mcp.json`, `.github/mcp.json` | Detected only. Adds servers; can't switch off a user/plugin server — that still needs `--disable-mcp-server`. |
-  | Instructions | `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md` | Detected only. |
-  | Repo agents / skills | `.github/agents/`, `.github/skills/` | Detected only. |
-  | Language servers | `.github/lsp.json` | Detected only. |
-  | `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all`, `--disable-mcp-server` | *(no in-repo equivalent)* | Always passed as startup flags by the launcher. |
+- **New Shortcut wizard** — live command preview as you set the working dir, resume target, `--allow-all`, copilot flags, and terminal.
 - **Changelog tab** — two sub-views: **Changelog** lists every version-bump notes entry (latest highlighted, previous collapsible). **Briefings** lists AI-generated 4-6 bullet "what changed for you" summaries. *Check now* runs `copilot update` and captures the release notes only (never spends AI credit). *Generate AI Briefing* is fully on-demand: if you're already briefed on the current version it just re-displays the existing summary, otherwise it summarizes everything since the last briefing.
 - **Settings** — terminal default, Sessions Resume defaults, AI Summary context file, update-check frequency, repair/workaround toggles, launcher behavior (after-launch action, start-with-Windows, theme), storage paths, about.
 - **Compact mode** — title-bar toggle resizes the window to a 320×640 mini-launcher showing just your saved shortcuts. Great for keeping the launcher pinned to a corner.
@@ -32,6 +22,29 @@ A modern WinUI 3 desktop app to manage and resume GitHub Copilot CLI sessions on
 - **Session repair** — silently fixes Copilot sessions with dangling `tool_use` events (Anthropic API tool-pairing bug) so `--resume` works again. Backed up before mutating; skips locked / in-use sessions.
 - **Known-bug workarounds** — port of the legacy `Repair-Win32NativeAddon` for [github/copilot-cli#3298](https://github.com/github/copilot-cli/issues/3298). Settings-gated, idempotent.
 - **Auto-update awareness** — runs `copilot update` on a configurable schedule (every launch / daily / weekly / manual) and captures version-bump changelogs automatically. AI briefings are on-demand only — no premium credit is spent unless you click *Generate AI Briefing*.
+
+## Projects
+
+A project pins how a folder starts. Point one at a directory and every **Resume**, *new session here*, or **▶ New session** under that path launches with the same settings — no re-entering flags each time.
+
+- **Matching** — an exact path wins; otherwise the longest ancestor path with *"also apply to sub-folders"* wins. So `C:\repos\app` beats `C:\repos`, and `C:\repos\app` will never swallow `C:\repos\app-tools`.
+- **Overrides are tri-state** — each of `--allow-all`, extra args, terminal, extension pre-approval and capabilities has its own *Override* checkbox. Leave it unticked and the setting keeps inheriting the global **Settings → Sessions Resume** default; tick it to pin a value, including deliberately turning off something that's globally on.
+- **▶ New session** — every project card launches straight into its folder with that project's settings.
+- **Import from sessions** — bulk-create projects from the working directories of your past sessions. Sessions in the same git repo are grouped under the repo root and named after the repo (`owner/repo` → `repo`); rows are ordered most-recently-used first and show a last-used date, so two checkouts sharing a repo name are easy to tell apart. Your user folder is skipped, and install/tooling folders are listed but left unticked.
+
+### In-repo config vs. startup flags
+
+Copilot reads some configuration from the project folder itself, which applies to **every** session there — including ones started outside this launcher. The Projects tab reports what a folder already supplies, and can write the plugin allowlist for you:
+
+| Setting | Where it can live | Notes |
+|---|---|---|
+| Enabled plugins (and the MCP servers / agents / skills they bring) | `.github/copilot/settings.json` → `enabledPlugins` | **Launcher-managed.** Written as a complete allowlist because the CLI drops any plugin not listed as `true`. |
+| Hooks, merge strategy, extra marketplaces | `.github/copilot/settings.json` | Detected only. |
+| Extra MCP servers | `.mcp.json`, `.github/mcp.json` | Detected only. Adds servers; can't switch off a user/plugin server — that still needs `--disable-mcp-server`. |
+| Instructions | `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md` | Detected only. |
+| Repo agents / skills | `.github/agents/`, `.github/skills/` | Detected only. |
+| Language servers | `.github/lsp.json` | Detected only. |
+| `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all`, `--disable-mcp-server` | *(no in-repo equivalent)* | Always passed as startup flags by the launcher. |
 
 ## Themes
 
@@ -116,9 +129,18 @@ The .NET 8 runtime is bundled — you do not need to install it separately.
 ```
 src/
   CopilotLauncher.Core/   pure .NET 8 class library — all testable logic
-                          (services, ViewModels, models, helpers)
+    Models/               CopilotSession, ProjectProfile, AppSettings,
+                          LaunchCapabilities, CopilotArgSpec, …
+    Services/             Settings, SessionDiscovery, Launch, Projects,
+                          RepoConfig, ProjectLaunch, SessionCapability, …
+    Helpers/              ArgQuoter, ProjectMatcher, ProjectImportPlanner,
+                          CopilotArgSet, RelativeTime, …
+    ViewModels/           one per page + the shared editors
   CopilotLauncher/        WinUI 3 / Windows App SDK 1.6 desktop app
-                          (Pages, MainWindow, App.xaml, ThemeManager)
+    Pages/                Sessions, NewSession, Shortcuts, NewShortcut,
+                          Projects, Changelog, Settings
+    Controls/             CapabilitiesEditor, CopilotArgsEditor, WrapPanel, …
+    MainWindow, App.xaml, Helpers/ThemeManager
 tests/
   CopilotLauncher.Tests/  xUnit, .NET 8, references Core only
 
@@ -174,7 +196,7 @@ For a production release, swap that dev cert for a real CA-signed cert and add `
 
 ## Architecture (one-paragraph version)
 
-Strict Core / UI split. All testable logic lives in `CopilotLauncher.Core` — a plain .NET 8 class library with no WinUI dependencies — so tests build and run with just the .NET 8 SDK. The WinUI 3 project (`CopilotLauncher`) holds Pages, ViewModels (thin), code-behind, the title bar, and `ThemeManager`. ViewModels live in Core but expose events that the WinUI side wires up to platform-specific concerns (autostart registry writes, tray icon lifecycle, dispatcher marshalling for off-thread refresh). The full architecture doc is at [`docs/architecture.md`](./docs/architecture.md).
+Strict Core / UI split. All testable logic lives in `CopilotLauncher.Core` — a plain .NET 8 class library with no WinUI dependencies — so tests build and run with just the .NET 8 SDK. That includes the ViewModels, which is why filtering, path matching, arg parsing and launch resolution are all unit-tested. The WinUI 3 project (`CopilotLauncher`) holds only Pages, reusable Controls, thin code-behind, the title bar, and `ThemeManager`. Where a ViewModel needs a platform-specific concern (autostart registry writes, tray icon lifecycle, dispatcher marshalling for off-thread refresh) it exposes an interface or callback that the WinUI side supplies. The full architecture doc is at [`docs/architecture.md`](./docs/architecture.md).
 
 ## Releases
 
@@ -200,7 +222,7 @@ Conventions for code changes are documented in [`.github/copilot-instructions.md
 
 - All testable logic in Core, no UI types leaking in
 - `pwsh scripts\test.ps1` must stay green before every push
-- Every commit subject contains `[skip ci]` to protect the user's GitHub Actions minute budget — direct pushes shouldn't burn minutes since `ci.yml` is filtered to PR-only
+- `ci.yml` only runs on pull requests (path-filtered to skip docs-only changes) and manual dispatch, so direct pushes to `main` cost zero GitHub Actions minutes — no `[skip ci]` marker needed
 
 ## License
 
