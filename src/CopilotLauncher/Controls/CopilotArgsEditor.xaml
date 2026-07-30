@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="CopilotLauncher.Controls.CopilotArgsEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:CopilotLauncher.Controls"
+    xmlns:vm="using:CopilotLauncher.ViewModels"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
+
+    <muxc:Expander IsExpanded="False">
+        <muxc:Expander.Header>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Advanced copilot args" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                <TextBlock Text="{x:Bind ViewModel.EnabledSummary, Mode=OneWay}"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Opacity="0.6"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </muxc:Expander.Header>
+
+        <StackPanel Spacing="14" Padding="0,8,0,0">
+            <ItemsControl ItemsSource="{x:Bind ViewModel.Groups}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CopilotArgCategoryGroup">
+                        <StackPanel Spacing="6" Margin="0,0,0,14">
+                            <TextBlock Text="{x:Bind Category}" Style="{StaticResource BodyStrongTextBlockStyle}" Opacity="0.9"/>
+                            <ItemsControl ItemsSource="{x:Bind Rows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CopilotArgRowViewModel">
+                                        <Grid Margin="0,2,0,2" ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="220"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <CheckBox Grid.Column="0"
+                                                      IsChecked="{x:Bind IsEnabled, Mode=TwoWay}"
+                                                      AutomationProperties.Name="{x:Bind Flag}">
+                                                <StackPanel Spacing="1">
+                                                    <TextBlock Text="{x:Bind Flag}"/>
+                                                    <TextBlock Text="{x:Bind Description}"
+                                                               TextWrapping="WrapWholeWords"
+                                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                                               Opacity="0.6"/>
+                                                </StackPanel>
+                                            </CheckBox>
+
+                                            <StackPanel Grid.Column="1" Spacing="3"
+                                                        VerticalAlignment="Center"
+                                                        Visibility="{x:Bind local:CopilotArgsEditor.BoolToVisibility(HasValue), Mode=OneWay}">
+                                                <ComboBox ItemsSource="{x:Bind Choices}"
+                                                          SelectedItem="{x:Bind Value, Mode=TwoWay}"
+                                                          IsEnabled="{x:Bind ValueControlEnabled, Mode=OneWay}"
+                                                          MinWidth="260"
+                                                          AutomationProperties.Name="{x:Bind Flag}"
+                                                          Visibility="{x:Bind local:CopilotArgsEditor.BoolToVisibility(UsesChoiceComboBox), Mode=OneWay}"/>
+
+                                                <ComboBox ItemsSource="{x:Bind Choices}"
+                                                          Text="{x:Bind Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          IsEditable="True"
+                                                          IsEnabled="{x:Bind ValueControlEnabled, Mode=OneWay}"
+                                                          PlaceholderText="{x:Bind Placeholder}"
+                                                          MinWidth="260"
+                                                          AutomationProperties.Name="{x:Bind Flag}"
+                                                          Visibility="{x:Bind local:CopilotArgsEditor.BoolToVisibility(UsesEditableComboBox), Mode=OneWay}"/>
+
+                                                <TextBox Text="{x:Bind Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         AcceptsReturn="{x:Bind IsRepeatable, Mode=OneWay}"
+                                                         TextWrapping="Wrap"
+                                                         MinWidth="260"
+                                                         MinHeight="32"
+                                                         MaxHeight="92"
+                                                         PlaceholderText="{x:Bind Placeholder}"
+                                                         IsEnabled="{x:Bind ValueControlEnabled, Mode=OneWay}"
+                                                         AutomationProperties.Name="{x:Bind Flag}"
+                                                         Visibility="{x:Bind local:CopilotArgsEditor.BoolToVisibility(UsesTextBox), Mode=OneWay}"/>
+
+                                                <TextBlock Text="{x:Bind RepeatableHint}"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Opacity="0.6"
+                                                           Visibility="{x:Bind local:CopilotArgsEditor.BoolToVisibility(IsRepeatable), Mode=OneWay}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="Other args (passed through verbatim)" Style="{StaticResource BodyStrongTextBlockStyle}" Opacity="0.9"/>
+                <TextBox AcceptsReturn="True"
+                         Height="74"
+                         TextWrapping="Wrap"
+                         AutomationProperties.AutomationId="CopilotArgsOtherArgsTextBox"
+                         Text="{x:Bind ViewModel.UnrecognizedText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="Unrecognized flags or raw args are preserved here."/>
+            </StackPanel>
+        </StackPanel>
+    </muxc:Expander>
+</UserControl>

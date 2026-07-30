@@ -74,6 +74,7 @@ public sealed partial class ProjectsViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly ITerminalDiscoveryService _terminals;
     private readonly ISessionDiscoveryService? _sessions;
+    private readonly IProjectLaunchService? _projectLaunch;
 
     public ObservableCollection<ProjectProfile> Items { get; } = new();
     public ObservableCollection<RepoPluginToggle> RepoPlugins { get; } = new();
@@ -126,7 +127,8 @@ public sealed partial class ProjectsViewModel : ObservableObject
         ISessionCapabilityService capabilities,
         ISettingsService settings,
         ITerminalDiscoveryService terminals,
-        ISessionDiscoveryService? sessions = null)
+        ISessionDiscoveryService? sessions = null,
+        IProjectLaunchService? projectLaunch = null)
     {
         _store = store;
         _repoConfig = repoConfig;
@@ -134,6 +136,32 @@ public sealed partial class ProjectsViewModel : ObservableObject
         _settings = settings;
         _terminals = terminals;
         _sessions = sessions;
+        _projectLaunch = projectLaunch;
+    }
+
+    /// <summary>
+    /// Start a fresh Copilot session in this project's folder, applying the project's own
+    /// settings. Goes through the same <see cref="IProjectLaunchService"/> the Sessions tab
+    /// uses, so it behaves identically to resuming there.
+    /// </summary>
+    public bool StartSession(ProjectProfile project)
+    {
+        if (_projectLaunch is null)
+        {
+            StatusMessage = "Launching is unavailable.";
+            return false;
+        }
+        if (!Directory.Exists(project.Path))
+        {
+            StatusMessage = $"Folder no longer exists: {project.Path}";
+            return false;
+        }
+
+        var result = _projectLaunch.Launch(project.Path, resumeTarget: null);
+        StatusMessage = result.Success
+            ? $"Started a new session in {project.Path} {result.Describe()}"
+            : $"Launch failed: {result.Error}";
+        return result.Success;
     }
 
     partial void OnSelectedChanged(ProjectProfile? value)

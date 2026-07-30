@@ -25,9 +25,20 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
 
+                <!-- Start from a saved project -->
+                <StackPanel Spacing="4" Visibility="{x:Bind BoolToVis(ViewModel.HasProjects)}">
+                    <TextBlock Text="Start from a project" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock Text="Optional. Fills the folder below and applies that project's saved settings (allow-all, args, terminal, capabilities)."
+                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6" TextWrapping="Wrap"/>
+                    <ComboBox x:Name="ProjectCombo" MinWidth="320"
+                              AutomationProperties.AutomationId="NewSessionProjectCombo"
+                              PlaceholderText="(none — configure manually below)"
+                              SelectionChanged="OnProjectChanged"/>
+                </StackPanel>
+
                 <!-- Folder -->
                 <StackPanel Spacing="4">
-                    <TextBlock Text="Folder" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock Text="Project/Session Folder" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                     <TextBlock Text="Where the new session starts. Usually your project root."
                                Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
                     <Grid ColumnSpacing="6">
@@ -49,11 +60,9 @@
                 <!-- Launcher args -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="Launcher args" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                    <TextBlock Text="Optional. Verbatim flags appended to the copilot command, e.g. '--model claude-opus-4.8'. Quoted values preserved."
-                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                    <TextBox AutomationProperties.AutomationId="NewSessionArgsTextBox"
-                             Text="{x:Bind ViewModel.ExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="(blank for none)"/>
+                    <TextBlock Text="Optional. Flags appended to the copilot command. Tick the ones you want, or use the passthrough box for anything not listed."
+                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6" TextWrapping="Wrap"/>
+                    <controls:CopilotArgsEditor x:Name="ArgsEditor"/>
                 </StackPanel>
 
                 <!-- Allow-all -->

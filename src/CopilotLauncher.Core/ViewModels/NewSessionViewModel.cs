@@ -20,22 +20,50 @@ public sealed partial class NewSessionViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly IAfterLaunchAction _afterLaunch;
     private readonly IExtensionPermissionService? _extPerms;
+    private readonly IProjectsService? _projects;
 
     public NewSessionViewModel(
         ILaunchService launch,
         ITerminalDiscoveryService terminals,
         ISettingsService settings,
         IAfterLaunchAction? afterLaunch = null,
-        IExtensionPermissionService? extPerms = null)
+        IExtensionPermissionService? extPerms = null,
+        IProjectsService? projects = null)
     {
         _launch = launch;
         _terminals = terminals;
         _settings = settings;
         _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
         _extPerms = extPerms;
+        _projects = projects;
         _enableAllowAll = settings.Current.CopilotCli.DefaultAllowAll;
         _extraArgs = settings.Current.CopilotCli.DefaultExtraArgs ?? string.Empty;
         _capabilities = settings.Current.DefaultCapabilities.IsEmpty ? null : settings.Current.DefaultCapabilities.Clone();
+    }
+
+    /// <summary>Saved projects, for the "start from a project" picker.</summary>
+    public IReadOnlyList<ProjectProfile> Projects =>
+        _projects?.All.Where(p => p.Enabled).OrderBy(p => p.Label, StringComparer.OrdinalIgnoreCase).ToList()
+        ?? (IReadOnlyList<ProjectProfile>)Array.Empty<ProjectProfile>();
+
+    public bool HasProjects => Projects.Count > 0;
+
+    /// <summary>
+    /// Seed the form from a saved project: its folder plus its resolved launch settings
+    /// (allow-all, extra args, terminal, capabilities). Lets the user start a customized
+    /// session in one click instead of re-entering the project's setup.
+    /// </summary>
+    public void ApplyProject(ProjectProfile project)
+    {
+        var resolved = ProjectMatcher.Resolve(project, _settings.Current);
+
+        WorkingDirectory = project.Path;
+        EnableAllowAll = resolved.EnableAllowAll;
+        ExtraArgs = resolved.ExtraCopilotArgs ?? string.Empty;
+        TerminalOverride = string.IsNullOrWhiteSpace(resolved.TerminalOverride) ? "auto" : resolved.TerminalOverride;
+        Capabilities = resolved.Capabilities?.Clone();
+        StatusMessage = $"Loaded settings from project '{project.Label}'.";
+        RecalcPreview();
     }
 
     private string _workingDirectory = string.Empty;

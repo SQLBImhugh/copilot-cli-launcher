@@ -77,14 +77,23 @@
                                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         BorderThickness="{ThemeResource CardBorderThickness}"
                                         CornerRadius="{StaticResource OverlayCornerRadius}"
-                                        Spacing="2">
+                                        Spacing="6">
                                 <TextBlock Text="{x:Bind Label, Mode=OneTime}"
                                            Style="{StaticResource BodyStrongTextBlockStyle}"
                                            TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Text="{x:Bind Path, Mode=OneTime}"
                                            Opacity="0.65"
                                            Style="{StaticResource CaptionTextBlockStyle}"
-                                           TextTrimming="CharacterEllipsis"/>
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTipService.ToolTip="{x:Bind Path, Mode=OneTime}"/>
+                                <Button Content="▶ New session"
+                                        AutomationProperties.AutomationId="ProjectStartSessionButton"
+                                        AutomationProperties.Name="Start a new session in this project"
+                                        ToolTipService.ToolTip="Start a fresh Copilot session here using this project's settings"
+                                        HorizontalAlignment="Left"
+                                        Padding="10,3"
+                                        Tag="{x:Bind Mode=OneTime}"
+                                        Click="OnStartSessionClick"/>
                             </StackPanel>
                         </DataTemplate>
                     </ListView.ItemTemplate>
@@ -175,9 +184,7 @@
                         <TextBlock Text="Extra copilot args" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Text="Appended to every launch of this project. Blank = inherit the global default."
                                    Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                        <TextBox AutomationProperties.AutomationId="ProjectExtraArgsTextBox"
-                                 Text="{x:Bind ViewModel.EditExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="--model claude-sonnet-4.5"/>
+                        <controls:CopilotArgsEditor x:Name="ArgsEditor"/>
                     </StackPanel>
 
                     <StackPanel Spacing="4">

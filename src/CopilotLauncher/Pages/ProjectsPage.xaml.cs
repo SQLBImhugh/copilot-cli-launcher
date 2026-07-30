@@ -39,9 +39,11 @@ public sealed partial class ProjectsPage : Page
             App.Services.GetRequiredService<ISessionCapabilityService>(),
             App.Services.GetRequiredService<ISettingsService>(),
             App.Services.GetRequiredService<ITerminalDiscoveryService>(),
-            App.Services.GetRequiredService<ISessionDiscoveryService>());
+            App.Services.GetRequiredService<ISessionDiscoveryService>(),
+            App.Services.GetRequiredService<IProjectLaunchService>());
         InitializeComponent();
         CapEditor.WorkingDirectoryProvider = () => ViewModel.EditPath;
+        ArgsEditor.Changed += (_, _) => ViewModel.EditExtraArgs = ArgsEditor.ReadArgs();
         Loaded += OnPageLoaded;
     }
 
@@ -117,6 +119,7 @@ public sealed partial class ProjectsPage : Page
 
         ViewModel.Edit(project);
         PopulateTerminals(ViewModel.EditTerminal);
+        ArgsEditor.Load(ViewModel.EditExtraArgs);
         await LoadEditorSideDataAsync();
     }
 
@@ -128,6 +131,7 @@ public sealed partial class ProjectsPage : Page
 
         ViewModel.StartNew();
         PopulateTerminals(string.Empty);
+        ArgsEditor.Load(ViewModel.EditExtraArgs);
         await LoadEditorSideDataAsync();
     }
 
@@ -138,6 +142,13 @@ public sealed partial class ProjectsPage : Page
         ProjectList.SelectedItem = null;
         _suppressSelectionChanged = false;
         PopulateTerminals(ViewModel.EditTerminal);
+    }
+
+    /// <summary>Launch a fresh session in a project's folder straight from its card.</summary>
+    private void OnStartSessionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: ProjectProfile project })
+            ViewModel.StartSession(project);
     }
 
     // ---- bulk import ----
@@ -231,6 +242,7 @@ public sealed partial class ProjectsPage : Page
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        ViewModel.EditExtraArgs = ArgsEditor.ReadArgs();
         var caps = ViewModel.EditOverrideCapabilities ? CapEditor.ReadCapabilities() : null;
         var saved = ViewModel.Save(caps);
         if (saved is null) return;

@@ -78,6 +78,15 @@ public partial class App : Application
         services.AddSingleton<IShortcutsService, ShortcutsService>();
         services.AddSingleton<IProjectsService, ProjectsService>();
         services.AddSingleton<IRepoConfigService, RepoConfigService>();
+        services.AddSingleton<IProjectLaunchService>(sp => new ProjectLaunchService(
+            sp.GetRequiredService<ILaunchService>(),
+            sp.GetRequiredService<ITerminalDiscoveryService>(),
+            sp.GetRequiredService<ISettingsService>(),
+            sp.GetRequiredService<IProjectsService>(),
+            sp.GetRequiredService<IRepoConfigService>(),
+            sp.GetRequiredService<ISessionCapabilityService>(),
+            sp.GetRequiredService<IExtensionPermissionService>(),
+            sp.GetRequiredService<IAfterLaunchAction>()));
         services.AddSingleton<ISessionRepairService, SessionRepairService>();
         services.AddSingleton<IExtensionPermissionService, ExtensionPermissionService>();
         services.AddSingleton<ISessionCapabilityService, SessionCapabilityService>();

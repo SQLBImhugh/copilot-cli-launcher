@@ -78,11 +78,9 @@
                 <!-- Extra args -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="Extra copilot args" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                    <TextBlock Text="Optional. Verbatim flags appended to the copilot command, e.g. '--max-autopilot-continues 100'. Quoted values preserved."
-                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-                    <TextBox AutomationProperties.AutomationId="NewShortcutExtraArgsTextBox"
-                             Text="{x:Bind ViewModel.ExtraArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="(blank for none)"/>
+                    <TextBlock Text="Optional. Flags appended to the copilot command. Tick the ones you want, or use the passthrough box for anything not listed."
+                               Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6" TextWrapping="Wrap"/>
+                    <controls:CopilotArgsEditor x:Name="ArgsEditor"/>
                 </StackPanel>
 
                 <!-- Terminal -->

@@ -87,6 +87,7 @@ Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLau
 |---|---|
 | `IProjectsService` | Load/save `projects.json` under `%LOCALAPPDATA%\CopilotLauncher\` (same atomic-write + corrupt-backup contract as `IShortcutsService`). Also resolves a working directory to its governing `ProjectProfile`. |
 | `IRepoConfigService` | Read/write the Copilot CLI config that lives *inside* a project directory. `Inspect(dir)` reports which config files the folder supplies; `WriteEnabledPlugins` / `ClearEnabledPlugins` manage `.github/copilot/settings.json` → `enabledPlugins`. |
+| `IProjectLaunchService` | The single launch path: resolve the governing profile → pre-approve extensions → sync repo config → spawn → apply the after-launch action. Used by the Sessions tab (Resume / new session here) and the Projects tab's **▶ New session** button so a project starts identically from either. |
 
 `ProjectMatcher` (in `Helpers/`) holds the precedence rules as pure static methods so they're testable without disk or UI:
 
@@ -94,7 +95,15 @@ Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLau
 - **Resolve** — merges the profile over `AppSettings.SessionsResume`. Every override is nullable; `null` inherits. `Capabilities` replaces the global default wholesale rather than merging field-by-field, because a partial capability merge has no unambiguous meaning (is an empty tool list "inherit" or "clear"?).
 - **No match** — returns exactly the pre-Projects behavior, including a `null` capability set, so adding the feature can't change how uncovered directories launch.
 
-`SessionsViewModel.ResumeSession` and `StartNewSessionAt` both funnel through one private `LaunchAt`, so a project always starts identically regardless of which button opened it.
+`SessionsViewModel.ResumeSession` and `StartNewSessionAt` both funnel through one private `LaunchAt`, which delegates to `IProjectLaunchService` — the same service the Projects tab's **▶ New session** button uses, so the two launch paths cannot drift.
+
+### Structured copilot args
+
+`Models/CopilotArgSpec.cs` holds a static catalog of the supported `copilot` CLI flags (46 of them) with their value kind (`Switch` / `Choice` / `Text` / `Number` / `Path`), choices, and category. `Helpers/CopilotArgSet.cs` parses a free-text args string into that structure and formats it back.
+
+The round-trip is deliberately **lossless**: any token the catalog doesn't recognize is preserved verbatim in `UnrecognizedText` and re-emitted on `Format()`, so a user's hand-typed args survive being opened in the structured editor. Both `--flag value` and `--flag=value` are accepted; `--flag value` is emitted.
+
+Flags already owned by other UI are deliberately **excluded** from the catalog to avoid emitting duplicates: `--allow-all` (its own toggle), `--agent` / `--available-tools` / `--excluded-tools` / `--disable-mcp-server` / `--disable-builtin-mcps` (the CapabilitiesEditor), and `--resume` (a dedicated field).
 
 `ProjectImportPlanner` (also in `Helpers/`, pure static) powers the **Import from sessions** button:
 

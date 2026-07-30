@@ -24,6 +24,8 @@ public sealed partial class NewShortcutPage : Page
         PopulateTerminals();
         CapEditor.WorkingDirectoryProvider = () => ViewModel.WorkingDirectory;
         CapEditor.Changed += (_, _) => ViewModel.Capabilities = CapEditor.ReadCapabilities();
+        ArgsEditor.Load(ViewModel.ExtraArgs);
+        ArgsEditor.Changed += (_, _) => ViewModel.ExtraArgs = ArgsEditor.ReadArgs();
         Loaded += OnPageLoaded;
         ViewModel.RecalcPreview();
     }
@@ -79,6 +81,7 @@ public sealed partial class NewShortcutPage : Page
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        ViewModel.ExtraArgs = ArgsEditor.ReadArgs();
         ViewModel.Capabilities = CapEditor.ReadCapabilities();
         if (ViewModel.Save() is not null)
             ViewModel.Reset();
@@ -86,11 +89,16 @@ public sealed partial class NewShortcutPage : Page
 
     private void OnSaveAndLaunchClick(object sender, RoutedEventArgs e)
     {
+        ViewModel.ExtraArgs = ArgsEditor.ReadArgs();
         ViewModel.Capabilities = CapEditor.ReadCapabilities();
         if (ViewModel.SaveAndLaunch())
             ViewModel.Reset();
     }
 
-    private void OnResetClick(object sender, RoutedEventArgs e) => ViewModel.Reset();
+    private void OnResetClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.Reset();
+        ArgsEditor.Load(ViewModel.ExtraArgs);
+    }
 }
 

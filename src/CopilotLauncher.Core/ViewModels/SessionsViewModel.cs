@@ -14,14 +14,8 @@ namespace CopilotLauncher.ViewModels;
 public sealed partial class SessionsViewModel : ObservableObject
 {
     private readonly ISessionDiscoveryService _discovery;
-    private readonly ITerminalDiscoveryService _terminals;
-    private readonly ILaunchService _launch;
     private readonly ISettingsService _settings;
-    private readonly IAfterLaunchAction _afterLaunch;
-    private readonly IExtensionPermissionService? _extPerms;
-    private readonly IProjectsService? _projects;
-    private readonly IRepoConfigService? _repoConfig;
-    private readonly ISessionCapabilityService? _capabilities;
+    private readonly IProjectLaunchService _projectLaunch;
     private Func<Action, Task>? _marshalToUi;
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
@@ -83,15 +77,14 @@ public sealed partial class SessionsViewModel : ObservableObject
         ISessionCapabilityService? capabilities = null)
     {
         _discovery = discovery;
-        _terminals = terminals;
-        _launch = launch;
         _settings = settings;
-        _afterLaunch = afterLaunch ?? new NoopAfterLaunchAction();
         _marshalToUi = marshalToUi ?? (SynchronizationContext.Current is not null ? CreateUiMarshaller(SynchronizationContext.Current) : null);
-        _extPerms = extPerms;
-        _projects = projects;
-        _repoConfig = repoConfig;
-        _capabilities = capabilities;
+
+        // Built here rather than injected so this ctor's signature (and its tests)
+        // stay put. Shared with the Projects tab so both launch paths behave identically.
+        _projectLaunch = new ProjectLaunchService(
+            launch, terminals, settings, projects, repoConfig, capabilities, extPerms,
+            afterLaunch ?? new NoopAfterLaunchAction());
     }
 
     partial void OnShowRecentChanged(bool value) => ApplyFilters();
@@ -165,99 +158,20 @@ public sealed partial class SessionsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Shared launch path for ▶ Resume and "new session here". Both apply the
-    /// same resolved project profile so a project always starts the same way
-    /// regardless of which button opened it.
+    /// Shared launch path for ▶ Resume and "new session here". Both go through
+    /// <see cref="IProjectLaunchService"/>, which resolves the governing project
+    /// profile and applies it — the same code the Projects tab launches with.
     /// </summary>
-    /// <remarks>
-    /// --allow-all auto-approves copilot's tool / path / URL permission prompts.
-    /// It does NOT cover an extension's "elevated permissions" request — copilot
-    /// gates those per-directory in ~/.copilot/permissions-config.json via
-    /// "extension-permission-access" grants, which is what PreApproveExtensions
-    /// writes.
-    /// </remarks>
     private bool LaunchAt(string dir, string? resumeTarget, string successMessage, string failurePrefix)
     {
-        try
+        var result = _projectLaunch.Launch(dir, resumeTarget);
+        if (!result.Success)
         {
-            var profile = _projects?.Resolve(dir, _settings.Current)
-                          ?? ProjectMatcher.Resolve(null, _settings.Current);
-            var terminal = ResolveTerminal(profile.TerminalOverride);
-
-            if (profile.PreApproveExtensions)
-                _extPerms?.EnsureExtensionGrants(dir);
-
-            var pinned = SyncRepoConfig(profile.Project);
-
-            _launch.Spawn(new LaunchRequest
-            {
-                WorkingDirectory = dir,
-                ResumeTarget = resumeTarget,
-                EnableAllowAll = profile.EnableAllowAll,
-                ExtraCopilotArgs = profile.ExtraCopilotArgs,
-                Capabilities = profile.Capabilities,
-                Terminal = terminal,
-            });
-
-            var via = terminal?.DisplayName ?? "direct";
-            var project = profile.Project is null ? string.Empty : $" [{profile.Project.Label}]";
-            var repo = pinned ? " (repo plugin config synced)" : string.Empty;
-            StatusMessage = $"{successMessage} in {via}{project}.{repo}";
-            _afterLaunch.Apply(_settings.Current.LauncherBehavior.AfterLaunch);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"{failurePrefix}: {ex.Message}";
+            StatusMessage = $"{failurePrefix}: {result.Error}";
             return false;
         }
-    }
-
-    /// <summary>Mirror the project's plugin allowlist into
-    /// <c>.github/copilot/settings.json</c> when the project opted in. Best-effort:
-    /// a failure never blocks the launch. Uses the synchronous plugin read rather than
-    /// <c>DiscoverAsync</c> so a launch never stalls on a CLI shell-out.</summary>
-    private bool SyncRepoConfig(ProjectProfile? project)
-    {
-        if (project is null || !project.SyncRepoConfigOnLaunch) return false;
-        if (project.RepoEnabledPlugins is null) return false;
-        if (_repoConfig is null || _capabilities is null) return false;
-
-        try
-        {
-            var plugins = _capabilities.GetInstalledPlugins();
-            if (plugins.Count == 0) return false;
-            return _repoConfig.WriteEnabledPlugins(project.Path, plugins, project.RepoEnabledPlugins);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private TerminalProfile? ResolveTerminal(string? overrideId)
-    {
-        var discovered = _terminals.Discovered;
-        if (discovered.Count == 0) return null;
-
-        var pref = !string.IsNullOrWhiteSpace(overrideId)
-            ? overrideId
-            : _settings.Current.Terminal.DefaultTerminal;
-
-        if (!string.IsNullOrEmpty(pref) && pref != "auto")
-        {
-            var match = discovered.FirstOrDefault(t => t.Id == pref);
-            if (match is not null) return match;
-        }
-        // Auto-pick: prefer wt > pwsh > powershell > cmd.
-        return discovered.OrderBy(t => t.Id switch
-        {
-            "wt" => 0,
-            "pwsh" => 1,
-            "powershell" => 2,
-            "cmd" => 3,
-            _ => 4
-        }).First();
+        StatusMessage = $"{successMessage} {result.Describe()}";
+        return true;
     }
 
     /// <summary>Applies the current filter chips + search to the full list.
