@@ -219,6 +219,32 @@ public sealed class ProjectImportPlannerTests
     }
 
     [Fact]
+    public void SplitsSessionCountAndDetailIntoSeparateLines()
+    {
+        var git = Build(new[] { S(@"C:\repos\app", repository: "me/app", gitRoot: @"C:\repos\app") })[0];
+        Assert.Equal("1 session", git.SessionsText);
+        Assert.Equal("me/app", git.DetailText);
+
+        var plain = Build(new[] { S(@"C:\repos\plain"), S(@"C:\repos\plain") })[0];
+        Assert.Equal("2 sessions", plain.SessionsText);
+        Assert.Equal(string.Empty, plain.DetailText);
+
+        var localGit = Build(new[] { S(@"C:\repos\local", gitRoot: @"C:\repos\local") })[0];
+        Assert.Equal("git repo", localGit.DetailText);
+    }
+
+    [Fact]
+    public void DetailLineExplainsWhyARowIsNotRecommended()
+    {
+        var existing = new[] { new ProjectProfile { Id = "1", Label = "app", Path = @"C:\repos\app" } };
+        var imported = Build(new[] { S(@"C:\repos\app", repository: "me/app") }, existing)[0];
+        Assert.Equal("already a project", imported.DetailText);
+
+        var missing = Build(new[] { S(@"D:\gone", repository: "me/gone") }, exists: _ => false)[0];
+        Assert.Equal("folder not found", missing.DetailText);
+    }
+
+    [Fact]
     public void IgnoresSessionsWithNoWorkingDirectory()
     {
         var candidates = Build(new[] { S(null), S("   "), S(@"C:\repos\app") });

@@ -40,12 +40,17 @@ public sealed partial class ProjectImportRow : ObservableObject
 {
     public required ProjectImportCandidate Candidate { get; init; }
 
+    /// <summary>Odd-numbered row — the view tints these for readability.</summary>
+    public bool IsAlternate { get; init; }
+
     [ObservableProperty]
     private bool _isSelected;
 
     public string SuggestedName => Candidate.SuggestedName;
     public string Path => Candidate.Path;
     public string Caption => Candidate.Caption;
+    public string SessionsText => Candidate.SessionsText;
+    public string DetailText => Candidate.DetailText;
     public string LastUsedDate => Candidate.LastUsedDate;
     public string LastUsedRelative => Candidate.LastUsedRelative;
     public bool CanImport => !Candidate.AlreadyImported;
@@ -572,7 +577,12 @@ public sealed partial class ProjectsViewModel : ObservableObject
 
         foreach (var c in candidates)
         {
-            var row = new ProjectImportRow { Candidate = c, IsSelected = c.RecommendedByDefault };
+            var row = new ProjectImportRow
+            {
+                Candidate = c,
+                IsSelected = c.RecommendedByDefault,
+                IsAlternate = ImportCandidates.Count % 2 == 1,
+            };
             row.PropertyChanged += OnImportRowChanged;
             ImportCandidates.Add(row);
         }

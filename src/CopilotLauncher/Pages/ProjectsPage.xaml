@@ -6,6 +6,7 @@
     xmlns:models="using:CopilotLauncher.Models"
     xmlns:vm="using:CopilotLauncher.ViewModels"
     xmlns:controls="using:CopilotLauncher.Controls"
+    xmlns:pages="using:CopilotLauncher.Pages"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     FontFamily="{ThemeResource BodyFontFamily}">
 
@@ -317,8 +318,14 @@
                        IsPrimaryButtonEnabled="{x:Bind ViewModel.CanRunImport, Mode=OneWay}"
                        PrimaryButtonClick="OnImportDialogPrimary"
                        SecondaryButtonClick="OnImportDialogSelectNone">
-            <Grid RowSpacing="10" Width="620">
+            <ContentDialog.Resources>
+                <!-- The stock ContentDialogMaxWidth is 548, which clipped the table
+                     and the wrapped help text. -->
+                <x:Double x:Key="ContentDialogMaxWidth">860</x:Double>
+            </ContentDialog.Resources>
+            <Grid RowSpacing="10" Width="780">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -327,7 +334,7 @@
 
                 <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75"
                            Style="{StaticResource CaptionTextBlockStyle}"
-                           Text="Working directories from your past Copilot sessions, most recently used first (date on the right). Your user folder is excluded, sessions in the same git repo are grouped and named after the repo, and install/tooling folders are listed but left unticked."/>
+                           Text="Working directories from your past Copilot sessions, most recently used first. Your user folder is excluded, sessions in the same git repo are grouped and named after the repo, and install/tooling folders are listed but left unticked."/>
 
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
                     <Button Content="Select all" Click="OnImportSelectAll"
@@ -341,45 +348,85 @@
                                Style="{StaticResource CaptionTextBlockStyle}"/>
                 </StackPanel>
 
-                <ListView Grid.Row="2"
+                <!-- Table header. Column widths MUST match the row template below;
+                     WinUI has no SharedSizeGroup, so alignment relies on both using
+                     the same fixed/star definitions and on rows stretching. -->
+                <Grid Grid.Row="2" Padding="8,0,8,4" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="28"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="180"/>
+                        <ColumnDefinition Width="104"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="1" Text="Project" Opacity="0.6"
+                               Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="2" Text="Sessions" Opacity="0.6"
+                               Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="3" Text="Last used" Opacity="0.6"
+                               HorizontalAlignment="Right"
+                               Style="{StaticResource CaptionTextBlockStyle}" FontWeight="SemiBold"/>
+                </Grid>
+
+                <ListView Grid.Row="3"
                           AutomationProperties.AutomationId="ProjectImportList"
                           ItemsSource="{x:Bind ViewModel.ImportCandidates, Mode=OneWay}"
                           SelectionMode="None"
-                          Height="380">
+                          Height="360"
+                          Padding="0">
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem">
                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="HorizontalAlignment" Value="Stretch"/>
                             <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="MinHeight" Value="0"/>
                         </Style>
                     </ListView.ItemContainerStyle>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:ProjectImportRow">
-                            <CheckBox Margin="0,2" MinWidth="0"
-                                      HorizontalContentAlignment="Stretch"
-                                      IsEnabled="{x:Bind CanImport}"
-                                      Opacity="{x:Bind RowOpacity}"
-                                      AutomationProperties.Name="{x:Bind AccessibleName}"
-                                      IsChecked="{x:Bind IsSelected, Mode=TwoWay}">
-                                <Grid ColumnSpacing="12">
+                            <!-- Alternating tint applied on the row Border so it spans the
+                                 full width regardless of content length. -->
+                            <Border Background="{x:Bind pages:ProjectsPage.RowBackground(IsAlternate)}"
+                                    Padding="8,6"
+                                    Opacity="{x:Bind RowOpacity}">
+                                <Grid ColumnSpacing="12" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="28"/>
                                         <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto" MinWidth="86"/>
+                                        <ColumnDefinition Width="180"/>
+                                        <ColumnDefinition Width="104"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Spacing="1">
+
+                                    <CheckBox Grid.Column="0"
+                                              MinWidth="0" Width="28" Padding="0" Margin="0"
+                                              VerticalAlignment="Center"
+                                              IsEnabled="{x:Bind CanImport}"
+                                              AutomationProperties.Name="{x:Bind AccessibleName}"
+                                              IsChecked="{x:Bind IsSelected, Mode=TwoWay}"/>
+
+                                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind SuggestedName}"
                                                    Style="{StaticResource BodyStrongTextBlockStyle}"
                                                    TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Text="{x:Bind Path}" Opacity="0.7"
                                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{x:Bind Caption}" Opacity="0.5"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTipService.ToolTip="{x:Bind Path}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind SessionsText}"
+                                                   Opacity="0.75"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"/>
+                                        <TextBlock Text="{x:Bind DetailText}"
+                                                   Opacity="0.5"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTipService.ToolTip="{x:Bind DetailText}"
                                                    Style="{StaticResource CaptionTextBlockStyle}"/>
                                     </StackPanel>
-                                    <!-- Last-used date: the disambiguator when the same repo
-                                         name exists in two folders. -->
-                                    <StackPanel Grid.Column="1" Spacing="1"
-                                                VerticalAlignment="Center"
-                                                HorizontalAlignment="Right">
+
+                                    <StackPanel Grid.Column="3" Spacing="1" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind LastUsedDate}"
                                                    HorizontalAlignment="Right"
                                                    Style="{StaticResource CaptionTextBlockStyle}"/>
@@ -388,12 +435,12 @@
                                                    Style="{StaticResource CaptionTextBlockStyle}"/>
                                     </StackPanel>
                                 </Grid>
-                            </CheckBox>
+                            </Border>
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
 
-                <TextBlock Grid.Row="3" TextWrapping="Wrap" Opacity="0.6"
+                <TextBlock Grid.Row="4" TextWrapping="Wrap" Opacity="0.6"
                            Style="{StaticResource CaptionTextBlockStyle}"
                            Text="Imported projects start with no overrides — they inherit every global default until you edit them."/>
             </Grid>

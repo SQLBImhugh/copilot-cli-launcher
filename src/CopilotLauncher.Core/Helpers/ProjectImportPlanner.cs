@@ -42,11 +42,28 @@ public sealed class ProjectImportCandidate
     /// technically session cwds but aren't projects.</summary>
     public bool RecommendedByDefault { get; init; }
 
+    /// <summary>"13 sessions" — the count on its own line.</summary>
+    public string SessionsText => SessionCount == 1 ? "1 session" : $"{SessionCount} sessions";
+
+    /// <summary>Second detail line: the repo, or why the row isn't recommended. Kept separate
+    /// from <see cref="SessionsText"/> so every row renders exactly two lines and the table
+    /// keeps a uniform row height.</summary>
+    public string DetailText
+    {
+        get
+        {
+            if (AlreadyImported) return "already a project";
+            if (!DirectoryExists) return "folder not found";
+            if (!string.IsNullOrWhiteSpace(Repository)) return Repository;
+            return IsGitRepo ? "git repo" : string.Empty;
+        }
+    }
+
     public string Caption
     {
         get
         {
-            var bits = new List<string> { SessionCount == 1 ? "1 session" : $"{SessionCount} sessions" };
+            var bits = new List<string> { SessionsText };
             if (!string.IsNullOrWhiteSpace(Repository)) bits.Add(Repository);
             else if (IsGitRepo) bits.Add("git repo");
             if (AlreadyImported) bits.Add("already a project");

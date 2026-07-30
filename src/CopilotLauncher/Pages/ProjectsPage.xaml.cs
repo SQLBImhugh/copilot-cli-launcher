@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 using CopilotLauncher.Models;
@@ -45,6 +46,19 @@ public sealed partial class ProjectsPage : Page
     }
 
     public Visibility BoolToVis(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// Zebra striping for the import table. Bound as an x:Bind static function from the row
+    /// DataTemplate — WinUI's ListView has no alternation index, and the row view-model lives
+    /// in Core, which can't reference WinUI brush types.
+    /// </summary>
+    public static Brush RowBackground(bool alternate)
+    {
+        if (!alternate) return TransparentBrush;
+        return Application.Current.Resources["SubtleFillColorTertiaryBrush"] as Brush ?? TransparentBrush;
+    }
+
+    private static readonly Brush TransparentBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
     private void OnPageLoaded(object sender, RoutedEventArgs e)
     {
