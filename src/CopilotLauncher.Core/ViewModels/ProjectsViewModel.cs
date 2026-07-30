@@ -48,6 +48,10 @@ public sealed partial class ProjectImportRow : ObservableObject
     public string Caption => Candidate.Caption;
     public bool CanImport => !Candidate.AlreadyImported;
     public double RowOpacity => Candidate.AlreadyImported ? 0.5 : 1.0;
+
+    /// <summary>Single-line label for screen readers — the row's visual content is a stack of
+    /// TextBlocks, which would otherwise announce as nothing.</summary>
+    public string AccessibleName => $"{SuggestedName}, {Path}, {Caption}";
 }
 
 /// <summary>
@@ -495,19 +499,40 @@ public sealed partial class ProjectsViewModel : ObservableObject
 
     [ObservableProperty] private string _importMessage = string.Empty;
 
+    /// <summary>True while past sessions are being scanned on a background thread.</summary>
+    [ObservableProperty] private bool _isScanningSessions;
+
+    partial void OnIsScanningSessionsChanged(bool value) => OnPropertyChanged(nameof(CanRunImport));
+
+    /// <summary>Gates the dialog's Import / Select all buttons while the scan is in flight.</summary>
+    public bool CanRunImport => !IsScanningSessions;
+
     public bool HasImportCandidates => ImportCandidates.Count > 0;
 
     public int SelectedImportCount => ImportCandidates.Count(r => r.IsSelected && r.CanImport);
+
+    /// <summary>Test seam: the user-profile root used to skip the home directory and to
+    /// classify install/tooling folders. Null = the real profile. Tests set this because
+    /// their temp folders live under %LOCALAPPDATA%\Temp, which is legitimately a tooling
+    /// path in production.</summary>
+    internal string? ImportHomeRootOverride { get; set; }
 
     /// <summary>
     /// Scan past sessions for working directories that could become projects. Groups by git
     /// root where one is known, skips the user-profile root, and pre-ticks everything that
     /// isn't already a project, missing from disk, or an install/tooling folder.
     /// </summary>
-    public void LoadImportCandidates()
+    /// <remarks>
+    /// The scan runs on a background thread: <see cref="ISessionDiscoveryService.Enumerate"/>
+    /// walks every session folder recursively to total its size, which is far too much disk
+    /// I/O to do on the UI thread.
+    /// </remarks>
+    public async Task LoadImportCandidatesAsync(CancellationToken ct = default)
     {
+        foreach (var row in ImportCandidates) row.PropertyChanged -= OnImportRowChanged;
         ImportCandidates.Clear();
         OnPropertyChanged(nameof(HasImportCandidates));
+        OnPropertyChanged(nameof(SelectedImportCount));
 
         if (_sessions is null)
         {
@@ -515,15 +540,32 @@ public sealed partial class ProjectsViewModel : ObservableObject
             return;
         }
 
+        IsScanningSessions = true;
+        ImportMessage = "Scanning past sessions…";
+
         IReadOnlyList<ProjectImportCandidate> candidates;
         try
         {
-            candidates = ProjectImportPlanner.BuildCandidates(_sessions.Enumerate().ToList(), _store.All);
+            // Snapshot the store before leaving the UI thread.
+            var existing = _store.All.ToList();
+            var homeRoot = ImportHomeRootOverride;
+            candidates = await Task.Run(
+                () => ProjectImportPlanner.BuildCandidates(_sessions.Enumerate().ToList(), existing, homeRoot), ct)
+                .ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            ImportMessage = "Scan canceled.";
+            return;
         }
         catch (Exception ex)
         {
             ImportMessage = $"Could not scan sessions: {ex.Message}";
             return;
+        }
+        finally
+        {
+            IsScanningSessions = false;
         }
 
         foreach (var c in candidates)
@@ -534,11 +576,10 @@ public sealed partial class ProjectsViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasImportCandidates));
-        var importable = ImportCandidates.Count(r => r.CanImport);
+        OnPropertyChanged(nameof(SelectedImportCount));
         ImportMessage = candidates.Count == 0
             ? "No session working directories found to import."
-            : $"{importable} folder(s) available, {SelectedImportCount} selected.";
-        OnPropertyChanged(nameof(SelectedImportCount));
+            : $"{ImportCandidates.Count(r => r.CanImport)} folder(s) available, {SelectedImportCount} selected.";
     }
 
     private void OnImportRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

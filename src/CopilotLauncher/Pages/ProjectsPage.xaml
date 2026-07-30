@@ -9,75 +9,6 @@
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     FontFamily="{ThemeResource BodyFontFamily}">
 
-    <Page.Resources>
-        <!-- Bulk import picker. Opened from the toolbar; rows are pre-ticked by the
-             view-model for folders that aren't already projects. -->
-        <ContentDialog x:Name="ImportDialog"
-                       Title="Import projects from past sessions"
-                       PrimaryButtonText="Import selected"
-                       SecondaryButtonText="Select none"
-                       CloseButtonText="Cancel"
-                       DefaultButton="Primary"
-                       PrimaryButtonClick="OnImportDialogPrimary"
-                       SecondaryButtonClick="OnImportDialogSelectNone">
-            <Grid RowSpacing="10" Width="620">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Text="Working directories from your past Copilot sessions, excluding your user folder. Sessions in the same git repo are grouped, and the project is named after the repo. Install and tooling folders are listed but left unticked."/>
-
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
-                    <Button Content="Select all" Click="OnImportSelectAll"
-                            AutomationProperties.AutomationId="ProjectImportSelectAllButton"/>
-                    <TextBlock Text="{x:Bind ViewModel.ImportMessage, Mode=OneWay}"
-                               VerticalAlignment="Center" Opacity="0.8"
-                               Style="{StaticResource CaptionTextBlockStyle}"/>
-                </StackPanel>
-
-                <ListView Grid.Row="2"
-                          AutomationProperties.AutomationId="ProjectImportList"
-                          ItemsSource="{x:Bind ViewModel.ImportCandidates, Mode=OneWay}"
-                          SelectionMode="None"
-                          MaxHeight="380">
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Setter Property="Padding" Value="0"/>
-                        </Style>
-                    </ListView.ItemContainerStyle>
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ProjectImportRow">
-                            <CheckBox Margin="0,2" MinWidth="0"
-                                      IsEnabled="{x:Bind CanImport}"
-                                      Opacity="{x:Bind RowOpacity}"
-                                      IsChecked="{x:Bind IsSelected, Mode=TwoWay}">
-                                <StackPanel Spacing="1">
-                                    <TextBlock Text="{x:Bind SuggestedName}"
-                                               Style="{StaticResource BodyStrongTextBlockStyle}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{x:Bind Path}" Opacity="0.7"
-                                               Style="{StaticResource CaptionTextBlockStyle}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{x:Bind Caption}" Opacity="0.5"
-                                               Style="{StaticResource CaptionTextBlockStyle}"/>
-                                </StackPanel>
-                            </CheckBox>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-
-                <TextBlock Grid.Row="3" TextWrapping="Wrap" Opacity="0.6"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Text="Imported projects start with no overrides — they inherit every global default until you edit them."/>
-            </Grid>
-        </ContentDialog>
-    </Page.Resources>
 
     <Grid Padding="{ThemeResource PagePadding}" RowSpacing="16">
         <Grid.RowDefinitions>
@@ -372,5 +303,81 @@
                        Style="{StaticResource CaptionTextBlockStyle}"
                        Opacity="0.8"/>
         </Border>
+
+        <!-- Bulk import picker. Must live in the page's visual tree, not in
+             Page.Resources: a ContentDialog declared as a resource opens an empty
+             modal shell (its x:Bind content never realizes) that swallows input. -->
+        <ContentDialog x:Name="ImportDialog"
+                       Grid.Row="0"
+                       Title="Import projects from past sessions"
+                       PrimaryButtonText="Import selected"
+                       SecondaryButtonText="Select none"
+                       CloseButtonText="Cancel"
+                       DefaultButton="Primary"
+                       IsPrimaryButtonEnabled="{x:Bind ViewModel.CanRunImport, Mode=OneWay}"
+                       PrimaryButtonClick="OnImportDialogPrimary"
+                       SecondaryButtonClick="OnImportDialogSelectNone">
+            <Grid RowSpacing="10" Width="620">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Text="Working directories from your past Copilot sessions, excluding your user folder. Sessions in the same git repo are grouped, and the project is named after the repo. Install and tooling folders are listed but left unticked."/>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Select all" Click="OnImportSelectAll"
+                            AutomationProperties.AutomationId="ProjectImportSelectAllButton"
+                            IsEnabled="{x:Bind ViewModel.CanRunImport, Mode=OneWay}"/>
+                    <muxc:ProgressRing Width="16" Height="16"
+                                       VerticalAlignment="Center"
+                                       IsActive="{x:Bind ViewModel.IsScanningSessions, Mode=OneWay}"/>
+                    <TextBlock Text="{x:Bind ViewModel.ImportMessage, Mode=OneWay}"
+                               VerticalAlignment="Center" Opacity="0.8"
+                               Style="{StaticResource CaptionTextBlockStyle}"/>
+                </StackPanel>
+
+                <ListView Grid.Row="2"
+                          AutomationProperties.AutomationId="ProjectImportList"
+                          ItemsSource="{x:Bind ViewModel.ImportCandidates, Mode=OneWay}"
+                          SelectionMode="None"
+                          Height="380">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProjectImportRow">
+                            <CheckBox Margin="0,2" MinWidth="0"
+                                      IsEnabled="{x:Bind CanImport}"
+                                      Opacity="{x:Bind RowOpacity}"
+                                      AutomationProperties.Name="{x:Bind AccessibleName}"
+                                      IsChecked="{x:Bind IsSelected, Mode=TwoWay}">
+                                <StackPanel Spacing="1">
+                                    <TextBlock Text="{x:Bind SuggestedName}"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{x:Bind Path}" Opacity="0.7"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{x:Bind Caption}" Opacity="0.5"
+                                               Style="{StaticResource CaptionTextBlockStyle}"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <TextBlock Grid.Row="3" TextWrapping="Wrap" Opacity="0.6"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Text="Imported projects start with no overrides — they inherit every global default until you edit them."/>
+            </Grid>
+        </ContentDialog>
     </Grid>
 </Page>

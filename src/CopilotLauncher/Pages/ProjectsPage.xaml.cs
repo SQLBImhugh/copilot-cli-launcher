@@ -130,9 +130,12 @@ public sealed partial class ProjectsPage : Page
 
     private async void OnImportClick(object sender, RoutedEventArgs e)
     {
-        ViewModel.LoadImportCandidates();
         ImportDialog.XamlRoot = XamlRoot;
-        await ImportDialog.ShowAsync();
+        // Show first so the scan's progress ring is visible, then load. Both are
+        // awaited so the handler completes only after the dialog closes.
+        var showing = ImportDialog.ShowAsync();
+        await ViewModel.LoadImportCandidatesAsync();
+        await showing;
     }
 
     private void OnImportSelectAll(object sender, RoutedEventArgs e) =>
