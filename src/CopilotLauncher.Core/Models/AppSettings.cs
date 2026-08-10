@@ -100,6 +100,14 @@ public sealed class BriefingSettings
     /// burning premium Copilot CLI requests on every launch.</summary>
     public bool AISummaryOnStartupUpdate { get; set; }
     public string? AgentsContextFilePath { get; set; }
+
+    /// <summary>User-customized instruction block for AI briefings (Changelog
+    /// tab → Briefings → "Customize instructions…"). Null/blank = use
+    /// <see cref="Services.AISummaryPromptBuilder.DefaultInstructions"/>.
+    /// <c>{from}</c> / <c>{to}</c> are substituted with the version range. The
+    /// Changelog and Repository-context data sections are always appended by
+    /// the prompt builder and are not part of this text.</summary>
+    public string? PromptInstructions { get; set; }
     public bool AppendToHistoryLog { get; set; } = true;
     public string FallbackSource { get; set; } = "both";
 

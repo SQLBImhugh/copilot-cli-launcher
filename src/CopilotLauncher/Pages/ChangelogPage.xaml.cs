@@ -10,15 +10,17 @@ namespace CopilotLauncher.Pages;
 public sealed partial class ChangelogPage : Page
 {
     public ChangelogPageViewModel ViewModel { get; }
+    private readonly ISettingsService _settings;
 
     public ChangelogPage()
     {
+        _settings = App.Services.GetRequiredService<ISettingsService>();
         ViewModel = new ChangelogPageViewModel(
             App.Services.GetRequiredService<IChangelogHistoryService>(),
             App.Services.GetRequiredService<IBriefingHistoryService>(),
             App.Services.GetRequiredService<IUpdateCheckService>(),
             App.Services.GetRequiredService<IBriefingService>(),
-            App.Services.GetRequiredService<ISettingsService>(),
+            _settings,
             App.Services.GetRequiredService<IReleaseNotesService>(),
             App.Services.GetRequiredService<IAISummaryService>());
         InitializeComponent();
@@ -180,5 +182,91 @@ public sealed partial class ChangelogPage : Page
         };
         var result = await dialog.ShowAsync();
         return result == ContentDialogResult.Primary;
+    }
+
+    // ---------- Briefing instructions editor ----------
+    //
+    // Edits the instruction block prepended to every AI briefing prompt. The
+    // Changelog / Repository-context data sections are appended by
+    // AISummaryPromptBuilder and are deliberately NOT editable here, so a
+    // custom block can't break the data plumbing.
+
+    private async void OnCustomizeInstructionsClick(object sender, RoutedEventArgs e)
+    {
+        var current = _settings.Current.Briefings.PromptInstructions;
+        var editor = new TextBox
+        {
+            Text = string.IsNullOrWhiteSpace(current)
+                ? AISummaryPromptBuilder.DefaultInstructions
+                : current,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MaxLength = AISummaryPromptBuilder.InstructionsLimit,
+            Height = 320,
+            // Explicit family rather than a ThemeResource lookup: the mono font
+            // resource isn't guaranteed to exist under every theme.
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
+            FontSize = 12,
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(editor, "BriefingInstructionsTextBox");
+
+        var help = new TextBlock
+        {
+            Text = "Sent to Copilot ahead of the release notes. Use {from} and {to} for the version range. "
+                 + "The changelog and your agents.md context are appended automatically — don't add them here.",
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.7,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        // Defensive lookup: an indexer miss throws, which would take down the
+        // whole dialog just to style a caption.
+        if (Application.Current.Resources.TryGetValue("CaptionTextBlockStyle", out var captionStyle)
+            && captionStyle is Style s)
+        {
+            help.Style = s;
+        }
+
+        var panel = new StackPanel { Width = 620 };
+        panel.Children.Add(help);
+        panel.Children.Add(editor);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Briefing instructions",
+            Content = panel,
+            PrimaryButtonText = "Save",
+            SecondaryButtonText = "Reset to default",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        // Reset repopulates the box in place instead of closing, so the user can
+        // review (and still cancel) before committing.
+        dialog.SecondaryButtonClick += (_, args) =>
+        {
+            args.Cancel = true;
+            editor.Text = AISummaryPromptBuilder.DefaultInstructions;
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var text = editor.Text?.Trim() ?? string.Empty;
+        // Persist null when blank or unchanged from the default, so settings.json
+        // stays clean and future default improvements still reach the user.
+        var isDefault = string.Equals(text, AISummaryPromptBuilder.DefaultInstructions.Trim(), StringComparison.Ordinal);
+        _settings.Current.Briefings.PromptInstructions = (text.Length == 0 || isDefault) ? null : text;
+        try
+        {
+            _settings.Save();
+            ViewModel.NoteBriefingStatus(_settings.Current.Briefings.PromptInstructions is null
+                ? "Briefing instructions reset to the default."
+                : "Custom briefing instructions saved — used on the next Generate AI Briefing.");
+        }
+        catch (Exception ex)
+        {
+            ViewModel.NoteBriefingStatus($"Could not save briefing instructions: {ex.Message}");
+        }
     }
 }

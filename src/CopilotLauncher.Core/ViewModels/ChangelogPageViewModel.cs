@@ -360,8 +360,12 @@ public sealed partial class ChangelogPageViewModel : ObservableObject
            && !string.Equals(entry.FromVersion, entry.ToVersion, StringComparison.Ordinal)
            && !entry.Body.Contains("## v", StringComparison.Ordinal);
 
-    public void ClearChangelogs()
-    {
+    /// <summary>Surface a one-off message in the Briefings status bar. Used by
+    /// the view for actions it owns (e.g. saving custom briefing instructions)
+    /// so <see cref="BriefingStatus"/> can stay private-set.</summary>
+    public void NoteBriefingStatus(string message) => BriefingStatus = message;
+
+    public void ClearChangelogs()    {
         _changelogHistory.Clear();
         Changelogs.Clear();
         ChangelogStatus = "Changelog history cleared.";

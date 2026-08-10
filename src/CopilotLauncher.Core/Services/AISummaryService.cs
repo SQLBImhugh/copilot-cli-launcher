@@ -67,7 +67,12 @@ public sealed class AISummaryService : IAISummaryService
                 _settings.Current.Briefings.AgentsContextFilePath,
                 ct).ConfigureAwait(false);
 
-            var prompt = AISummaryPromptBuilder.Build(fromVersion, toVersion, changelogText, repoContext);
+            var prompt = AISummaryPromptBuilder.Build(
+                fromVersion,
+                toVersion,
+                changelogText,
+                repoContext,
+                _settings.Current.Briefings.PromptInstructions);
             var copilot = _resolveCopilot(prompt);
             if (copilot is null)
                 return null;
@@ -259,8 +264,45 @@ public sealed class AISummaryService : IAISummaryService
     }
 }
 
-internal static class AISummaryPromptBuilder
+/// <summary>
+/// Builds the prompt sent to copilot for an AI briefing. The instruction block
+/// is user-customizable (Changelog tab → Briefings → "Customize instructions…",
+/// persisted as <see cref="Models.BriefingSettings.PromptInstructions"/>); the
+/// data sections (Changelog / Repository context) are always appended by this
+/// builder so a custom instruction block can never break the data plumbing.
+/// Public so the WinUI editor can show + reset to <see cref="DefaultInstructions"/>.
+/// </summary>
+public static class AISummaryPromptBuilder
 {
+    /// <summary>
+    /// Default instruction block. <c>{from}</c> / <c>{to}</c> are substituted
+    /// with the version range being summarized.
+    /// <para>
+    /// The "IMPORTANT INSTRUCTIONS" clauses are anti-hallucination guards added
+    /// in v0.1.12: the briefing session is reused across version bumps for
+    /// cumulative context, so prior turns can contain hallucinated context (e.g.
+    /// the legacy PowerShell launcher's Launch-Copilot.ps1 /
+    /// Get-RemoteChangelogEntries helpers, which the WinUI rewrite has not had
+    /// since v0.1.0). Without them, a thin changelog makes the model fall back
+    /// on those memorized hallucinations instead of reporting "no notes".
+    /// Users editing this text should keep equivalent guards.
+    /// </para>
+    /// </summary>
+    public const string DefaultInstructions =
+        """
+        Summarize the most important user-facing changes between GitHub Copilot CLI versions {from} and {to} in 4-6 concise bullets.
+        Focus on practical impact, notable fixes, and anything a Copilot CLI Launcher user should notice.
+
+        IMPORTANT INSTRUCTIONS:
+        - Base your summary STRICTLY on the changelog text below. Do not invent items.
+        - Do not reference any prior turns in this session, any PowerShell scripts (Launch-Copilot.ps1, Get-RemoteChangelogEntries, etc.), any wrapper, or any cache files on the Desktop — none of those exist in this product.
+        - If the changelog below is empty or contains only updater status lines like "No update needed" / "Checking for updates...", respond with exactly: "No release notes available for this transition." and nothing else.
+        """;
+
+    /// <summary>Max chars of a custom instruction block. Generous — the guard
+    /// exists so a pasted novel can't crowd out the changelog itself.</summary>
+    public const int InstructionsLimit = 8000;
+
     internal const int ChangelogLimit = 6000;
 
     /// <summary>Max chars of the optional repository-context file (AGENTS.md
@@ -271,7 +313,7 @@ internal static class AISummaryPromptBuilder
     internal const int RepositoryContextLimit = 20000;
     private const string TruncationMarker = "...[truncated]";
 
-    public static string Build(string fromVersion, string toVersion, string changelog, string? repoContext)
+    public static string Build(string fromVersion, string toVersion, string changelog, string? repoContext, string? customInstructions = null)
     {
         var normalizedChangelog = changelog?.Trim() ?? string.Empty;
         if (normalizedChangelog.Length > ChangelogLimit)
@@ -281,20 +323,7 @@ internal static class AISummaryPromptBuilder
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine($"Summarize the most important user-facing changes between GitHub Copilot CLI versions {fromVersion} and {toVersion} in 4-6 concise bullets.");
-        sb.AppendLine("Focus on practical impact, notable fixes, and anything a Copilot CLI Launcher user should notice.");
-        sb.AppendLine();
-        // Strong guard against session-memory contamination. The briefing
-        // session is reused across version bumps for cumulative context, so
-        // prior turns may include hallucinated context (e.g. the legacy
-        // PowerShell launcher's Launch-Copilot.ps1 / Get-RemoteChangelogEntries
-        // helpers, which the WinUI rewrite has not had since v0.1.0). Without
-        // this clause, when the changelog is thin the model defaults to those
-        // memorized hallucinations instead of saying "no notes available".
-        sb.AppendLine("IMPORTANT INSTRUCTIONS:");
-        sb.AppendLine("- Base your summary STRICTLY on the changelog text below. Do not invent items.");
-        sb.AppendLine("- Do not reference any prior turns in this session, any PowerShell scripts (Launch-Copilot.ps1, Get-RemoteChangelogEntries, etc.), any wrapper, or any cache files on the Desktop — none of those exist in this product.");
-        sb.AppendLine("- If the changelog below is empty or contains only updater status lines like \"No update needed\" / \"Checking for updates...\", respond with exactly: \"No release notes available for this transition.\" and nothing else.");
+        sb.AppendLine(ResolveInstructions(fromVersion, toVersion, customInstructions));
         sb.AppendLine();
         sb.AppendLine("Changelog:");
         sb.AppendLine(normalizedChangelog);
@@ -313,5 +342,29 @@ internal static class AISummaryPromptBuilder
         }
 
         return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Pick the instruction block (custom when the user supplied a non-blank
+    /// one, else the default), substitute the version placeholders, and clamp
+    /// its length. Public so the editor can preview exactly what will be sent.
+    /// </summary>
+    public static string ResolveInstructions(string fromVersion, string toVersion, string? customInstructions)
+    {
+        var text = string.IsNullOrWhiteSpace(customInstructions)
+            ? DefaultInstructions
+            : customInstructions.Trim();
+
+        if (text.Length > InstructionsLimit)
+            text = text[..Math.Max(0, InstructionsLimit - TruncationMarker.Length)] + TruncationMarker;
+
+        // Placeholders are optional — a custom block that hardcodes or omits
+        // versions is left as-is. Long aliases accepted for discoverability.
+        return text
+            .Replace("{fromVersion}", fromVersion, StringComparison.Ordinal)
+            .Replace("{toVersion}", toVersion, StringComparison.Ordinal)
+            .Replace("{from}", fromVersion, StringComparison.Ordinal)
+            .Replace("{to}", toVersion, StringComparison.Ordinal)
+            .TrimEnd();
     }
 }

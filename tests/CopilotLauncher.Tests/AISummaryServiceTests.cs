@@ -74,6 +74,89 @@ public class AISummaryServiceTests
         Assert.Contains("Launcher repo context", prompt);
     }
 
+    // ─── Customizable instructions ──────────────────────────────────────────
+
+    [Fact]
+    public void Build_UsesDefaultInstructions_WhenCustomIsNullOrBlank()
+    {
+        var withNull = AISummaryPromptBuilder.Build("1.0.0", "1.1.0", "Fixed bugs", null, null);
+        var withBlank = AISummaryPromptBuilder.Build("1.0.0", "1.1.0", "Fixed bugs", null, "   ");
+
+        // Default guard clauses must still be present.
+        Assert.Contains("IMPORTANT INSTRUCTIONS:", withNull);
+        Assert.Contains("Do not invent items.", withNull);
+        Assert.Equal(withNull, withBlank);
+    }
+
+    [Fact]
+    public void Build_DefaultOutput_IsUnchangedByTheCustomizationRefactor()
+    {
+        // Locks the exact legacy shape: instructions, blank line, then data.
+        var prompt = AISummaryPromptBuilder.Build("1.0.0", "1.1.0", "Fixed bugs", null);
+
+        Assert.StartsWith(
+            "Summarize the most important user-facing changes between GitHub Copilot CLI versions 1.0.0 and 1.1.0 in 4-6 concise bullets.",
+            prompt,
+            StringComparison.Ordinal);
+        Assert.Contains("\"No release notes available for this transition.\"", prompt);
+        Assert.Contains("Changelog:" + Environment.NewLine + "Fixed bugs", prompt);
+        // No unsubstituted placeholders may leak into the model prompt.
+        Assert.DoesNotContain("{from}", prompt);
+        Assert.DoesNotContain("{to}", prompt);
+    }
+
+    [Fact]
+    public void Build_UsesCustomInstructions_AndStillAppendsData()
+    {
+        var prompt = AISummaryPromptBuilder.Build(
+            "1.0.0", "1.1.0", "Fixed bugs", "Repo ctx", "Only output one haiku about {from} to {to}.");
+
+        Assert.Contains("Only output one haiku about 1.0.0 to 1.1.0.", prompt);
+        // Custom text replaces the default block...
+        Assert.DoesNotContain("IMPORTANT INSTRUCTIONS:", prompt);
+        // ...but the data sections are still appended by the builder.
+        Assert.Contains("Changelog:", prompt);
+        Assert.Contains("Fixed bugs", prompt);
+        Assert.Contains("Repository context:", prompt);
+        Assert.Contains("Repo ctx", prompt);
+    }
+
+    [Fact]
+    public void ResolveInstructions_SubstitutesShortAndLongPlaceholders()
+    {
+        var resolved = AISummaryPromptBuilder.ResolveInstructions(
+            "1.0.0", "1.1.0", "{from}|{to}|{fromVersion}|{toVersion}");
+
+        Assert.Equal("1.0.0|1.1.0|1.0.0|1.1.0", resolved);
+    }
+
+    [Fact]
+    public void ResolveInstructions_LeavesCustomTextWithoutPlaceholdersAlone()
+    {
+        var resolved = AISummaryPromptBuilder.ResolveInstructions("1.0.0", "1.1.0", "Be terse.");
+
+        Assert.Equal("Be terse.", resolved);
+    }
+
+    [Fact]
+    public void ResolveInstructions_TruncatesOversizeCustomInstructions()
+    {
+        var oversize = new string('q', AISummaryPromptBuilder.InstructionsLimit + 500);
+
+        var resolved = AISummaryPromptBuilder.ResolveInstructions("1.0.0", "1.1.0", oversize);
+
+        Assert.Contains("[truncated]", resolved);
+        Assert.True(resolved.Length <= AISummaryPromptBuilder.InstructionsLimit);
+    }
+
+    [Fact]
+    public void DefaultInstructions_ContainPlaceholdersAndAntiHallucinationGuards()
+    {
+        Assert.Contains("{from}", AISummaryPromptBuilder.DefaultInstructions);
+        Assert.Contains("{to}", AISummaryPromptBuilder.DefaultInstructions);
+        Assert.Contains("STRICTLY", AISummaryPromptBuilder.DefaultInstructions);
+    }
+
     [Fact]
     public void IsEnabled_ReflectsSettingsToggle()
     {
@@ -231,6 +314,35 @@ public class AISummaryServiceTests
         var text = AISummaryService.ExtractAssistantTextFromJsonl(jsonl);
 
         Assert.Equal("Real reply.", text);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_SendsCustomInstructions_FromSettings()
+    {
+        var settings = new FakeSettings();
+        settings.Current.Briefings.BriefingSessionName = null;
+        settings.Current.Briefings.PromptInstructions = "Reply with a single word about {from}->{to}.";
+
+        ProcessStartInfo? captured = null;
+        var fakeTarget = new CopilotLauncher.Helpers.ProcessUtil.CopilotProcessTarget { FileName = "copilot-test.cmd" };
+        var service = new AISummaryService(
+            settings,
+            psi => { captured = psi; return null; },
+            _ => false,
+            _ => fakeTarget);
+
+        await service.GenerateAsync("1.0.0", "1.1.0", "Fixed bugs");
+
+        Assert.NotNull(captured);
+        // The prompt is the argument right after -p.
+        var pIndex = captured!.ArgumentList.IndexOf("-p");
+        Assert.True(pIndex >= 0 && pIndex + 1 < captured.ArgumentList.Count, "-p argument not found");
+        var prompt = captured.ArgumentList[pIndex + 1];
+
+        Assert.Contains("Reply with a single word about 1.0.0->1.1.0.", prompt);
+        Assert.DoesNotContain("IMPORTANT INSTRUCTIONS:", prompt);   // default block replaced
+        Assert.Contains("Changelog:", prompt);                       // data still appended
+        Assert.Contains("Fixed bugs", prompt);
     }
 
     private static async Task<(FakeSettings settings, ProcessStartInfo? captured)> CaptureSpawnAsync(

@@ -185,6 +185,14 @@
                         </StackPanel>
                     </Button>
                     <ProgressRing x:Name="BriefingSpinner" IsActive="False" Width="16" Height="16"/>
+                    <Button AutomationProperties.AutomationId="ChangelogCustomizeInstructionsButton"
+                            ToolTipService.ToolTip="Edit the instructions sent to Copilot when generating a briefing"
+                            Click="OnCustomizeInstructionsClick">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <muxc:FontIcon Glyph="&#xE70F;" FontSize="14"/>
+                            <TextBlock Text="Customize instructions…"/>
+                        </StackPanel>
+                    </Button>
                     <Button Content="Clear briefings"
                             AutomationProperties.AutomationId="ChangelogClearBriefingsButton"
                             Click="OnClearBriefingsClick"/>
