@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -193,43 +194,69 @@ public sealed partial class ChangelogPage : Page
 
     private async void OnCustomizeInstructionsClick(object sender, RoutedEventArgs e)
     {
+        var contextSvc = App.Services.GetRequiredService<IBriefingContextService>();
+        var contextPath = contextSvc.ResolvePath();
+        var originalContext = await contextSvc.ReadAsync();
+
         var current = _settings.Current.Briefings.PromptInstructions;
-        var editor = new TextBox
-        {
-            Text = string.IsNullOrWhiteSpace(current)
-                ? AISummaryPromptBuilder.DefaultInstructions
-                : current,
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            MaxLength = AISummaryPromptBuilder.InstructionsLimit,
-            Height = 320,
-            // Explicit family rather than a ThemeResource lookup: the mono font
-            // resource isn't guaranteed to exist under every theme.
-            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
-            FontSize = 12,
-        };
-        ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(editor, "BriefingInstructionsTextBox");
 
-        var help = new TextBlock
-        {
-            Text = "Sent to Copilot ahead of the release notes. Use {from} and {to} for the version range. "
-                 + "The changelog and your agents.md context are appended automatically — don't add them here.",
-            TextWrapping = TextWrapping.Wrap,
-            Opacity = 0.7,
-            Margin = new Thickness(0, 0, 0, 8),
-        };
-        // Defensive lookup: an indexer miss throws, which would take down the
-        // whole dialog just to style a caption.
-        if (Application.Current.Resources.TryGetValue("CaptionTextBlockStyle", out var captionStyle)
-            && captionStyle is Style s)
-        {
-            help.Style = s;
-        }
+        // --- Pane 1: the ask (settings-stored) ---
+        var instructionsBox = NewEditor(
+            string.IsNullOrWhiteSpace(current) ? AISummaryPromptBuilder.DefaultInstructions : current,
+            AISummaryPromptBuilder.InstructionsLimit,
+            "BriefingInstructionsTextBox");
 
-        var panel = new StackPanel { Width = 620 };
+        // --- Pane 2: the project context (AGENTS.md file) ---
+        var contextBox = NewEditor(originalContext, 0, "BriefingContextTextBox");
+        contextBox.Visibility = Visibility.Collapsed;
+
+        var help = NewCaption(
+            "The ask sent to Copilot. Use {from} and {to} for the version range. "
+            + "The changelog and your project context are appended automatically — don't add them here.");
+        var contextHelp = NewCaption(
+            $"Background about your project, appended to every briefing as \"Repository context\". "
+            + $"This is what makes briefings say things like \"Highlights for <your project>\".\n{contextPath}");
+        contextHelp.Visibility = Visibility.Collapsed;
+
+        var openFileButton = new Button
+        {
+            Content = "Open in editor…",
+            Margin = new Thickness(0, 8, 0, 0),
+            Visibility = Visibility.Collapsed,
+        };
+        openFileButton.Click += (_, _) => OpenContextFileExternally(contextPath, contextBox.Text);
+
+        var selector = new SelectorBar { Margin = new Thickness(0, 0, 0, 8) };
+        var instructionsItem = new SelectorBarItem { Text = "Instructions" };
+        var contextItem = new SelectorBarItem { Text = "Project context" };
+        selector.Items.Add(instructionsItem);
+        selector.Items.Add(contextItem);
+        selector.SelectedItem = instructionsItem;
+
+        var resetHint = NewCaption("“Reset to default” applies to the Instructions pane only.");
+        resetHint.Margin = new Thickness(0, 8, 0, 0);
+
+        selector.SelectionChanged += (s, _) =>
+        {
+            var onInstructions = s.SelectedItem == instructionsItem;
+            instructionsBox.Visibility = onInstructions ? Visibility.Visible : Visibility.Collapsed;
+            help.Visibility = onInstructions ? Visibility.Visible : Visibility.Collapsed;
+            resetHint.Visibility = onInstructions ? Visibility.Visible : Visibility.Collapsed;
+            contextBox.Visibility = onInstructions ? Visibility.Collapsed : Visibility.Visible;
+            contextHelp.Visibility = onInstructions ? Visibility.Collapsed : Visibility.Visible;
+            openFileButton.Visibility = onInstructions ? Visibility.Collapsed : Visibility.Visible;
+        };
+
+        // No fixed width: let the dialog size to its max and the editors stretch.
+        // A hardcoded width wider than ContentDialogMaxWidth clips the content.
+        var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
+        panel.Children.Add(selector);
         panel.Children.Add(help);
-        panel.Children.Add(editor);
+        panel.Children.Add(contextHelp);
+        panel.Children.Add(instructionsBox);
+        panel.Children.Add(contextBox);
+        panel.Children.Add(openFileButton);
+        panel.Children.Add(resetHint);
 
         var dialog = new ContentDialog
         {
@@ -241,32 +268,112 @@ public sealed partial class ChangelogPage : Page
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
+        // Widen beyond the ~548px default so long prompt lines aren't cramped.
+        dialog.Resources["ContentDialogMaxWidth"] = 1100.0;
 
-        // Reset repopulates the box in place instead of closing, so the user can
-        // review (and still cancel) before committing.
+        // Reset repopulates the instructions box in place instead of closing, so
+        // the user can review (and still cancel) before committing. Never touches
+        // the project-context file, which is hand-authored.
         dialog.SecondaryButtonClick += (_, args) =>
         {
             args.Cancel = true;
-            editor.Text = AISummaryPromptBuilder.DefaultInstructions;
+            selector.SelectedItem = instructionsItem;
+            instructionsBox.Text = AISummaryPromptBuilder.DefaultInstructions;
         };
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var text = editor.Text?.Trim() ?? string.Empty;
-        // Persist null when blank or unchanged from the default, so settings.json
-        // stays clean and future default improvements still reach the user.
+        // 1) Instructions -> settings. Persist null when blank or unchanged from
+        // the default, so settings.json stays clean and future default
+        // improvements still reach the user.
+        var text = instructionsBox.Text?.Trim() ?? string.Empty;
         var isDefault = string.Equals(text, AISummaryPromptBuilder.DefaultInstructions.Trim(), StringComparison.Ordinal);
         _settings.Current.Briefings.PromptInstructions = (text.Length == 0 || isDefault) ? null : text;
+
+        var messages = new List<string>();
         try
         {
             _settings.Save();
-            ViewModel.NoteBriefingStatus(_settings.Current.Briefings.PromptInstructions is null
-                ? "Briefing instructions reset to the default."
-                : "Custom briefing instructions saved — used on the next Generate AI Briefing.");
+            messages.Add(_settings.Current.Briefings.PromptInstructions is null
+                ? "instructions reset to default"
+                : "custom instructions saved");
         }
         catch (Exception ex)
         {
-            ViewModel.NoteBriefingStatus($"Could not save briefing instructions: {ex.Message}");
+            messages.Add($"could not save instructions ({ex.Message})");
+        }
+
+        // 2) Project context -> file, only when actually edited.
+        if (!string.Equals(contextBox.Text, originalContext, StringComparison.Ordinal))
+        {
+            try
+            {
+                await contextSvc.WriteAsync(contextBox.Text ?? string.Empty);
+                messages.Add("project context saved");
+            }
+            catch (Exception ex)
+            {
+                messages.Add($"could not save project context ({ex.Message})");
+            }
+        }
+
+        ViewModel.NoteBriefingStatus(
+            string.Join("; ", messages) + " — applied on the next Generate AI Briefing.");
+    }
+
+    private static TextBox NewEditor(string text, int maxLength, string automationId)
+    {
+        var box = new TextBox
+        {
+            Text = text ?? string.Empty,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 320,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            // Explicit family rather than a ThemeResource lookup: the mono font
+            // resource isn't guaranteed to exist under every theme.
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
+            FontSize = 12,
+        };
+        if (maxLength > 0) box.MaxLength = maxLength;
+        ScrollViewer.SetVerticalScrollBarVisibility(box, ScrollBarVisibility.Auto);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(box, automationId);
+        return box;
+    }
+
+    private static TextBlock NewCaption(string text)
+    {
+        var block = new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.7,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        // Defensive lookup: an indexer miss throws, which would take down the
+        // whole dialog just to style a caption.
+        if (Application.Current.Resources.TryGetValue("CaptionTextBlockStyle", out var captionStyle)
+            && captionStyle is Style s)
+        {
+            block.Style = s;
+        }
+        return block;
+    }
+
+    /// <summary>Hand the context file to the user's default editor. Saves the
+    /// in-dialog text first so they don't edit a stale copy.</summary>
+    private async void OpenContextFileExternally(string path, string pendingText)
+    {
+        try
+        {
+            var svc = App.Services.GetRequiredService<IBriefingContextService>();
+            await svc.WriteAsync(pendingText ?? string.Empty);
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            ViewModel.NoteBriefingStatus($"Opened {path} — reopen this dialog after saving to see your changes.");
+        }
+        catch (Exception ex)
+        {
+            ViewModel.NoteBriefingStatus($"Could not open the context file: {ex.Message}");
         }
     }
 }

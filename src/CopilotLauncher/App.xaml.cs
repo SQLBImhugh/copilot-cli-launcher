@@ -101,6 +101,7 @@ public partial class App : Application
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<IAfterLaunchAction, Helpers.WinUIAfterLaunchAction>();
         services.AddSingleton<IAISummaryService, AISummaryService>();
+        services.AddSingleton<IBriefingContextService, BriefingContextService>();
         services.AddSingleton<ITrayIconService, TrayIconService>();
 
         return services.BuildServiceProvider();
