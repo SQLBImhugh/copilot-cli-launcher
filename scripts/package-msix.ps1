@@ -33,7 +33,7 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
-    [string]$Version = '0.2.6.0',
+    [string]$Version = '0.3.0.0',
     [string]$Publisher = 'CN=SQLBImhugh',
     [switch]$SkipPublish
 )
