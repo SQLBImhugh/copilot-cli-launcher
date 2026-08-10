@@ -306,14 +306,23 @@ public sealed partial class ChangelogPage : Page
         // 2) Project context -> file, only when actually edited.
         if (!string.Equals(contextBox.Text, originalContext, StringComparison.Ordinal))
         {
-            try
+            var updated = contextBox.Text ?? string.Empty;
+            if (BriefingContextService.IsSuspiciousShrink(originalContext, updated)
+                && !await ConfirmContextShrinkAsync(originalContext.Length, updated.Length))
             {
-                await contextSvc.WriteAsync(contextBox.Text ?? string.Empty);
-                messages.Add("project context saved");
+                messages.Add("project context left unchanged");
             }
-            catch (Exception ex)
+            else
             {
-                messages.Add($"could not save project context ({ex.Message})");
+                try
+                {
+                    await contextSvc.WriteAsync(updated);
+                    messages.Add("project context saved");
+                }
+                catch (Exception ex)
+                {
+                    messages.Add($"could not save project context ({ex.Message})");
+                }
             }
         }
 
@@ -323,9 +332,14 @@ public sealed partial class ChangelogPage : Page
 
     private static TextBox NewEditor(string text, int maxLength, string automationId)
     {
+        // ORDER IS LOAD-BEARING: a TextBox with AcceptsReturn=false (the
+        // default) silently truncates assigned text at the first newline.
+        // Setting Text inside the object initializer — i.e. before
+        // AcceptsReturn=true — therefore dropped every line but the first, and
+        // saving wrote that truncated value back over the user's file.
+        // Configure the multi-line behavior FIRST, then assign Text.
         var box = new TextBox
         {
-            Text = text ?? string.Empty,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             Height = 320,
@@ -336,6 +350,7 @@ public sealed partial class ChangelogPage : Page
             FontSize = 12,
         };
         if (maxLength > 0) box.MaxLength = maxLength;
+        box.Text = text ?? string.Empty;
         ScrollViewer.SetVerticalScrollBarVisibility(box, ScrollBarVisibility.Auto);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(box, automationId);
         return box;
@@ -360,6 +375,24 @@ public sealed partial class ChangelogPage : Page
         return block;
     }
 
+    /// <summary>Guard against a save that would wipe most of a substantial,
+    /// hand-authored context file. Defaults to Cancel.</summary>
+    private async System.Threading.Tasks.Task<bool> ConfirmContextShrinkAsync(int beforeChars, int afterChars)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Save a much smaller project context?",
+            Content = $"This would replace {beforeChars:N0} characters with {afterChars:N0} — "
+                    + "most of the file would be removed.\n\n"
+                    + "If you didn't intend that, choose Cancel. A timestamped backup is kept either way.",
+            PrimaryButtonText = "Save anyway",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
     /// <summary>Hand the context file to the user's default editor. Saves the
     /// in-dialog text first so they don't edit a stale copy.</summary>
     private async void OpenContextFileExternally(string path, string pendingText)
@@ -367,7 +400,13 @@ public sealed partial class ChangelogPage : Page
         try
         {
             var svc = App.Services.GetRequiredService<IBriefingContextService>();
-            await svc.WriteAsync(pendingText ?? string.Empty);
+            // Same shrink guard as the Save path — never let a truncated editor
+            // value reach disk just because the user clicked "Open in editor".
+            var onDisk = await svc.ReadAsync();
+            if (!BriefingContextService.IsSuspiciousShrink(onDisk, pendingText ?? string.Empty))
+            {
+                await svc.WriteAsync(pendingText ?? string.Empty);
+            }
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
             ViewModel.NoteBriefingStatus($"Opened {path} — reopen this dialog after saving to see your changes.");
         }

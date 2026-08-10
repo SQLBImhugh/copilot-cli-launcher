@@ -115,6 +115,49 @@ public class BriefingContextServiceTests : IDisposable
         Assert.Equal(path, _settings.Current.Briefings.AgentsContextFilePath);
     }
 
+    // ─── Shrink guard (regression: first-line truncation wiped a 5 KB file) ──
+
+    [Fact]
+    public void IsSuspiciousShrink_FlagsFirstLineTruncationOfRealFile()
+    {
+        // Exactly the incident: a 5 KB hand-authored context file reduced to its
+        // first heading line by a TextBox that wasn't in multi-line mode.
+        var original = "# FabricPOCPortal-Briefings — Persistent Instructions\n"
+                     + new string('x', 5000);
+        var truncated = "# FabricPOCPortal-Briefings — Persistent Instructions";
+
+        Assert.True(BriefingContextService.IsSuspiciousShrink(original, truncated));
+    }
+
+    [Fact]
+    public void IsSuspiciousShrink_FlagsClearingASubstantialFile()
+    {
+        var original = new string('x', 1000);
+
+        Assert.True(BriefingContextService.IsSuspiciousShrink(original, string.Empty));
+        Assert.True(BriefingContextService.IsSuspiciousShrink(original, null));
+    }
+
+    [Fact]
+    public void IsSuspiciousShrink_AllowsNormalEditsAndGrowth()
+    {
+        var original = new string('x', 1000);
+
+        Assert.False(BriefingContextService.IsSuspiciousShrink(original, new string('x', 900)));   // trim
+        Assert.False(BriefingContextService.IsSuspiciousShrink(original, new string('x', 501)));   // just over half
+        Assert.False(BriefingContextService.IsSuspiciousShrink(original, new string('x', 4000)));  // growth
+        Assert.False(BriefingContextService.IsSuspiciousShrink(original, original));               // unchanged
+    }
+
+    [Fact]
+    public void IsSuspiciousShrink_IgnoresSmallOriginals()
+    {
+        // Starting from empty/near-empty is normal authoring, not data loss.
+        Assert.False(BriefingContextService.IsSuspiciousShrink(null, "hello"));
+        Assert.False(BriefingContextService.IsSuspiciousShrink(string.Empty, string.Empty));
+        Assert.False(BriefingContextService.IsSuspiciousShrink(new string('x', 199), string.Empty));
+    }
+
     private sealed class FakeSettings : ISettingsService
     {
         public FakeSettings(string appData) => AppDataDirectory = appData;

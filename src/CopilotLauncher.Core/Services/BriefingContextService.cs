@@ -39,6 +39,30 @@ public sealed class BriefingContextService : IBriefingContextService
     /// <summary>File name used when the user has no context path configured.</summary>
     internal const string DefaultFileName = "AGENTS.md";
 
+    /// <summary>Below this length the original is too small for a shrink to be
+    /// meaningfully suspicious (e.g. an empty or one-line placeholder).</summary>
+    internal const int ShrinkGuardMinimumOriginalLength = 200;
+
+    /// <summary>
+    /// True when replacing <paramref name="original"/> with <paramref name="updated"/>
+    /// would destroy most of a substantial file — the signature of a truncation
+    /// bug (or a mis-click) rather than a deliberate edit. Callers should confirm
+    /// with the user before writing.
+    /// <para>
+    /// Added after a real incident: the editor's TextBox was configured with
+    /// <c>AcceptsReturn=false</c> at assignment time, so it silently kept only
+    /// the first line of a 5 KB hand-authored context file and saved that back.
+    /// The per-save backup made it recoverable; this makes it preventable.
+    /// </para>
+    /// </summary>
+    public static bool IsSuspiciousShrink(string? original, string? updated)
+    {
+        var before = original?.Length ?? 0;
+        if (before < ShrinkGuardMinimumOriginalLength) return false;
+        var after = updated?.Length ?? 0;
+        return after * 2 < before;   // lost more than half
+    }
+
     private readonly ISettingsService _settings;
 
     public BriefingContextService(ISettingsService settings)
