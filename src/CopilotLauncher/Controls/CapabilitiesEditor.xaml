@@ -86,11 +86,11 @@
             <TextBlock Text="Skills" Style="{StaticResource BodyStrongTextBlockStyle}" Opacity="0.9"/>
             <TextBlock Text="{x:Bind ViewModel.SkillSummary, Mode=OneWay}"
                        Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"/>
-            <ToggleSwitch Header="Disable all skills"
-                          AutomationProperties.AutomationId="CapabilitiesDisableSkillsToggle"
-                          OffContent="Skills enabled"
-                          OnContent="Skills disabled (excludes the skill tool)"
-                          IsOn="{x:Bind ViewModel.DisableAllSkills, Mode=TwoWay}"/>
+            <ToggleSwitch Header="Enable all skills"
+                          AutomationProperties.AutomationId="CapabilitiesEnableSkillsToggle"
+                          OffContent="Skills disabled (excludes the skill tool)"
+                          OnContent="Skills enabled"
+                          IsOn="{x:Bind ViewModel.EnableAllSkills, Mode=TwoWay}"/>
         </StackPanel>
     </StackPanel>
 </UserControl>

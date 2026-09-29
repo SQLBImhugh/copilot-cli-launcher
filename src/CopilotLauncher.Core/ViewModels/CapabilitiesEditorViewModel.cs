@@ -52,6 +52,16 @@ public sealed partial class CapabilitiesEditorViewModel : ObservableObject
     public int SkillCount => Skills.Count;
     public bool ToolListEnabled => ToolModeOnly || ToolModeExclude;
 
+    /// <summary>Positive-facing mirror of <see cref="DisableAllSkills"/> for the
+    /// UI toggle, so "on" means skills are enabled. Skills are all-or-nothing
+    /// per session, so this is just the inverse of the model flag; the model
+    /// still persists <see cref="DisableAllSkills"/>.</summary>
+    public bool EnableAllSkills
+    {
+        get => !DisableAllSkills;
+        set => DisableAllSkills = !value;
+    }
+
     public string SkillSummary => SkillCount == 0
         ? "No skills detected."
         : $"{SkillCount} skill(s) available. Skills are all-or-nothing per session.";
@@ -59,7 +69,11 @@ public sealed partial class CapabilitiesEditorViewModel : ObservableObject
     partial void OnDisableBuiltinGitHubMcpChanged(bool value) => RaiseChanged();
     partial void OnSelectedAgentChanged(string value) => RaiseChanged();
     partial void OnToolsTextChanged(string value) => RaiseChanged();
-    partial void OnDisableAllSkillsChanged(bool value) => RaiseChanged();
+    partial void OnDisableAllSkillsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(EnableAllSkills));
+        RaiseChanged();
+    }
 
     partial void OnToolModeNoneChanged(bool value) { OnPropertyChanged(nameof(ToolListEnabled)); if (value) RaiseChanged(); }
     partial void OnToolModeOnlyChanged(bool value) { OnPropertyChanged(nameof(ToolListEnabled)); if (value) RaiseChanged(); }
