@@ -232,18 +232,51 @@ public sealed partial class CleanupViewModel : ObservableObject
     }
 
     /// <summary>True when the session folder holds no real conversation.</summary>
+    /// <summary>Below this, a transcript is empty on size alone — no need to read it.</summary>
+    private const long TinyTranscriptBytes = 2048;
+
+    /// <summary>
+    /// Upper bound on transcripts we will read looking for a user message. A transcript
+    /// this large always contains real conversation, so scanning it would only cost time.
+    /// </summary>
+    private const long UserMessageScanCapBytes = 256 * 1024;
+
+    /// <summary>The event a transcript must contain to count as a real conversation.</summary>
+    private const string UserMessageMarker = "\"type\":\"user.message\"";
+
     private static bool IsEmptyOnDisk(CopilotSession s)
     {
         try
         {
             var events = Path.Combine(s.FolderPath, "events.jsonl");
             if (!File.Exists(events)) return true;
-            return new FileInfo(events).Length < 2048;
+
+            var length = new FileInfo(events).Length;
+            if (length < TinyTranscriptBytes) return true;
+            if (length > UserMessageScanCapBytes) return false;
+
+            // A session the CLI booted but the user never typed into still writes a
+            // few KB of startup events (session.start, permissions_changed, warnings,
+            // hooks, shutdown), so size alone no longer identifies it. `copilot
+            // --resume=<id>` mints one of these placeholder sessions on every resume,
+            // which is how they accumulate. Absence of a user message is the reliable
+            // signal.
+            return !ContainsUserMessage(events);
         }
         catch
         {
             return false;
         }
+    }
+
+    private static bool ContainsUserMessage(string eventsPath)
+    {
+        using var reader = new StreamReader(eventsPath);
+        while (reader.ReadLine() is { } line)
+        {
+            if (line.Contains(UserMessageMarker, StringComparison.Ordinal)) return true;
+        }
+        return false;
     }
 
     private static bool IsScratch(string? cwd)

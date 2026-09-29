@@ -1,3 +1,4 @@
+using System.Text;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 using CopilotLauncher.ViewModels;
@@ -26,11 +27,13 @@ public sealed class CleanupViewModelTests : IDisposable
     /// <summary>Creates a session folder so the "empty" check has something real to read.</summary>
     private CopilotSession Session(
         string id, string? name = null, string cwd = @"C:\repos\app",
-        int eventBytes = 100_000, int summaries = 0, bool locked = false, bool userNamed = false)
+        int eventBytes = 100_000, int summaries = 0, bool locked = false, bool userNamed = false,
+        bool hasUserMessage = true)
     {
         var dir = Path.Combine(_root, id);
         Directory.CreateDirectory(dir);
-        if (eventBytes > 0) File.WriteAllBytes(Path.Combine(dir, "events.jsonl"), new byte[eventBytes]);
+        if (eventBytes > 0)
+            File.WriteAllText(Path.Combine(dir, "events.jsonl"), BuildTranscript(eventBytes, hasUserMessage));
         if (locked) File.WriteAllText(Path.Combine(dir, "inuse.1.lock"), "");
         return new CopilotSession
         {
@@ -38,6 +41,21 @@ public sealed class CleanupViewModelTests : IDisposable
             Name = name, Cwd = cwd, SummaryCount = summaries,
             IsLocked = locked, UserNamed = userNamed, SizeBytes = eventBytes,
         };
+    }
+
+    /// <summary>
+    /// A transcript of roughly <paramref name="approxBytes"/>, padded with the startup
+    /// events the CLI writes before any conversation happens.
+    /// </summary>
+    private static string BuildTranscript(int approxBytes, bool hasUserMessage)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("""{"type":"session.start","data":{"sessionId":"x"}}""");
+        if (hasUserMessage)
+            sb.AppendLine("""{"type":"user.message","data":{"content":"do the thing"}}""");
+        while (sb.Length < approxBytes)
+            sb.AppendLine("""{"type":"session.warning","data":{"message":"padding"}}""");
+        return sb.ToString();
     }
 
     private static List<CleanupRow> Classify(params CopilotSession[] s) => CleanupViewModel.Classify(s);
@@ -53,6 +71,31 @@ public sealed class CleanupViewModelTests : IDisposable
         Assert.Equal(SessionCleanupKind.Empty, rows.Single(r => r.SessionId == "no-events").Kind);
         Assert.Equal(SessionCleanupKind.Empty, rows.Single(r => r.SessionId == "tiny").Kind);
         Assert.NotEqual(SessionCleanupKind.Empty, rows.Single(r => r.SessionId == "real").Kind);
+    }
+
+    /// <summary>
+    /// `copilot --resume=&lt;id&gt;` mints a placeholder session alongside the one it was
+    /// asked to resume. It boots fully — startup, permission, model, warning and hook
+    /// events — so it clears the old 2 KB size threshold despite holding no conversation.
+    /// </summary>
+    [Fact]
+    public void Classify_ResumePlaceholderWithoutUserMessageIsEmpty()
+    {
+        var rows = Classify(
+            Session("placeholder", name: "something", eventBytes: 5_226, hasUserMessage: false),
+            Session("used", name: "something", eventBytes: 5_226, hasUserMessage: true));
+
+        Assert.Equal(SessionCleanupKind.Empty, rows.Single(r => r.SessionId == "placeholder").Kind);
+        Assert.NotEqual(SessionCleanupKind.Empty, rows.Single(r => r.SessionId == "used").Kind);
+    }
+
+    /// <summary>Transcripts past the scan cap are assumed real rather than read end to end.</summary>
+    [Fact]
+    public void Classify_LargeTranscriptIsNeverScannedForUserMessages()
+    {
+        var rows = Classify(Session("big", name: "something", eventBytes: 400_000, hasUserMessage: false));
+
+        Assert.NotEqual(SessionCleanupKind.Empty, rows[0].Kind);
     }
 
     [Theory]
