@@ -159,7 +159,9 @@ Documented in the session plan.md and run before each phase commit.
 
 ## Upstream issues to watch
 
-No tracked issues at this time. Previous entries:
+- [github/copilot-cli#4590](https://github.com/github/copilot-cli/issues/4590) — **Open.** Every MCP host reload restarts the whole extension cohort; each extension re-issues `session.resume`, and removing an SDK connection disposes the session's hook processor (`[rust:hooks] disposing owned hook processor … "reason":"SDK connection removed"`). Later extensions then fail `session.resume` with `Hook processor is not configured for session id`, crash-loop, and once the last processor is gone the next user prompt dies with `Execution failed: GenericFailure, Hook processor is not configured…`. The same reload storm produces the repeated `MCP Servers reloaded: N servers connected` notices. **No launcher-side workaround exists** — the fault is in the compiled Rust runtime, and reducing the active extension count from 4 to 2 still reproduced it, so do not add a `RepairSettings.TrackedGitHubIssues` entry for this one. Symptoms are timing-dependent: prompts submitted before the disposals (~t+20s) succeed.
+
+Previous entries:
 
 - ~~[github/copilot-cli#3298](https://github.com/github/copilot-cli/issues/3298)~~ — Fixed in v1.0.48 (2026-05-16). The Win32 keep-alive `native/win32/index.js` loader stub is no longer needed; the win32 native addon now loads from `prebuilds/win32-x64/`. `KnownBugWorkaroundService` was removed and `Repair-Win32NativeAddon` in the legacy kit was retired to a no-op.
 
