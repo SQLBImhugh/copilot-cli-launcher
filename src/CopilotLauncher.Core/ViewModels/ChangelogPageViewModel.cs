@@ -275,8 +275,14 @@ public sealed partial class ChangelogPageViewModel : ObservableObject
             }
 
             BriefingStatus = $"Generating AI summary for {fromVersion} → {currentVersion}…";
-            var changelogText = ReleaseNotesService.BuildChangelogText(entries);
-            var summary = await _ai.GenerateAsync(fromVersion, currentVersion, changelogText, ct).ConfigureAwait(true);
+            // Option B: hand the session the on-disk changelogs.json and let it
+            // read + filter the entries itself (generation runs with
+            // --allow-all-tools). The full untruncated history is available
+            // regardless of size, so the old 6000-char changelog cap in
+            // AISummaryPromptBuilder no longer applies to the briefing.
+            var summary = await _ai
+                .GenerateFromFileAsync(fromVersion, currentVersion, _changelogHistory.FilePath, ct)
+                .ConfigureAwait(true);
             if (string.IsNullOrWhiteSpace(summary))
             {
                 BriefingStatus = $"AI summary unavailable for {fromVersion} → {currentVersion} (copilot CLI not installed or returned empty).";

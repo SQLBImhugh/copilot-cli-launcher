@@ -437,6 +437,17 @@ public class ChangelogPageViewModelTests
             LastChangelogText = changelogText;
             return Task.FromResult(CannedSummary);
         }
+
+        public string? LastChangelogFilePath { get; private set; }
+
+        public Task<string?> GenerateFromFileAsync(string fromVersion, string toVersion, string changelogFilePath, CancellationToken ct = default)
+        {
+            CallCount++;
+            LastFromVersion = fromVersion;
+            LastToVersion = toVersion;
+            LastChangelogFilePath = changelogFilePath;
+            return Task.FromResult(CannedSummary);
+        }
     }
 
     private sealed class FakeReleaseNotes : IReleaseNotesService

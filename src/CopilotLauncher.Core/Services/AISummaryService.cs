@@ -73,6 +73,60 @@ public sealed class AISummaryService : IAISummaryService
                 changelogText,
                 repoContext,
                 _settings.Current.Briefings.PromptInstructions);
+            return await RunCopilotAsync(prompt, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<string?> GenerateFromFileAsync(
+        string fromVersion,
+        string toVersion,
+        string changelogFilePath,
+        CancellationToken ct = default)
+    {
+        // The file-mode counterpart to GenerateAsync: rather than baking the
+        // (limit-truncated) changelog text into the prompt, hand the session
+        // the path to changelogs.json and let it read + filter the entries.
+        // Generation already runs with --allow-all-tools, so the session's file
+        // tools can read the file directly and no prompt-size cap applies.
+        if (string.IsNullOrWhiteSpace(changelogFilePath))
+            return null;
+
+        try
+        {
+            if (ct.IsCancellationRequested)
+                return null;
+
+            var repoContext = await TryReadRepositoryContextAsync(
+                _settings.Current.Briefings.AgentsContextFilePath,
+                ct).ConfigureAwait(false);
+
+            var prompt = AISummaryPromptBuilder.BuildFileMode(
+                fromVersion,
+                toVersion,
+                changelogFilePath,
+                repoContext,
+                _settings.Current.Briefings.PromptInstructions);
+            return await RunCopilotAsync(prompt, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Spawns the copilot CLI with the given fully-built prompt and returns the
+    /// model's text reply (or null on any failure/timeout/cancellation). Shared
+    /// by <see cref="GenerateAsync"/> and <see cref="GenerateFromFileAsync"/>.
+    /// </summary>
+    private async Task<string?> RunCopilotAsync(string prompt, CancellationToken ct)
+    {
+        try
+        {
             var copilot = _resolveCopilot(prompt);
             if (copilot is null)
                 return null;
@@ -118,10 +172,11 @@ public sealed class AISummaryService : IAISummaryService
             // only tool-invocation banners and the stats footer appear.
             // The reply is only emitted via JSONL when `--output-format json`
             // is set. `--allow-all-tools` is required for any non-trivial
-            // briefing because the model must fetch release notes from the
-            // web or `gh`. Without it, the model's tool calls are denied
-            // ("Permission denied and could not request permission from
-            // user") and it ends up producing no useful summary anyway.
+            // briefing because the model must read the local changelogs.json
+            // (file-mode path) or fetch release notes from the web or `gh`.
+            // Without it, the model's tool calls are denied ("Permission denied
+            // and could not request permission from user") and it ends up
+            // producing no useful summary anyway.
             psi.ArgumentList.Add("--allow-all-tools");
             psi.ArgumentList.Add("--output-format");
             psi.ArgumentList.Add("json");
@@ -299,6 +354,25 @@ public static class AISummaryPromptBuilder
         - If the changelog below is empty or contains only updater status lines like "No update needed" / "Checking for updates...", respond with exactly: "No release notes available for this transition." and nothing else.
         """;
 
+    /// <summary>
+    /// File-mode counterpart to <see cref="DefaultInstructions"/>, used by
+    /// <see cref="BuildFileMode"/>. Instead of a changelog embedded below, the
+    /// prompt names an on-disk <c>changelogs.json</c> for the session to read
+    /// with its file tools (generation runs with <c>--allow-all-tools</c>), so
+    /// the full untruncated history is available regardless of size. Keeps the
+    /// same anti-hallucination guards as the embedded-text default.
+    /// </summary>
+    public const string DefaultFileInstructions =
+        """
+        Summarize the most important user-facing changes between GitHub Copilot CLI versions {from} and {to} in 4-6 concise bullets.
+        Focus on practical impact, notable fixes, and anything a Copilot CLI Launcher user should notice.
+
+        IMPORTANT INSTRUCTIONS:
+        - Read the changelog JSON file whose path is given below with your file tools. It is an array of entries, each with `fromVersion`, `toVersion`, `timestamp`, `source`, and `body` (the release-notes markdown). Base your summary STRICTLY on the `body` fields of the entries covering versions after {from} up to and including {to}. Do not invent items, and do not summarize versions outside that range.
+        - Do not reference any prior turns in this session, any PowerShell scripts (Launch-Copilot.ps1, Get-RemoteChangelogEntries, etc.), any wrapper, or any cache files on the Desktop — none of those exist in this product.
+        - If the file cannot be read, has no entries in that range, or those entries contain only updater status lines like "No update needed" / "Checking for updates...", respond with exactly: "No release notes available for this transition." and nothing else.
+        """;
+
     /// <summary>Max chars of a custom instruction block. Generous — the guard
     /// exists so a pasted novel can't crowd out the changelog itself.</summary>
     public const int InstructionsLimit = 8000;
@@ -345,14 +419,49 @@ public static class AISummaryPromptBuilder
     }
 
     /// <summary>
+    /// Builds a briefing prompt that points the session at an on-disk changelog
+    /// JSON file instead of embedding the changelog text. Because generation
+    /// runs with <c>--allow-all-tools</c>, the session reads and filters the
+    /// file itself, so there is no changelog-size cap. The repository-context
+    /// block is still embedded (and still clamped) exactly as in
+    /// <see cref="Build"/>.
+    /// </summary>
+    public static string BuildFileMode(string fromVersion, string toVersion, string changelogFilePath, string? repoContext, string? customInstructions = null)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(ResolveInstructionsCore(fromVersion, toVersion, customInstructions, DefaultFileInstructions));
+        sb.AppendLine();
+        sb.AppendLine("Changelog file (JSON array of changelog entries — read it with your file tools):");
+        sb.AppendLine((changelogFilePath ?? string.Empty).Trim());
+
+        if (!string.IsNullOrWhiteSpace(repoContext))
+        {
+            var normalizedRepoContext = repoContext.Trim();
+            if (normalizedRepoContext.Length > RepositoryContextLimit)
+            {
+                normalizedRepoContext = normalizedRepoContext[..Math.Max(0, RepositoryContextLimit - TruncationMarker.Length)]
+                    + TruncationMarker;
+            }
+            sb.AppendLine();
+            sb.AppendLine("Repository context:");
+            sb.AppendLine(normalizedRepoContext);
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
     /// Pick the instruction block (custom when the user supplied a non-blank
     /// one, else the default), substitute the version placeholders, and clamp
     /// its length. Public so the editor can preview exactly what will be sent.
     /// </summary>
     public static string ResolveInstructions(string fromVersion, string toVersion, string? customInstructions)
+        => ResolveInstructionsCore(fromVersion, toVersion, customInstructions, DefaultInstructions);
+
+    private static string ResolveInstructionsCore(string fromVersion, string toVersion, string? customInstructions, string defaultBlock)
     {
         var text = string.IsNullOrWhiteSpace(customInstructions)
-            ? DefaultInstructions
+            ? defaultBlock
             : customInstructions.Trim();
 
         if (text.Length > InstructionsLimit)
