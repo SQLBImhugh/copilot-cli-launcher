@@ -75,7 +75,7 @@ public sealed partial class LaunchShortcutPage : ListPage
         // includes real copilot CLI flags that can be pasted into a shell.
         var args = new List<string?> { "copilot" };
         if (shortcut.EnableAllowAll) args.Add("--allow-all");
-        if (!string.IsNullOrWhiteSpace(shortcut.ResumeTarget)) args.Add($"--resume={shortcut.ResumeTarget}");
+        if (ResumeFlag.Format(shortcut.ResumeTarget) is { } resumeArg) args.Add(resumeArg);
         if (!string.IsNullOrWhiteSpace(shortcut.ExtraCopilotArgs))
         {
             args.AddRange(ArgQuoter.Split(shortcut.ExtraCopilotArgs));

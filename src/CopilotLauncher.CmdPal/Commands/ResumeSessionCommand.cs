@@ -9,7 +9,7 @@ namespace CopilotLauncher.CmdPal.Commands;
 
 /// <summary>
 /// Resumes a Copilot CLI session by spawning the user's default terminal +
-/// `copilot --resume=&lt;id&gt;` in the session's working directory. Wraps
+/// `copilot --session-id=&lt;id&gt;` in the session's working directory. Wraps
 /// <see cref="ILaunchService.Spawn"/> for one-click invocation from the
 /// Command Palette.
 /// </summary>

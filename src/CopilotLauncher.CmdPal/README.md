@@ -4,7 +4,7 @@ Sibling project to the main launcher. Reuses `CopilotLauncher.Core` to expose tw
 
 | Top-level command | What it does |
 |---|---|
-| **Resume Copilot session…** | Lists every session under `~/.copilot/session-state/`, sorted newest-first; selecting one spawns `copilot --resume=<id>` in your default terminal (uses your Sessions Resume defaults). |
+| **Resume Copilot session…** | Lists every session under `~/.copilot/session-state/`, sorted newest-first; selecting one spawns `copilot --session-id=<id>` in your default terminal (uses your Sessions Resume defaults). |
 | **Launch Copilot shortcut…** | Lists your saved Shortcuts (the same ones the main app shows in its Shortcuts tab); selecting one launches with that shortcut's per-shortcut config. |
 
 ## Status: starter scaffold

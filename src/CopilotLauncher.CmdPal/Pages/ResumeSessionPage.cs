@@ -1,17 +1,17 @@
 using System;
 using System.Linq;
 using CopilotLauncher.CmdPal.Commands;
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
-
 namespace CopilotLauncher.CmdPal.Pages;
 
 /// <summary>
 /// Lists every Copilot CLI session under <c>~/.copilot/session-state/</c>.
 /// Selecting an item runs <see cref="ResumeSessionCommand"/> which spawns
-/// `copilot --resume=&lt;id&gt;` in the user's preferred terminal.
+/// `copilot --session-id=&lt;id&gt;` in the user's preferred terminal.
 /// </summary>
 public sealed partial class ResumeSessionPage : DynamicListPage
 {
@@ -93,7 +93,7 @@ public sealed partial class ResumeSessionPage : DynamicListPage
                 {
                     Title = "Copy session id",
                 },
-                new CommandContextItem(new CopyTextCommand($"copilot --resume={session.Id}"))
+                new CommandContextItem(new CopyTextCommand($"copilot {ResumeFlag.Format(session.Id)}"))
                 {
                     Title = "Copy resume command",
                 },

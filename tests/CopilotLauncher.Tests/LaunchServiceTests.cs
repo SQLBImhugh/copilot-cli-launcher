@@ -29,6 +29,24 @@ public class LaunchServiceTests
         Assert.Contains("--resume=MyApp", cmd.ArgumentList);
     }
 
+    /// <summary>
+    /// Resuming by full session id must use --session-id. Interactive --resume=&lt;uuid&gt;
+    /// initializes a second placeholder workspace and leaves the UI stuck on "Resuming".
+    /// </summary>
+    [Fact]
+    public void Build_FullSessionIdResumesWithSessionIdFlag()
+    {
+        var svc = NewSvc(CmdResolver);
+        var cmd = svc.Build(new LaunchRequest
+        {
+            WorkingDirectory = @"C:\proj",
+            ResumeTarget = "3d8fdf55-0c73-4b24-8979-7ea46f96abec",
+            Terminal = null,
+        });
+        Assert.Contains("--session-id=3d8fdf55-0c73-4b24-8979-7ea46f96abec", cmd.ArgumentList);
+        Assert.DoesNotContain(cmd.ArgumentList, a => a.StartsWith("--resume", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Build_WindowsTerminal_WrapsCorrectly()
     {

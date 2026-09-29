@@ -76,7 +76,7 @@ public sealed class LaunchService : ILaunchService
         // PrefixArgs already contains pwsh -NoProfile -File <copilot.ps1> when .ps1 fallback is used;
         // append the user-facing copilot flags after.
         if (request.EnableAllowAll) copilotArgs.Add("--allow-all");
-        if (!string.IsNullOrWhiteSpace(request.ResumeTarget)) copilotArgs.Add($"--resume={request.ResumeTarget}");
+        if (ResumeFlag.Format(request.ResumeTarget) is { } resumeArg) copilotArgs.Add(resumeArg);
         if (!string.IsNullOrWhiteSpace(request.ExtraCopilotArgs))
             copilotArgs.AddRange(ArgQuoter.Split(request.ExtraCopilotArgs));
 
