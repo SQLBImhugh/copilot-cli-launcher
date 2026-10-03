@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 using Xunit;
@@ -22,6 +23,7 @@ public sealed class RepoConfigServiceTests : IDisposable
     }
 
     private string SettingsPath => Path.Combine(_repo, ".github", "copilot", "settings.json");
+    private string LocalSettingsPath => Path.Combine(_repo, ".github", "copilot", "settings.local.json");
 
     private static InstalledPluginInfo Plugin(string name, string marketplace, bool enabled = true) => new()
     {
@@ -71,6 +73,80 @@ public sealed class RepoConfigServiceTests : IDisposable
         var managed = _svc.Inspect(_repo).Files.Where(f => f.Kind == RepoConfigKind.Managed).ToList();
         Assert.Single(managed);
         Assert.Equal(".github/copilot/settings.json", managed[0].RelativePath);
+    }
+
+    [Fact]
+    public void FindGitRoot_DetectsDirectoryGitEntry()
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, ".git"));
+        var child = Path.Combine(_repo, "src", "app");
+        Directory.CreateDirectory(child);
+
+        Assert.Equal(_repo, RepoConfigService.FindGitRoot(child));
+    }
+
+    [Fact]
+    public void FindGitRoot_DetectsFileGitEntry()
+    {
+        File.WriteAllText(Path.Combine(_repo, ".git"), "gitdir: ../main/.git/worktrees/app");
+        var child = Path.Combine(_repo, "src", "app");
+        Directory.CreateDirectory(child);
+
+        Assert.Equal(_repo, RepoConfigService.FindGitRoot(child));
+    }
+
+    [Fact]
+    public void FindGitRoot_ReturnsNullOutsideGitRepo()
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, "src"));
+
+        Assert.Null(RepoConfigService.FindGitRoot(Path.Combine(_repo, "src")));
+    }
+
+    [Fact]
+    public void MergeDisabledMcpServers_CreatesPersonalSettingsAndFolders()
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, ".git"));
+        var child = Path.Combine(_repo, "src");
+        Directory.CreateDirectory(child);
+
+        Assert.True(_svc.MergeDisabledMcpServers(child, new[] { "azure", "ms-learn" }));
+
+        Assert.True(File.Exists(LocalSettingsPath));
+        Assert.False(File.Exists(SettingsPath));
+        var root = JsonNode.Parse(File.ReadAllText(LocalSettingsPath))!.AsObject();
+        var servers = root["disabledMcpServers"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
+        Assert.Equal(new[] { "azure", "ms-learn" }, servers);
+    }
+
+    [Fact]
+    public void MergeDisabledMcpServers_PreservesOtherKeysAndDeduplicates()
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, ".git"));
+        Directory.CreateDirectory(Path.GetDirectoryName(LocalSettingsPath)!);
+        File.WriteAllText(LocalSettingsPath, """
+            {
+              // personal plugin override
+              "enabledPlugins": { "winui@awesome-copilot": true },
+              "disabledMcpServers": [ "azure", "GitHub" ]
+            }
+            """);
+
+        Assert.True(_svc.MergeDisabledMcpServers(_repo, new[] { "azure", "ms-learn", "github" }));
+
+        var root = JsonNode.Parse(File.ReadAllText(LocalSettingsPath))!.AsObject();
+        Assert.True(root["enabledPlugins"]!["winui@awesome-copilot"]!.GetValue<bool>());
+        var servers = root["disabledMcpServers"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
+        Assert.Equal(new[] { "azure", "GitHub", "ms-learn" }, servers);
+        Assert.False(File.Exists(SettingsPath));
+    }
+
+    [Fact]
+    public void MergeDisabledMcpServers_NoGitRepo_DoesNotWrite()
+    {
+        Assert.False(_svc.MergeDisabledMcpServers(_repo, new[] { "azure" }));
+        Assert.False(File.Exists(LocalSettingsPath));
+        Assert.False(File.Exists(SettingsPath));
     }
 
     [Fact]

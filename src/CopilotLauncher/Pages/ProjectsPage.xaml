@@ -201,7 +201,7 @@
                         <CheckBox Content="Override capabilities for this project"
                                   AutomationProperties.AutomationId="ProjectOverrideCapabilitiesCheckBox"
                                   IsChecked="{x:Bind ViewModel.EditOverrideCapabilities, Mode=TwoWay}"/>
-                        <TextBlock Text="MCP servers, custom agent, tool allow/exclude lists and skills. These have no in-repo equivalent, so they are always passed as startup flags."
+                        <TextBlock Text="MCP servers, custom agent, tool allow/exclude lists and skills. Disabled MCP servers are stored in repo-local personal settings when the project is inside a git repo; the other selections stay startup flags."
                                    Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6" TextWrapping="Wrap"/>
                         <controls:CapabilitiesEditor x:Name="CapEditor"
                                                      IsEnabled="{x:Bind ViewModel.EditOverrideCapabilities, Mode=OneWay}"/>
@@ -216,7 +216,7 @@
                                 CornerRadius="{StaticResource OverlayCornerRadius}">
                         <TextBlock Text="In-repo config" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock TextWrapping="Wrap" Opacity="0.65" Style="{StaticResource CaptionTextBlockStyle}"
-                                   Text="Copilot reads these from the folder itself, so anything set here applies to every session — including ones started outside this launcher. Everything else has to be a startup flag."/>
+                                   Text="Copilot reads these from git repository folders, so anything set here applies to every session in that repo — including ones started outside this launcher. Plain folders ignore repository settings."/>
 
                         <ItemsControl ItemsSource="{x:Bind ViewModel.RepoConfigFiles, Mode=OneWay}">
                             <ItemsControl.ItemTemplate>

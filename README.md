@@ -41,11 +41,14 @@ Copilot reads some configuration from the project folder itself, which applies t
 |---|---|---|
 | Enabled plugins (and the MCP servers / agents / skills they bring) | `.github/copilot/settings.json` → `enabledPlugins` | **Launcher-managed.** Written as a complete allowlist because the CLI drops any plugin not listed as `true`. |
 | Hooks, merge strategy, extra marketplaces | `.github/copilot/settings.json` | Detected only. |
-| Extra MCP servers | `.mcp.json`, `.github/mcp.json` | Detected only. Adds servers; can't switch off a user/plugin server — that still needs `--disable-mcp-server`. |
+| Disabled MCP servers | `.github/copilot/settings.local.json` → `disabledMcpServers` | **Launcher-managed in git repos.** Merged as a personal, git-ignored union. The launcher never removes entries; edit the file to re-enable a server. In plain folders, this falls back to `--disable-mcp-server`. |
+| Extra MCP servers | `.mcp.json`, `.github/mcp.json` | Detected only. Adds servers. |
 | Instructions | `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md` | Detected only. |
 | Repo agents / skills | `.github/agents/`, `.github/skills/` | Detected only. |
 | Language servers | `.github/lsp.json` | Detected only. |
-| `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all`, `--disable-mcp-server` | *(no in-repo equivalent)* | Always passed as startup flags by the launcher. |
+| `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all` | *(no in-repo equivalent)* | Always passed as startup flags by the launcher. |
+
+Repository `.github/copilot/settings.json` and `.github/copilot/settings.local.json` are honored only inside a git repository. In a plain folder, Copilot ignores them.
 
 ## Themes
 

@@ -52,14 +52,20 @@ public interface ILaunchService
 public sealed class LaunchService : ILaunchService
 {
     private readonly Func<string, string?> _resolveOnPath;
+    private readonly IRepoConfigService _repoConfig;
 
     public LaunchService()
-        : this(TerminalDiscoveryService.ResolveOnPath) { }
+        : this(TerminalDiscoveryService.ResolveOnPath, new RepoConfigService()) { }
 
     /// <summary>Test-only ctor.</summary>
     internal LaunchService(Func<string, string?> resolveOnPath)
+        : this(resolveOnPath, new RepoConfigService()) { }
+
+    /// <summary>Test-only ctor.</summary>
+    internal LaunchService(Func<string, string?> resolveOnPath, IRepoConfigService repoConfig)
     {
         _resolveOnPath = resolveOnPath;
+        _repoConfig = repoConfig;
     }
 
     public LaunchCommand Build(LaunchRequest request)
@@ -83,7 +89,7 @@ public sealed class LaunchService : ILaunchService
         // Capability flags (which MCPs / agent / tools / skills load). The
         // tool allow/exclude lists are variadic and must come LAST so they
         // don't swallow following flags.
-        AppendCapabilityArgs(copilotArgs, request.Capabilities);
+        AppendCapabilityArgs(copilotArgs, request.Capabilities, request.WorkingDirectory, _repoConfig);
 
         // Wrap in terminal (or run direct).
         if (request.Terminal is null)
@@ -135,14 +141,36 @@ public sealed class LaunchService : ILaunchService
     /// MCP-disable and agent flags first; the variadic tool list LAST so it
     /// doesn't consume subsequent flags as tool names.
     /// </summary>
-    internal static void AppendCapabilityArgs(List<string> args, LaunchCapabilities? caps)
+    internal static void AppendCapabilityArgs(
+        List<string> args,
+        LaunchCapabilities? caps,
+        string? workingDirectory = null,
+        IRepoConfigService? repoConfig = null)
     {
         if (caps is null) return;
 
-        foreach (var name in caps.DisabledMcpServers.Where(n => !string.IsNullOrWhiteSpace(n)))
+        var disabledMcpServers = caps.DisabledMcpServers
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .ToList();
+
+        var mcpServersStoredInRepo = false;
+        if (disabledMcpServers.Count > 0
+            && !string.IsNullOrWhiteSpace(workingDirectory)
+            && repoConfig is not null)
         {
-            args.Add("--disable-mcp-server");
-            args.Add(name.Trim());
+            // The launcher only adds entries. To re-enable a server for this repo,
+            // edit .github/copilot/settings.local.json and remove it there.
+            mcpServersStoredInRepo = repoConfig.MergeDisabledMcpServers(workingDirectory, disabledMcpServers);
+        }
+
+        if (!mcpServersStoredInRepo)
+        {
+            foreach (var name in disabledMcpServers)
+            {
+                args.Add("--disable-mcp-server");
+                args.Add(name);
+            }
         }
 
         if (caps.DisableBuiltinMcps)

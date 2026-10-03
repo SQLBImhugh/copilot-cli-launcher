@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using CopilotLauncher.Models;
 
 namespace CopilotLauncher.Services;
@@ -57,15 +59,20 @@ public sealed class RepoConfigStatus
 /// <item><c>.github/copilot/settings.json</c> — <c>enabledPlugins</c>, <c>hooks</c>,
 /// <c>disableAllHooks</c>, <c>mergeStrategy</c>, <c>extraKnownMarketplaces</c>. Merged over the
 /// user config at session start. The launcher WRITES <c>enabledPlugins</c> here.</item>
+/// <item><c>.github/copilot/settings.local.json</c> — personal repo settings. In a git
+/// repository, <c>disabledMcpServers</c> and <c>disabledSkills</c> are unioned with the user
+/// config, and <c>enabledPlugins</c> overrides the user value per plugin key. The launcher
+/// WRITES <c>disabledMcpServers</c> here for per-project MCP disables.</item>
 /// <item><c>.mcp.json</c> / <c>.github/mcp.json</c> — workspace MCP servers (adds servers; it
 /// cannot switch off a user- or plugin-provided one).</item>
 /// <item><c>.github/copilot-instructions.md</c>, <c>AGENTS.md</c>, <c>CLAUDE.md</c> — instructions.</item>
 /// <item><c>.github/agents/</c>, <c>.github/skills/</c> — repo-scoped agents and skills.</item>
 /// <item><c>.github/lsp.json</c> — repo language servers.</item>
 /// </list>
-/// There is NO in-repo equivalent for <c>--agent</c>, <c>--available-tools</c>,
-/// <c>--excluded-tools</c>, <c>--allow-all</c>, or <c>--disable-mcp-server</c>; those stay
-/// startup flags supplied by the launcher.
+/// Repository settings are honored only when the working directory is inside a git repository.
+/// In a plain folder they are ignored. There is no in-repo equivalent for <c>--agent</c>,
+/// <c>--available-tools</c>, <c>--excluded-tools</c>, or <c>--allow-all</c>; those stay startup
+/// flags supplied by the launcher.
 /// </remarks>
 public interface IRepoConfigService
 {
@@ -85,14 +92,36 @@ public interface IRepoConfigService
     /// <summary>Remove the <c>enabledPlugins</c> key, handing plugin selection back to the user
     /// config. Other keys in the file are preserved. Returns true when something changed.</summary>
     bool ClearEnabledPlugins(string directory);
+
+    /// <summary>
+    /// Merge MCP server names into <c>.github/copilot/settings.local.json</c> at the git root
+    /// governing <paramref name="directory"/>. Returns false when the directory is not inside a
+    /// git repository or the personal settings file could not be written.
+    /// </summary>
+    bool MergeDisabledMcpServers(string directory, IEnumerable<string> serverNames);
 }
 
 public sealed class RepoConfigService : IRepoConfigService
 {
     /// <summary>The repo settings file the CLI merges over the user config.</summary>
     internal static readonly string SettingsRelativePath = Path.Combine(".github", "copilot", "settings.json");
+    /// <summary>The personal repo settings file the CLI merges over repo settings.</summary>
+    internal static readonly string LocalSettingsRelativePath = Path.Combine(".github", "copilot", "settings.local.json");
 
     private const string EnabledPluginsKey = "enabledPlugins";
+    private const string DisabledMcpServersKey = "disabledMcpServers";
+
+    private static readonly JsonDocumentOptions JsoncOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    private static readonly JsonSerializerOptions WriteJsonOptions = new()
+    {
+        WriteIndented = true,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+    };
 
     public RepoConfigStatus Inspect(string? directory)
     {
@@ -109,7 +138,7 @@ public sealed class RepoConfigService : IRepoConfigService
         var files = new List<RepoConfigFile>
         {
             Describe(root, SettingsRelativePath, "Repo settings — plugin allowlist, hooks, merge strategy", RepoConfigKind.Managed),
-            Describe(root, Path.Combine(".github", "copilot", "settings.local.json"), "Personal (git-ignored) overrides of the repo settings"),
+            Describe(root, LocalSettingsRelativePath, "Personal (git-ignored) overrides of the repo settings"),
             Describe(root, ".mcp.json", "Workspace MCP servers"),
             Describe(root, Path.Combine(".github", "mcp.json"), "Workspace MCP servers (alternate location)"),
             Describe(root, Path.Combine(".github", "copilot-instructions.md"), "Repo instructions injected into the system prompt"),
@@ -165,14 +194,83 @@ public sealed class RepoConfigService : IRepoConfigService
         return WriteAtomic(path, obj);
     }
 
+    public bool MergeDisabledMcpServers(string directory, IEnumerable<string> serverNames)
+    {
+        var gitRoot = FindGitRoot(directory);
+        if (gitRoot is null) return false;
+
+        var names = StableDistinct(serverNames);
+        if (names.Count == 0) return true;
+
+        var path = Path.Combine(gitRoot, LocalSettingsRelativePath);
+        var existed = File.Exists(path);
+        var obj = LoadOrCreate(path);
+        if (obj is null) return false;
+
+        var merged = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (obj[DisabledMcpServersKey] is JsonArray existing)
+        {
+            foreach (var item in existing)
+            {
+                if (item is JsonValue value
+                    && value.TryGetValue<string>(out var name)
+                    && !string.IsNullOrWhiteSpace(name)
+                    && seen.Add(name.Trim()))
+                {
+                    merged.Add(name.Trim());
+                }
+            }
+        }
+
+        foreach (var name in names)
+        {
+            if (seen.Add(name))
+                merged.Add(name);
+        }
+
+        var arr = new JsonArray();
+        foreach (var name in merged)
+            arr.Add(name);
+        obj[DisabledMcpServersKey] = arr;
+
+        if (!WriteAtomic(path, obj)) return false;
+
+        if (!existed)
+            EnsureLocalSettingsIgnored(gitRoot);
+
+        return true;
+    }
+
     // ----- helpers -----
+
+    internal static string? FindGitRoot(string? directory)
+    {
+        var current = TryFullPath(directory);
+        if (current is null || !Directory.Exists(current)) return null;
+
+        while (!string.IsNullOrEmpty(current))
+        {
+            var dotGit = Path.Combine(current, ".git");
+            if (Directory.Exists(dotGit) || File.Exists(dotGit))
+                return current;
+
+            var parent = Directory.GetParent(current)?.FullName;
+            if (string.IsNullOrEmpty(parent) || string.Equals(parent, current, StringComparison.OrdinalIgnoreCase))
+                return null;
+            current = parent;
+        }
+
+        return null;
+    }
 
     internal static IReadOnlyDictionary<string, bool>? ReadEnabledPlugins(string settingsPath)
     {
         try
         {
             if (!File.Exists(settingsPath)) return null;
-            var node = JsonNode.Parse(File.ReadAllText(settingsPath));
+            var node = ParseJsonObject(File.ReadAllText(settingsPath));
             if (node is not JsonObject obj) return null;
             if (obj[EnabledPluginsKey] is not JsonObject map) return null;
 
@@ -217,7 +315,7 @@ public sealed class RepoConfigService : IRepoConfigService
         if (!File.Exists(path)) return new JsonObject();
         try
         {
-            return JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+            return ParseJsonObject(File.ReadAllText(path));
         }
         catch (JsonException)
         {
@@ -233,7 +331,7 @@ public sealed class RepoConfigService : IRepoConfigService
     {
         try
         {
-            var json = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            var json = root.ToJsonString(WriteJsonOptions);
 
             // This file usually lives in the user's git repo and SyncRepoConfigOnLaunch
             // rewrites it on every launch. Skip identical writes so a project launch
@@ -266,6 +364,88 @@ public sealed class RepoConfigService : IRepoConfigService
             else
                 File.Move(tmp, path);
             return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static JsonObject? ParseJsonObject(string json) =>
+        JsonNode.Parse(json, documentOptions: JsoncOptions) as JsonObject;
+
+    private static List<string> StableDistinct(IEnumerable<string>? names)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in names ?? Enumerable.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var name = raw.Trim();
+            if (seen.Add(name))
+                result.Add(name);
+        }
+        return result;
+    }
+
+    private static void EnsureLocalSettingsIgnored(string gitRoot)
+    {
+        try
+        {
+            if (IsGitIgnored(gitRoot, LocalSettingsRelativePath))
+                return;
+
+            var dotGit = Path.Combine(gitRoot, ".git");
+            if (!Directory.Exists(dotGit))
+                return;
+
+            var infoDir = Path.Combine(dotGit, "info");
+            Directory.CreateDirectory(infoDir);
+            var excludePath = Path.Combine(infoDir, "exclude");
+            const string ignoreRule = "/.github/copilot/settings.local.json";
+
+            if (File.Exists(excludePath)
+                && File.ReadLines(excludePath).Any(line => string.Equals(line.Trim(), ignoreRule, StringComparison.Ordinal)))
+            {
+                return;
+            }
+
+            File.AppendAllText(excludePath, $"{Environment.NewLine}{ignoreRule}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Best effort only: failing to update .git/info/exclude must not block launch.
+        }
+    }
+
+    private static bool IsGitIgnored(string gitRoot, string relativePath)
+    {
+        try
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    WorkingDirectory = gitRoot,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                },
+            };
+            process.StartInfo.ArgumentList.Add("check-ignore");
+            process.StartInfo.ArgumentList.Add("-q");
+            process.StartInfo.ArgumentList.Add("--");
+            process.StartInfo.ArgumentList.Add(relativePath.Replace('\\', '/'));
+
+            if (!process.Start()) return false;
+            if (!process.WaitForExit(2000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+                return false;
+            }
+            return process.ExitCode == 0;
         }
         catch
         {

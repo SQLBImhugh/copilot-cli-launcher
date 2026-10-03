@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using CopilotLauncher.Models;
 using CopilotLauncher.Services;
 using Xunit;
@@ -248,6 +249,76 @@ public class LaunchServiceTests
         Assert.Contains("--disable-builtin-mcps", list);
         var agentIdx = list.IndexOf("--agent");
         Assert.Equal("research", list[agentIdx + 1]);
+    }
+
+    [Fact]
+    public void Build_Capabilities_DisabledMcpServersInGitRepo_WritesLocalSettingsInsteadOfFlags()
+    {
+        var repo = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(repo, ".git"));
+            var workdir = Path.Combine(repo, "src", "app");
+            Directory.CreateDirectory(workdir);
+            var svc = NewSvc(CmdResolver);
+
+            var cmd = svc.Build(new LaunchRequest
+            {
+                WorkingDirectory = workdir,
+                Capabilities = new LaunchCapabilities
+                {
+                    DisabledMcpServers = new() { "azure", "ms-learn" },
+                    DisableBuiltinMcps = true,
+                    Agent = "research",
+                },
+            });
+
+            Assert.DoesNotContain("--disable-mcp-server", cmd.ArgumentList);
+            Assert.Contains("--disable-builtin-mcps", cmd.ArgumentList);
+            Assert.Contains("--agent", cmd.ArgumentList);
+
+            var localSettings = Path.Combine(repo, ".github", "copilot", "settings.local.json");
+            var root = JsonNode.Parse(File.ReadAllText(localSettings))!.AsObject();
+            var servers = root["disabledMcpServers"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
+            Assert.Equal(new[] { "azure", "ms-learn" }, servers);
+            Assert.False(File.Exists(Path.Combine(repo, ".github", "copilot", "settings.json")));
+        }
+        finally
+        {
+            try { Directory.Delete(repo, recursive: true); }
+            catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void Build_Capabilities_DisabledMcpServersInPlainFolder_EmitsFlags()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var svc = NewSvc(CmdResolver);
+
+            var cmd = svc.Build(new LaunchRequest
+            {
+                WorkingDirectory = dir,
+                Capabilities = new LaunchCapabilities
+                {
+                    DisabledMcpServers = new() { "azure", "ms-learn" },
+                },
+            });
+
+            var list = cmd.ArgumentList.ToList();
+            Assert.Equal(2, list.Count(a => a == "--disable-mcp-server"));
+            Assert.Contains("azure", list);
+            Assert.Contains("ms-learn", list);
+            Assert.False(File.Exists(Path.Combine(dir, ".github", "copilot", "settings.local.json")));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); }
+            catch { /* best effort */ }
+        }
     }
 
     [Fact]

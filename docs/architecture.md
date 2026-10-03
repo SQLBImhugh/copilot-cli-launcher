@@ -86,7 +86,7 @@ Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLau
 | Service | Responsibility |
 |---|---|
 | `IProjectsService` | Load/save `projects.json` under `%LOCALAPPDATA%\CopilotLauncher\` (same atomic-write + corrupt-backup contract as `IShortcutsService`). Also resolves a working directory to its governing `ProjectProfile`. |
-| `IRepoConfigService` | Read/write the Copilot CLI config that lives *inside* a project directory. `Inspect(dir)` reports which config files the folder supplies; `WriteEnabledPlugins` / `ClearEnabledPlugins` manage `.github/copilot/settings.json` → `enabledPlugins`. |
+| `IRepoConfigService` | Read/write the Copilot CLI config that lives *inside* a project directory. `Inspect(dir)` reports which config files the folder supplies; `WriteEnabledPlugins` / `ClearEnabledPlugins` manage `.github/copilot/settings.json` → `enabledPlugins`; `MergeDisabledMcpServers` manages git-ignored `.github/copilot/settings.local.json` → `disabledMcpServers`. |
 | `IProjectLaunchService` | The single launch path: resolve the governing profile → pre-approve extensions → sync repo config → spawn → apply the after-launch action. Used by the Sessions tab (Resume / new session here) and the Projects tab's **▶ New session** button so a project starts identically from either. |
 | `ISessionDeletionService` | Permanently deletes session folders. Deliberately paranoid: refuses locked sessions, refuses any path that doesn't resolve to a *direct child* of the session root (so a malformed id can't escape the store), and appends every deletion to `~/.copilot/deleted-sessions.log`. |
 
@@ -123,12 +123,15 @@ Verified against the `@github/copilot` bundle (v1.0.x). The CLI merges `.github/
 | Capability | In-repo file | Launcher role |
 |---|---|---|
 | `enabledPlugins` | `.github/copilot/settings.json` | **Managed** — written as a complete allowlist. |
+| `disabledMcpServers` | `.github/copilot/settings.local.json` | **Managed in git repos** — merged into a personal git-ignored union. The launcher never removes entries; edit the file to re-enable a server. |
 | `hooks`, `disableAllHooks`, `mergeStrategy`, `extraKnownMarketplaces` | `.github/copilot/settings.json` | Detected only. |
 | Workspace MCP servers | `.mcp.json`, `.github/mcp.json` | Detected only. |
 | Instructions | `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md` | Detected only. |
 | Repo agents / skills | `.github/agents/`, `.github/skills/` | Detected only. |
 | Language servers | `.github/lsp.json` | Detected only. |
-| `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all`, `--disable-mcp-server` | *(none)* | Always startup flags. |
+| `--agent`, `--available-tools`, `--excluded-tools`, `--allow-all` | *(none)* | Always startup flags. |
+
+Repository `.github/copilot/settings.json` and `.github/copilot/settings.local.json` are honored only when the working folder is inside a git repository. In a plain folder, the CLI ignores them, so disabled MCP servers fall back to `--disable-mcp-server`.
 
 > **`enabledPlugins` is an allowlist, not a patch.** The CLI keeps only the plugins whose key maps to `true`, so a partial map silently disables everything else. `RepoConfigService.WriteEnabledPlugins` therefore takes the full installed-plugin list and writes an explicit `true`/`false` for each. Keys are `name@marketplace` (e.g. `winui@awesome-copilot`).
 

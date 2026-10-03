@@ -20,7 +20,8 @@ public enum ToolFilterMode
 /// CLI flags by <see cref="Services.LaunchService"/>.
 ///
 /// Capability → flag mapping (copilot 1.0.x):
-///   DisabledMcpServers   → --disable-mcp-server &lt;name&gt; (repeatable)
+///   DisabledMcpServers   → .github/copilot/settings.local.json in a git repo,
+///                          otherwise --disable-mcp-server &lt;name&gt; (repeatable)
 ///   DisableBuiltinMcps   → --disable-builtin-mcps (the built-in GitHub MCP)
 ///   Agent                → --agent &lt;name&gt; (single custom agent)
 ///   ToolMode + Tools     → --available-tools / --excluded-tools (variadic)

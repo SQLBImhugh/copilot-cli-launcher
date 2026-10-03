@@ -246,5 +246,6 @@ public sealed class ProjectsViewModelImportTests : IDisposable
         };
         public bool WriteEnabledPlugins(string directory, IEnumerable<InstalledPluginInfo> allPlugins, IEnumerable<string> enabledKeys) => false;
         public bool ClearEnabledPlugins(string directory) => false;
+        public bool MergeDisabledMcpServers(string directory, IEnumerable<string> serverNames) => false;
     }
 }
