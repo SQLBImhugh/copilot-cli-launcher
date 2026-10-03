@@ -252,7 +252,7 @@ public class LaunchServiceTests
     }
 
     [Fact]
-    public void Build_Capabilities_DisabledMcpServersInGitRepo_WritesLocalSettingsInsteadOfFlags()
+    public void Build_Capabilities_DisabledMcpServersInGitRepo_DefaultPreviewEmitsFlagsAndWritesNothing()
     {
         var repo = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
         try
@@ -265,6 +265,45 @@ public class LaunchServiceTests
             var cmd = svc.Build(new LaunchRequest
             {
                 WorkingDirectory = workdir,
+                Capabilities = new LaunchCapabilities
+                {
+                    DisabledMcpServers = new() { "azure", "ms-learn" },
+                    DisableBuiltinMcps = true,
+                    Agent = "research",
+                },
+            });
+
+            var list = cmd.ArgumentList.ToList();
+            Assert.Equal(2, list.Count(a => a == "--disable-mcp-server"));
+            Assert.Contains("azure", list);
+            Assert.Contains("ms-learn", list);
+            Assert.Contains("--disable-builtin-mcps", cmd.ArgumentList);
+            Assert.Contains("--agent", cmd.ArgumentList);
+            Assert.False(File.Exists(Path.Combine(repo, ".github", "copilot", "settings.local.json")));
+            Assert.False(File.Exists(Path.Combine(repo, ".github", "copilot", "settings.json")));
+        }
+        finally
+        {
+            try { Directory.Delete(repo, recursive: true); }
+            catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void Build_Capabilities_DisabledMcpServersInGitRepo_WithPersistOptInWritesLocalSettingsInsteadOfFlags()
+    {
+        var repo = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(repo, ".git"));
+            var workdir = Path.Combine(repo, "src", "app");
+            Directory.CreateDirectory(workdir);
+            var svc = NewSvc(CmdResolver);
+
+            var cmd = svc.Build(new LaunchRequest
+            {
+                WorkingDirectory = workdir,
+                PersistDisabledMcpServersToRepo = true,
                 Capabilities = new LaunchCapabilities
                 {
                     DisabledMcpServers = new() { "azure", "ms-learn" },
@@ -291,7 +330,7 @@ public class LaunchServiceTests
     }
 
     [Fact]
-    public void Build_Capabilities_DisabledMcpServersInPlainFolder_EmitsFlags()
+    public void Build_Capabilities_DisabledMcpServersInPlainFolder_WithPersistOptInEmitsFlags()
     {
         var dir = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
         try
@@ -302,6 +341,7 @@ public class LaunchServiceTests
             var cmd = svc.Build(new LaunchRequest
             {
                 WorkingDirectory = dir,
+                PersistDisabledMcpServersToRepo = true,
                 Capabilities = new LaunchCapabilities
                 {
                     DisabledMcpServers = new() { "azure", "ms-learn" },

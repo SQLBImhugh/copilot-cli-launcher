@@ -21,6 +21,12 @@ public sealed class LaunchRequest
     public LaunchCapabilities? Capabilities { get; init; }
 
     /// <summary>
+    /// True only for an actual launch. Preview/export callers leave this false so building a
+    /// command never changes repository files.
+    /// </summary>
+    public bool PersistDisabledMcpServersToRepo { get; init; }
+
+    /// <summary>
     /// Terminal to wrap copilot in. Null = no terminal wrapper, spawn copilot
     /// directly attached to the parent process console (rare; mostly for tests).
     /// </summary>
@@ -89,7 +95,11 @@ public sealed class LaunchService : ILaunchService
         // Capability flags (which MCPs / agent / tools / skills load). The
         // tool allow/exclude lists are variadic and must come LAST so they
         // don't swallow following flags.
-        AppendCapabilityArgs(copilotArgs, request.Capabilities, request.WorkingDirectory, _repoConfig);
+        AppendCapabilityArgs(
+            copilotArgs,
+            request.Capabilities,
+            request.PersistDisabledMcpServersToRepo ? request.WorkingDirectory : null,
+            _repoConfig);
 
         // Wrap in terminal (or run direct).
         if (request.Terminal is null)
@@ -118,6 +128,7 @@ public sealed class LaunchService : ILaunchService
             EnableAllowAll = request.EnableAllowAll,
             ExtraCopilotArgs = request.ExtraCopilotArgs,
             Capabilities = request.Capabilities,
+            PersistDisabledMcpServersToRepo = true,
             Terminal = request.Terminal,
         });
         var psi = new ProcessStartInfo
