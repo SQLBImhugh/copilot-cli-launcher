@@ -110,7 +110,7 @@ public sealed class AISummaryService : IAISummaryService
                 changelogFilePath,
                 repoContext,
                 _settings.Current.Briefings.PromptInstructions);
-            return await RunCopilotAsync(prompt, ct).ConfigureAwait(false);
+            return await RunCopilotAsync(prompt, ct, Path.GetDirectoryName(changelogFilePath)).ConfigureAwait(false);
         }
         catch
         {
@@ -123,7 +123,7 @@ public sealed class AISummaryService : IAISummaryService
     /// model's text reply (or null on any failure/timeout/cancellation). Shared
     /// by <see cref="GenerateAsync"/> and <see cref="GenerateFromFileAsync"/>.
     /// </summary>
-    private async Task<string?> RunCopilotAsync(string prompt, CancellationToken ct)
+    private async Task<string?> RunCopilotAsync(string prompt, CancellationToken ct, string? allowedDirectory = null)
     {
         try
         {
@@ -178,6 +178,13 @@ public sealed class AISummaryService : IAISummaryService
             // and could not request permission from user") and it ends up
             // producing no useful summary anyway.
             psi.ArgumentList.Add("--allow-all-tools");
+            // File mode reads changelogs.json outside the session's cwd;
+            // --allow-all-tools does not cover that, so grant the directory.
+            if (!string.IsNullOrWhiteSpace(allowedDirectory))
+            {
+                psi.ArgumentList.Add("--add-dir");
+                psi.ArgumentList.Add(allowedDirectory);
+            }
             psi.ArgumentList.Add("--output-format");
             psi.ArgumentList.Add("json");
             psi.ArgumentList.Add("-p");

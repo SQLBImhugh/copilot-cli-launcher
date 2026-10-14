@@ -246,6 +246,30 @@ public class AISummaryServiceTests
     }
 
     [Fact]
+    public async Task GenerateFromFileAsync_AddsChangelogDirectory_ButInlineModeDoesNot()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
+        var file = Path.Combine(dir, "changelogs.json");
+        ProcessStartInfo? captured = null;
+        var settings = new FakeSettings();
+        var service = new AISummaryService(
+            settings,
+            psi => { captured = psi; return null; },
+            _ => false,
+            _ => new CopilotLauncher.Helpers.ProcessUtil.CopilotProcessTarget { FileName = "copilot-test.cmd" });
+
+        await service.GenerateFromFileAsync("1.0.0", "1.1.0", file);
+
+        Assert.NotNull(captured);
+        var idx = captured!.ArgumentList.IndexOf("--add-dir");
+        Assert.True(idx >= 0, "--add-dir missing in file mode");
+        Assert.Equal(dir, captured.ArgumentList[idx + 1]);
+
+        var (_, inline) = await CaptureSpawnAsync(_ => false, sessionName: null);
+        Assert.DoesNotContain("--add-dir", inline!.ArgumentList);
+    }
+
+    [Fact]
     public async Task GenerateAsync_TreatsWhitespaceSessionNameAsEmpty()
     {
         var (_, psi) = await CaptureSpawnAsync(_ => true, sessionName: "   ");

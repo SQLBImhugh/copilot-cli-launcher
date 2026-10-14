@@ -226,17 +226,10 @@ public sealed partial class SessionsViewModel : ObservableObject
         }
 
         IEnumerable<CopilotSession> rows;
-        if (ShowAll)
+        // No chips checked is equivalent to Show all.
+        if (ShowAll || (!ShowRecent && !ShowNamed && !ShowHeavy))
         {
             rows = _all;
-        }
-        else if (!ShowRecent && !ShowNamed && !ShowHeavy)
-        {
-            // No chips checked + Show all off: user explicitly hid everything.
-            rows = Array.Empty<CopilotSession>();
-            StatusMessage = "No filters checked. Toggle a chip above (Recent / Named / Heavily used) or check Show all.";
-            OnPropertyChanged(nameof(VisibleCount));
-            return;
         }
         else
         {
@@ -325,7 +318,8 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     private static bool MatchesSearch(CopilotSession s, string q)
     {
-        return Contains(s.Cwd, q)
+        return Contains(s.Name, q)
+            || Contains(s.Cwd, q)
             || Contains(s.Repository, q)
             || Contains(s.Branch, q)
             || Contains(s.Id, q);

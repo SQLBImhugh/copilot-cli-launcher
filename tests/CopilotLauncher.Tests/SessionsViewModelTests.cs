@@ -131,6 +131,78 @@ public class SessionsViewModelTests
         Assert.Contains("No sessions found", viewModel.StatusMessage);
     }
 
+    // ---- filtering ----
+
+    private static CopilotSession Session(string id, string? name, string cwd) => new()
+    {
+        Id = id,
+        FolderPath = @"C:\fake\" + id,
+        LastModified = DateTime.UtcNow.AddDays(-400),
+        Cwd = cwd,
+        Name = name,
+        UserNamed = name is not null,
+    };
+
+    private static async Task<SessionsViewModel> LoadedAsync(params CopilotSession[] sessions)
+    {
+        var vm = new SessionsViewModel(new SeededDiscovery(sessions), new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings());
+        await vm.RefreshAsync();
+        return vm;
+    }
+
+    [Fact]
+    public async Task Search_MatchesSessionName_WhenCwdAndRepoDoNot()
+    {
+        var vm = await LoadedAsync(
+            Session("aaaaaaaa-0000-0000-0000-000000000001", "LogisticsDemo", @"C:\work\alpha"),
+            Session("bbbbbbbb-0000-0000-0000-000000000002", "Other", @"C:\work\beta"));
+        vm.ShowAll = true;
+
+        vm.SearchText = "logisticsdemo";
+
+        var row = Assert.Single(vm.Visible);
+        Assert.StartsWith("aaaaaaaa", row.SessionId);
+    }
+
+    [Fact]
+    public async Task NoChipsChecked_ShowsAllSessions_EvenWithShowAllOff()
+    {
+        var vm = await LoadedAsync(
+            Session("aaaaaaaa-0000-0000-0000-000000000001", null, @"C:\work\alpha"),
+            Session("bbbbbbbb-0000-0000-0000-000000000002", "Named", @"C:\work\beta"));
+
+        vm.ShowAll = false;
+        vm.ShowRecent = false;
+        vm.ShowNamed = false;
+        vm.ShowHeavy = false;
+
+        Assert.Equal(2, vm.Visible.Count);
+        Assert.DoesNotContain("No filters", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task CheckedChip_StillFilters_WhenShowAllOff()
+    {
+        var vm = await LoadedAsync(
+            Session("aaaaaaaa-0000-0000-0000-000000000001", null, @"C:\work\alpha"),
+            Session("bbbbbbbb-0000-0000-0000-000000000002", "Named", @"C:\work\beta"));
+
+        vm.ShowAll = false;
+        vm.ShowRecent = false;
+        vm.ShowHeavy = false;
+        vm.ShowNamed = true;
+
+        Assert.Single(vm.Visible);
+    }
+
+    private sealed class SeededDiscovery : ISessionDiscoveryService
+    {
+        private readonly IReadOnlyList<CopilotSession> _sessions;
+        public SeededDiscovery(IReadOnlyList<CopilotSession> sessions) { _sessions = sessions; }
+        public string SessionRoot => Path.GetTempPath();
+        public IEnumerable<CopilotSession> Enumerate() => _sessions;
+    }
+
     // ---- project profiles ----
 
     [Fact]
