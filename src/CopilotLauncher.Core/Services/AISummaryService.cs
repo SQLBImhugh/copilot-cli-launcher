@@ -58,27 +58,19 @@ public sealed class AISummaryService : IAISummaryService
         if (string.IsNullOrWhiteSpace(changelogText))
             return null;
 
-        try
-        {
-            if (ct.IsCancellationRequested)
-                return null;
+        ct.ThrowIfCancellationRequested();
 
-            var repoContext = await TryReadRepositoryContextAsync(
-                _settings.Current.Briefings.AgentsContextFilePath,
-                ct).ConfigureAwait(false);
+        var repoContext = await TryReadRepositoryContextAsync(
+            _settings.Current.Briefings.AgentsContextFilePath,
+            ct).ConfigureAwait(false);
 
-            var prompt = AISummaryPromptBuilder.Build(
-                fromVersion,
-                toVersion,
-                changelogText,
-                repoContext,
-                _settings.Current.Briefings.PromptInstructions);
-            return await RunCopilotAsync(prompt, ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            return null;
-        }
+        var prompt = AISummaryPromptBuilder.Build(
+            fromVersion,
+            toVersion,
+            changelogText,
+            repoContext,
+            _settings.Current.Briefings.PromptInstructions);
+        return await RunCopilotAsync(prompt, ct).ConfigureAwait(false);
     }
 
     public async Task<string?> GenerateFromFileAsync(
@@ -95,138 +87,136 @@ public sealed class AISummaryService : IAISummaryService
         if (string.IsNullOrWhiteSpace(changelogFilePath))
             return null;
 
-        try
-        {
-            if (ct.IsCancellationRequested)
-                return null;
+        ct.ThrowIfCancellationRequested();
 
-            var repoContext = await TryReadRepositoryContextAsync(
-                _settings.Current.Briefings.AgentsContextFilePath,
-                ct).ConfigureAwait(false);
+        var repoContext = await TryReadRepositoryContextAsync(
+            _settings.Current.Briefings.AgentsContextFilePath,
+            ct).ConfigureAwait(false);
 
-            var prompt = AISummaryPromptBuilder.BuildFileMode(
-                fromVersion,
-                toVersion,
-                changelogFilePath,
-                repoContext,
-                _settings.Current.Briefings.PromptInstructions);
-            return await RunCopilotAsync(prompt, ct, Path.GetDirectoryName(changelogFilePath)).ConfigureAwait(false);
-        }
-        catch
-        {
-            return null;
-        }
+        var prompt = AISummaryPromptBuilder.BuildFileMode(
+            fromVersion,
+            toVersion,
+            changelogFilePath,
+            repoContext,
+            _settings.Current.Briefings.PromptInstructions);
+        return await RunCopilotAsync(prompt, ct, Path.GetDirectoryName(changelogFilePath)).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Spawns the copilot CLI with the given fully-built prompt and returns the
-    /// model's text reply (or null on any failure/timeout/cancellation). Shared
+    /// model's text reply. Failures propagate to the caller's status message. Shared
     /// by <see cref="GenerateAsync"/> and <see cref="GenerateFromFileAsync"/>.
     /// </summary>
     private async Task<string?> RunCopilotAsync(string prompt, CancellationToken ct, string? allowedDirectory = null)
     {
+        var copilot = _resolveCopilot(prompt)
+            ?? throw new InvalidOperationException("GitHub Copilot CLI was not found on PATH.");
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = copilot.FileName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+
+        foreach (var arg in copilot.PrefixArgs)
+            psi.ArgumentList.Add(arg);
+
+        // Session-reuse flags (optional). When BriefingSessionName is set,
+        // resume the existing named session if one exists so the AI has
+        // cumulative context across version-bump briefings; otherwise
+        // create it on this first run. Empty/null = stateless one-shot
+        // (original behavior).
+        var sessionName = _settings.Current.Briefings.BriefingSessionName;
+        if (!string.IsNullOrWhiteSpace(sessionName))
+        {
+            if (_sessionExistsByName(sessionName))
+            {
+                psi.ArgumentList.Add($"--resume={sessionName}");
+            }
+            else
+            {
+                psi.ArgumentList.Add("--name");
+                psi.ArgumentList.Add(sessionName);
+            }
+        }
+
+        // copilot 1.0.49 quirk: in non-interactive `-p` mode the model's
+        // text reply is NEVER printed to stdout in text output mode —
+        // only tool-invocation banners and the stats footer appear.
+        // The reply is only emitted via JSONL when `--output-format json`
+        // is set. `--allow-all-tools` is required for any non-trivial
+        // briefing because the model must read the local changelogs.json
+        // (file-mode path) or fetch release notes from the web or `gh`.
+        // Without it, the model's tool calls are denied ("Permission denied
+        // and could not request permission from user") and it ends up
+        // producing no useful summary anyway.
+        psi.ArgumentList.Add("--allow-all-tools");
+        // File mode reads changelogs.json outside the session's cwd;
+        // --allow-all-tools does not cover that, so grant the directory.
+        if (!string.IsNullOrWhiteSpace(allowedDirectory))
+        {
+            psi.ArgumentList.Add("--add-dir");
+            psi.ArgumentList.Add(allowedDirectory);
+        }
+        psi.ArgumentList.Add("--output-format");
+        psi.ArgumentList.Add("json");
+        // Briefing instructions and the selected context file are already in
+        // the prompt; inherited coding workflows can exhaust the timeout.
+        psi.ArgumentList.Add("--no-custom-instructions");
+        psi.ArgumentList.Add("-p");
+        psi.ArgumentList.Add(prompt);
+        psi.ArgumentList.Add("--no-color");
+
+        using var process = _spawn(psi)
+            ?? throw new InvalidOperationException($"Could not start GitHub Copilot CLI: {copilot.FileName}");
+
         try
         {
-            var copilot = _resolveCopilot(prompt);
-            if (copilot is null)
-                return null;
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            var stdout = await stdoutTask.ConfigureAwait(false);
+            var stderr = (await stderrTask.ConfigureAwait(false)).Trim();
 
-            var psi = new ProcessStartInfo
-            {
-                FileName = copilot.FileName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8,
-            };
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException(
+                    $"GitHub Copilot CLI exited with code {process.ExitCode}."
+                    + (stderr.Length > 0 ? $" {stderr}" : string.Empty));
 
-            foreach (var arg in copilot.PrefixArgs)
-                psi.ArgumentList.Add(arg);
-
-            // Session-reuse flags (optional). When BriefingSessionName is set,
-            // resume the existing named session if one exists so the AI has
-            // cumulative context across version-bump briefings; otherwise
-            // create it on this first run. Empty/null = stateless one-shot
-            // (original behavior).
-            var sessionName = _settings.Current.Briefings.BriefingSessionName;
-            if (!string.IsNullOrWhiteSpace(sessionName))
-            {
-                if (_sessionExistsByName(sessionName))
-                {
-                    psi.ArgumentList.Add($"--resume={sessionName}");
-                }
-                else
-                {
-                    psi.ArgumentList.Add("--name");
-                    psi.ArgumentList.Add(sessionName);
-                }
-            }
-
-            // copilot 1.0.49 quirk: in non-interactive `-p` mode the model's
-            // text reply is NEVER printed to stdout in text output mode —
-            // only tool-invocation banners and the stats footer appear.
-            // The reply is only emitted via JSONL when `--output-format json`
-            // is set. `--allow-all-tools` is required for any non-trivial
-            // briefing because the model must read the local changelogs.json
-            // (file-mode path) or fetch release notes from the web or `gh`.
-            // Without it, the model's tool calls are denied ("Permission denied
-            // and could not request permission from user") and it ends up
-            // producing no useful summary anyway.
-            psi.ArgumentList.Add("--allow-all-tools");
-            // File mode reads changelogs.json outside the session's cwd;
-            // --allow-all-tools does not cover that, so grant the directory.
-            if (!string.IsNullOrWhiteSpace(allowedDirectory))
-            {
-                psi.ArgumentList.Add("--add-dir");
-                psi.ArgumentList.Add(allowedDirectory);
-            }
-            psi.ArgumentList.Add("--output-format");
-            psi.ArgumentList.Add("json");
-            psi.ArgumentList.Add("-p");
-            psi.ArgumentList.Add(prompt);
-            psi.ArgumentList.Add("--no-color");
-
-            using var process = _spawn(psi);
-            if (process is null)
-                return null;
-
-            try
-            {
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-                var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
-
-                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-                var stdout = await stdoutTask.ConfigureAwait(false);
-                _ = await stderrTask.ConfigureAwait(false);
-
-                var extracted = ExtractAssistantTextFromJsonl(stdout);
-                return string.IsNullOrWhiteSpace(extracted) ? null : extracted;
-            }
-            catch (OperationCanceledException)
-            {
-                TryKill(process);
-                return null;
-            }
-            catch
-            {
-                TryKill(process);
-                return null;
-            }
+            var extracted = ExtractAssistantTextFromJsonl(stdout);
+            if (string.IsNullOrWhiteSpace(extracted))
+                throw new InvalidOperationException(
+                    "GitHub Copilot CLI returned no assistant response."
+                    + (stderr.Length > 0 ? $" {stderr}" : string.Empty));
+            return extracted;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            throw new TimeoutException("GitHub Copilot CLI did not finish the AI briefing within 120 seconds.");
         }
         catch
         {
-            return null;
+            TryKill(process);
+            throw;
         }
     }
 
     private static ProcessUtil.CopilotProcessTarget? DefaultResolveCopilotTarget(string prompt)
     {
-        var primary = ProcessUtil.Resolve(TerminalDiscoveryService.ResolveOnPath);
+        static string? ResolveCliOnPath(string name)
+            => TerminalDiscoveryService.ResolveOnPath(name, requireNonEmptyFile: true);
+
+        var primary = ProcessUtil.Resolve(ResolveCliOnPath);
         if (primary is null)
             return null;
 
@@ -241,7 +231,7 @@ public sealed class AISummaryService : IAISummaryService
         return ProcessUtil.Resolve(name =>
             string.Equals(name, "copilot.cmd", StringComparison.OrdinalIgnoreCase)
                 ? null
-                : TerminalDiscoveryService.ResolveOnPath(name))
+                : ResolveCliOnPath(name))
             ?? primary;
     }
 

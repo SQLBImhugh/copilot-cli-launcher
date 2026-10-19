@@ -247,6 +247,34 @@ public class ChangelogPageViewModelTests
     }
 
     [Fact]
+    public async Task GenerateAIBriefing_AIFails_ShowsCauseAndAllowsRetry()
+    {
+        var settings = new FakeSettings();
+        settings.Current.Briefings.LastObservedCopilotVersion = "1.0.98";
+        var ai = new FakeAI { Failure = new InvalidOperationException("GitHub Copilot CLI exited with code 17. Authentication failed") };
+        var notes = new FakeReleaseNotes
+        {
+            CannedEntries = new[] { new ReleaseEntry { Version = "1.0.98", Date = DateTime.UtcNow, Body = "Release notes" } },
+        };
+        var history = new FakeBriefingHistory();
+        var vm = NewVm(settings: settings, briefings: history, ai: ai, notes: notes);
+
+        await vm.GenerateAIBriefingAsync();
+
+        Assert.Contains("Authentication failed", vm.BriefingStatus);
+        Assert.False(vm.IsGeneratingBriefing);
+        Assert.Empty(vm.Briefings);
+        Assert.Empty(history.All);
+
+        ai.Failure = null;
+        await vm.GenerateAIBriefingAsync();
+
+        Assert.Single(history.All);
+        Assert.Single(vm.Briefings);
+        Assert.Contains("New AI briefing", vm.BriefingStatus);
+    }
+
+    [Fact]
     public void Reload_PopulatesBothCollections()
     {
         var changelogHistory = new FakeChangelogHistory();
@@ -424,6 +452,7 @@ public class ChangelogPageViewModelTests
     {
         public bool IsEnabled => true;
         public string? CannedSummary { get; set; } = "default summary";
+        public Exception? Failure { get; set; }
         public int CallCount { get; private set; }
         public string? LastFromVersion { get; private set; }
         public string? LastToVersion { get; private set; }
@@ -446,6 +475,8 @@ public class ChangelogPageViewModelTests
             LastFromVersion = fromVersion;
             LastToVersion = toVersion;
             LastChangelogFilePath = changelogFilePath;
+            if (Failure is not null)
+                return Task.FromException<string?>(Failure);
             return Task.FromResult(CannedSummary);
         }
     }

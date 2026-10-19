@@ -7,9 +7,10 @@ namespace CopilotLauncher.Services;
 /// default (<see cref="NoopAISummaryService"/>); the real implementation
 /// lives alongside the others in Core but is wired from the WinUI app's DI.
 ///
-/// Returns <c>null</c> when the user has the feature disabled, the CLI is
-/// unavailable, the call times out, or the response is empty — callers
-/// should fall back to the bundled-changelog body in those cases.
+/// Explicit generation is on-demand regardless of the legacy enable setting.
+/// Returns <c>null</c> for empty input or the no-op implementation. The real
+/// implementation throws on missing CLI, launch errors, nonzero exit, timeout,
+/// cancellation, or missing assistant output so callers can display the cause.
 /// </summary>
 public interface IAISummaryService
 {

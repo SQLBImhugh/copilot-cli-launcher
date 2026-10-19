@@ -24,6 +24,8 @@ A modern WinUI 3 desktop app to manage and resume GitHub Copilot CLI sessions on
 - **Known-bug workarounds** — port of the legacy `Repair-Win32NativeAddon` for [github/copilot-cli#3298](https://github.com/github/copilot-cli/issues/3298). Settings-gated, idempotent.
 - **Auto-update awareness** — runs `copilot update` on a configurable schedule (every launch / daily / weekly / manual) and captures version-bump changelogs automatically. AI briefings are on-demand only — no premium credit is spent unless you click *Generate AI Briefing*.
 
+AI briefings use the locally installed GitHub Copilot CLI, skipping zero-byte Windows app aliases when locating its executable. They use your briefing prompt and selected context file without loading unrelated user or repository coding instructions. If generation fails, the Briefings status shows the launch error, CLI exit error, empty-response error, or timeout instead of treating every failure as a missing installation.
+
 ## Projects
 
 A project pins how a folder starts. Point one at a directory and every **Resume**, *new session here*, or **▶ New session** under that path launches with the same settings — no re-entering flags each time.

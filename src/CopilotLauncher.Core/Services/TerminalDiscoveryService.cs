@@ -103,14 +103,19 @@ public sealed class TerminalDiscoveryService : ITerminalDiscoveryService
     /// PATH entries.
     /// </summary>
     public static string? ResolveOnPath(string exeName)
+        => ResolveOnPath(exeName, requireNonEmptyFile: false);
+
+    // Native CLI callers must skip zero-byte app execution aliases, without
+    // excluding aliases (such as wt.exe) from normal terminal discovery.
+    internal static string? ResolveOnPath(string exeName, bool requireNonEmptyFile, string? pathEnvironment = null)
     {
         if (string.IsNullOrWhiteSpace(exeName)) return null;
 
         // Direct path? Use as-is.
         if (Path.IsPathRooted(exeName))
-            return File.Exists(exeName) ? exeName : null;
+            return IsCandidate(exeName) ? exeName : null;
 
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var pathEnv = pathEnvironment ?? Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
         var separator = OperatingSystem.IsWindows() ? ';' : ':';
 
         foreach (var raw in pathEnv.Split(separator, StringSplitOptions.RemoveEmptyEntries))
@@ -138,10 +143,13 @@ public sealed class TerminalDiscoveryService : ITerminalDiscoveryService
                 continue;
             }
 
-            if (File.Exists(candidate))
+            if (IsCandidate(candidate))
                 return candidate;
         }
 
         return null;
+
+        bool IsCandidate(string path)
+            => File.Exists(path) && (!requireNonEmptyFile || new FileInfo(path).Length > 0);
     }
 }

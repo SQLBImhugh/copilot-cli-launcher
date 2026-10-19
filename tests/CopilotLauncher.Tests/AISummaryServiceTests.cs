@@ -210,6 +210,7 @@ public class AISummaryServiceTests
         // Original required args still present.
         Assert.Contains("-p", psi.ArgumentList);
         Assert.Contains("--no-color", psi.ArgumentList);
+        Assert.Contains("--no-custom-instructions", psi.ArgumentList);
         // Non-interactive mode requirements for copilot 1.0.49+.
         Assert.Contains("--allow-all-tools", psi.ArgumentList);
         var fmtIdx = psi.ArgumentList.IndexOf("--output-format");
@@ -258,7 +259,8 @@ public class AISummaryServiceTests
             _ => false,
             _ => new CopilotLauncher.Helpers.ProcessUtil.CopilotProcessTarget { FileName = "copilot-test.cmd" });
 
-        await service.GenerateFromFileAsync("1.0.0", "1.1.0", file);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.GenerateFromFileAsync("1.0.0", "1.1.0", file));
 
         Assert.NotNull(captured);
         var idx = captured!.ArgumentList.IndexOf("--add-dir");
@@ -355,7 +357,8 @@ public class AISummaryServiceTests
             _ => false,
             _ => fakeTarget);
 
-        await service.GenerateAsync("1.0.0", "1.1.0", "Fixed bugs");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.GenerateAsync("1.0.0", "1.1.0", "Fixed bugs"));
 
         Assert.NotNull(captured);
         // The prompt is the argument right after -p.
@@ -369,6 +372,100 @@ public class AISummaryServiceTests
         Assert.Contains("Fixed bugs", prompt);
     }
 
+    [Fact]
+    public async Task GenerateAsync_MissingCli_ReportsResolutionFailure()
+    {
+        var service = new AISummaryService(new FakeSettings(), _ => null, _ => false, _ => null);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.GenerateAsync("1.0.91", "1.0.98", "Release notes"));
+
+        Assert.Contains("not found on PATH", error.Message);
+    }
+
+    [Fact]
+    public async Task GenerateFromFileAsync_LaunchFailure_IsNotSwallowed()
+    {
+        var service = new AISummaryService(
+            new FakeSettings(),
+            _ => throw new System.ComponentModel.Win32Exception(3),
+            _ => false,
+            _ => new CopilotLauncher.Helpers.ProcessUtil.CopilotProcessTarget { FileName = "broken-alias.exe" });
+
+        await Assert.ThrowsAsync<System.ComponentModel.Win32Exception>(
+            () => service.GenerateFromFileAsync("1.0.91", "1.0.98", "changelogs.json"));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_ExitZeroWithAssistantResponse_ReturnsSummary()
+    {
+        var service = CreateOutputService(
+            """{"type":"assistant.message","data":{"content":"Verified briefing"}}""", string.Empty, 0);
+
+        Assert.Equal("Verified briefing", await service.GenerateAsync("1.0.91", "1.0.98", "Release notes"));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_NonzeroExit_ReportsErrorEvenIfAssistantTextExists()
+    {
+        var service = CreateOutputService(
+            """{"type":"assistant.message","data":{"content":"Incomplete briefing"}}""", "Authentication failed", 17);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.GenerateAsync("1.0.91", "1.0.98", "Release notes"));
+
+        Assert.Contains("code 17", error.Message);
+        Assert.Contains("Authentication failed", error.Message);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_ExitZeroWithoutAssistantResponse_ReportsEmptyResponse()
+    {
+        var service = CreateOutputService("""{"type":"result","exitCode":0}""", "No model response", 0);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.GenerateAsync("1.0.91", "1.0.98", "Release notes"));
+
+        Assert.Contains("no assistant response", error.Message);
+        Assert.Contains("No model response", error.Message);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_CancelledBeforeLaunch_DoesNotSpawn()
+    {
+        var service = new AISummaryService(new FakeSettings(), _ => throw new Xunit.Sdk.XunitException("Must not spawn"));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.GenerateAsync("1.0.91", "1.0.98", "Release notes", cts.Token));
+    }
+
+    private static AISummaryService CreateOutputService(string stdout, string stderr, int exitCode)
+        => new(
+            new FakeSettings(),
+            psi =>
+            {
+                psi.ArgumentList.Clear();
+                if (OperatingSystem.IsWindows())
+                {
+                    psi.FileName = "powershell.exe";
+                    psi.ArgumentList.Add("-NoProfile");
+                    psi.ArgumentList.Add("-EncodedCommand");
+                    var script = $"[Console]::Out.WriteLine('{stdout}'); [Console]::Error.WriteLine('{stderr}'); exit {exitCode}";
+                    psi.ArgumentList.Add(Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script)));
+                }
+                else
+                {
+                    psi.FileName = "/bin/sh";
+                    psi.ArgumentList.Add("-c");
+                    psi.ArgumentList.Add($"printf '%s\\n' '{stdout}'; printf '%s\\n' '{stderr}' >&2; exit {exitCode}");
+                }
+                return Process.Start(psi);
+            },
+            _ => false,
+            _ => new CopilotLauncher.Helpers.ProcessUtil.CopilotProcessTarget { FileName = "copilot-test.exe" });
+
     private static async Task<(FakeSettings settings, ProcessStartInfo? captured)> CaptureSpawnAsync(
         Func<string, bool> sessionExists,
         string? sessionName)
@@ -380,15 +477,15 @@ public class AISummaryServiceTests
         ProcessStartInfo? captured = null;
         // Inject a fake copilot resolver so the test passes regardless of
         // whether the host machine has copilot on PATH (CI runners don't).
-        // Capture the PSI then return null — GenerateAsync's null-process
-        // path returns null cleanly without actually spawning anything.
+        // Capture the PSI without spawning the real CLI.
         var fakeTarget = new CopilotLauncher.Helpers.ProcessUtil.CopilotProcessTarget { FileName = "copilot-test.cmd" };
         var service = new AISummaryService(
             settings,
             psi => { captured = psi; return null; },
             sessionExists,
             _ => fakeTarget);
-        await service.GenerateAsync("1.0.0", "1.1.0", "Fixed bugs\nAdded features");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.GenerateAsync("1.0.0", "1.1.0", "Fixed bugs\nAdded features"));
         return (settings, captured);
     }
 

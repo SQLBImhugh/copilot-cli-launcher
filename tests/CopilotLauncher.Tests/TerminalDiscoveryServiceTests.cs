@@ -55,6 +55,40 @@ public class TerminalDiscoveryServiceTests
         Assert.False(pwsh.SupportsTabs);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResolveOnPath_OnlySkipsEmptyAliases_WhenRequested(bool requireNonEmptyFile)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "copilot-launcher-tests-" + Guid.NewGuid());
+        var aliases = Path.Combine(root, "WindowsApps");
+        var native = Path.Combine(root, "WinGet Links");
+        Directory.CreateDirectory(aliases);
+        Directory.CreateDirectory(native);
+        var aliasPath = Path.Combine(aliases, "copilot.exe");
+        var nativePath = Path.Combine(native, "copilot.exe");
+        File.WriteAllText(aliasPath, string.Empty);
+        File.WriteAllText(nativePath, "native executable");
+        try
+        {
+            var path = string.Join(Path.PathSeparator, aliases, $"\"{native}\"");
+
+            var resolved = TerminalDiscoveryService.ResolveOnPath("copilot.exe", requireNonEmptyFile, path);
+
+            Assert.Equal(requireNonEmptyFile ? nativePath : aliasPath, resolved);
+            Assert.Equal(
+                requireNonEmptyFile ? null : aliasPath,
+                TerminalDiscoveryService.ResolveOnPath("copilot.exe", requireNonEmptyFile, aliases));
+            Assert.Equal(
+                requireNonEmptyFile ? null : aliasPath,
+                TerminalDiscoveryService.ResolveOnPath(aliasPath, requireNonEmptyFile, path));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>Wraps the internal ctor for test convenience via reflection.</summary>
     private static TerminalDiscoveryService NewSvc(Func<string, string?> resolver)
     {
