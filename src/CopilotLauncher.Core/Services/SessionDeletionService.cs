@@ -1,3 +1,4 @@
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Models;
 
 namespace CopilotLauncher.Services;
@@ -34,7 +35,7 @@ public sealed class BulkDeleteResult
 /// <remarks>
 /// Deliberately conservative, because this is unrecoverable:
 /// <list type="bullet">
-/// <item>Refuses any session that is currently in use (a sibling <c>inuse.*.lock</c> exists) —
+/// <item>Refuses sessions with a live or unverifiable <c>inuse.*.lock</c> owner —
 /// deleting a live session's state corrupts the running CLI.</item>
 /// <item>Refuses any path that does not resolve to a direct child of the session root, so a
 /// malformed or hostile id can't escape the store.</item>
@@ -98,7 +99,7 @@ public sealed class SessionDeletionService : ISessionDeletionService
 
         try
         {
-            if (Directory.EnumerateFiles(dir, "inuse.*.lock").Any())
+            if (SessionLock.IsInUse(dir))
                 return Fail(sessionId, "Session is currently in use — close it first.");
         }
         catch (Exception ex)
@@ -110,6 +111,9 @@ public sealed class SessionDeletionService : ISessionDeletionService
 
         try
         {
+            if (SessionLock.IsInUse(dir))
+                return Fail(sessionId, "Session is currently in use — close it first.");
+
             Directory.Delete(dir, recursive: true);
         }
         catch (Exception ex)

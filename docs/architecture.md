@@ -77,9 +77,15 @@ Output: `dist\CopilotLauncher\CopilotLauncher.exe` (~70 MB self-contained single
 | Service | Phase landed | Responsibility |
 |---|---|---|
 | `ISettingsService` | 0 | Load/save `settings.json` under `%LOCALAPPDATA%\CopilotLauncher\`. Atomic writes. Tolerates corrupt JSON via backup + reset. |
-| `ISessionDiscoveryService` | 0 | Enumerate sessions from `~/.copilot/session-state/<uuid>/workspace.yaml`. Detects active sessions via `inuse.*.lock` files. Tolerates malformed YAML. |
+| `ISessionDiscoveryService` | 0 | Enumerate sessions from `~/.copilot/session-state/<uuid>/workspace.yaml`. Supports metadata-only discovery and exact recursive disk sizes. Checks lock ownership through `SessionLock`. Tolerates malformed YAML. |
 
 Subsequent phases add: `ITerminalDiscoveryService`, `ILaunchService`, `ISavedLaunchesService`, `IUpdateCheckService`, `IBriefingService`, `IAISummaryService`, `ISessionRepairService`, `IKnownBugWorkaroundService`, `IMigrationService`, `IShortcutExportService`.
+
+### Session locks and refresh
+
+`SessionLock` is shared by discovery, deletion, and repair. An `inuse.<PID>.lock` marker protects a session only while its original owner is running, or when ownership cannot be verified. Process start times distinguish reused PIDs from the original owner. Unknown marker formats and inspection failures remain protected; a session's age never overrides a live lock. Detection does not remove marker files. Deletion and repair recheck ownership before modifying session data.
+
+The Sessions tab publishes metadata before scanning nested artifact directories for sizes. Discovery retains the last calculated sizes in memory, but rereads metadata and lock ownership on every refresh. Exact sizes are calculated on a worker thread, then applied to existing rows on the UI dispatcher. Size sorting is reapplied when selected. A newer refresh cancels the previous scan, and size updates cannot restore a deleted row. Cleanup still uses a full scan for accurate selection totals.
 
 ### Per-project launch profiles
 

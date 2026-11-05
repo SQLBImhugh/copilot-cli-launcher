@@ -43,7 +43,7 @@ public sealed partial class CleanupRow : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
-    /// <summary>Locked sessions can never be deleted; the CLI is still using them.</summary>
+    /// <summary>Live or unverifiable lock owners keep sessions protected from deletion.</summary>
     public bool CanDelete => !IsLocked;
 
     public string SizeDisplay => FormatBytes(SizeBytes);

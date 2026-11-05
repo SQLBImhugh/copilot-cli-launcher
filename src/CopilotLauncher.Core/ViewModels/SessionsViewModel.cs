@@ -18,6 +18,8 @@ public sealed partial class SessionsViewModel : ObservableObject
     private readonly IProjectLaunchService _projectLaunch;
     private readonly ISessionDeletionService? _deletion;
     private Func<Action, Task>? _marshalToUi;
+    private readonly object _refreshGate = new();
+    private CancellationTokenSource? _refreshCancellation;
 
     public ObservableCollection<SessionRow> Visible { get; } = new();
 
@@ -46,6 +48,10 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _showAll;
+
+    // Temporary view state: never written to settings.
+    [ObservableProperty]
+    private bool _isHidingExcludedPaths = true;
 
     private string _searchText = string.Empty;
     public string SearchText
@@ -98,6 +104,8 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     partial void OnShowAllChanged(bool value) => ApplyFilters();
 
+    partial void OnIsHidingExcludedPathsChanged(bool value) => ApplyFilters();
+
     partial void OnSortFieldChanged(SessionSortField value) => ApplyFilters();
 
     partial void OnSortDescendingChanged(bool value) => ApplyFilters();
@@ -106,19 +114,34 @@ public sealed partial class SessionsViewModel : ObservableObject
     [Obsolete("Use RefreshAsync instead. This method now schedules a background refresh and returns immediately.")]
     public void Refresh() => _ = RefreshAsync();
 
-    /// <summary>Re-scan disk off the UI thread and then apply the current filters.</summary>
+    /// <summary>Show metadata first, then update recursive sizes off the UI thread.</summary>
     public async Task RefreshAsync(CancellationToken ct = default)
     {
         var marshalToUi = GetUiMarshaller();
+        CancellationTokenSource refresh;
+        lock (_refreshGate)
+        {
+            _refreshCancellation?.Cancel();
+            refresh = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _refreshCancellation = refresh;
+        }
+        var token = refresh.Token;
+        var metadataLoaded = false;
 
         try
         {
-            await marshalToUi(() => StatusMessage = "Loading sessions…").ConfigureAwait(false);
-            var discovered = await Task.Run(() => _discovery.Enumerate().ToList(), ct).ConfigureAwait(false);
-            ct.ThrowIfCancellationRequested();
+            await marshalToUi(() =>
+            {
+                if (IsCurrentRefresh(refresh))
+                    StatusMessage = "Loading sessions…";
+            }).ConfigureAwait(false);
+            var discovered = await Task.Run(
+                () => _discovery.Enumerate(includeSizes: false, token).ToList(), token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
 
             await marshalToUi(() =>
             {
+                token.ThrowIfCancellationRequested();
                 _all = discovered;
                 TotalCount = _all.Count;
                 ApplyFilters();
@@ -126,16 +149,80 @@ public sealed partial class SessionsViewModel : ObservableObject
                 OnPropertyChanged(nameof(RecentWindowDays));
                 OnPropertyChanged(nameof(RecentFilterLabel));
                 OnPropertyChanged(nameof(RecentFilterTooltip));
+                if (_all.Count > 0)
+                    StatusMessage += " Updating sizes…";
+            }).ConfigureAwait(false);
+            metadataLoaded = true;
+            if (discovered.Count == 0)
+                return;
+
+            var sized = await Task.Run(
+                () => _discovery.Enumerate(includeSizes: true, token)
+                    .ToDictionary(s => s.Id, StringComparer.OrdinalIgnoreCase), token).ConfigureAwait(false);
+
+            await marshalToUi(() =>
+            {
+                token.ThrowIfCancellationRequested();
+                ApplySizes(sized);
             }).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            await marshalToUi(() => StatusMessage = "Session refresh canceled.").ConfigureAwait(false);
+            await marshalToUi(() =>
+            {
+                if (IsCurrentRefresh(refresh))
+                    StatusMessage = "Session refresh canceled.";
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await marshalToUi(() => StatusMessage = $"Failed to scan sessions: {ex.Message}").ConfigureAwait(false);
+            await marshalToUi(() =>
+            {
+                if (IsCurrentRefresh(refresh))
+                    StatusMessage = metadataLoaded
+                        ? $"Failed to update session sizes: {ex.Message}"
+                        : $"Failed to scan sessions: {ex.Message}";
+            }).ConfigureAwait(false);
         }
+        finally
+        {
+            lock (_refreshGate)
+            {
+                if (ReferenceEquals(_refreshCancellation, refresh))
+                    _refreshCancellation = null;
+                refresh.Dispose();
+            }
+        }
+    }
+
+    private bool IsCurrentRefresh(CancellationTokenSource refresh)
+    {
+        lock (_refreshGate)
+            return ReferenceEquals(_refreshCancellation, refresh);
+    }
+
+    private void ApplySizes(IReadOnlyDictionary<string, CopilotSession> sized)
+    {
+        // Only enrich the current list; a session deleted during sizing must not return.
+        foreach (var session in _all)
+        {
+            if (sized.TryGetValue(session.Id, out var measured))
+                session.SizeBytes = measured.SizeBytes;
+        }
+
+        if (SortField == SessionSortField.Size)
+        {
+            ApplyFilters();
+            return;
+        }
+
+        var current = _all.ToDictionary(s => s.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Visible)
+        {
+            if (current.TryGetValue(row.SessionId, out var session))
+                row.Tags = SessionRow.BuildTags(session);
+        }
+        StatusMessage = $"{Visible.Count} of {_all.Count} session(s) visible.";
     }
 
     /// <summary>
@@ -213,7 +300,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     /// <summary>Applies the current filter chips + search to the full list.
     /// Filter logic is AND across checked chips: a session must satisfy every
     /// chip the user has checked (Recent + Named + Heavy intersect, not union).
-    /// "Show all" is a single override that bypasses the other chips entirely.
+    /// "Show all" bypasses the other chips, but not search or excluded paths.
     /// </summary>
     public void ApplyFilters()
     {
@@ -236,17 +323,41 @@ public sealed partial class SessionsViewModel : ObservableObject
             rows = _all.Where(MatchesAllCheckedChips);
         }
 
+        var listing = _settings.Current.SessionListing;
+        var excludedPaths = listing.ExcludedPaths;
+        if (IsHidingExcludedPaths && excludedPaths is { Count: > 0 })
+            rows = rows.Where(s => !MatchesExcludedPath(s.Cwd, excludedPaths));
+
         if (!string.IsNullOrWhiteSpace(_searchText))
             rows = rows.Where(s => MatchesSearch(s, _searchText));
 
         rows = ApplySort(rows);
 
-        var showFullId = _settings.Current.SessionListing.ShowFullSessionId;
+        var showFullId = listing.ShowFullSessionId;
         foreach (var s in rows)
             Visible.Add(SessionRow.From(s, showFullId));
 
         StatusMessage = $"{Visible.Count} of {_all.Count} session(s) visible.";
         OnPropertyChanged(nameof(VisibleCount));
+    }
+
+    private static bool MatchesExcludedPath(string? cwd, IEnumerable<string> excludedPaths)
+    {
+        if (string.IsNullOrWhiteSpace(cwd)) return false;
+        var path = Normalize(cwd);
+        foreach (var excludedPath in excludedPaths)
+        {
+            if (string.IsNullOrWhiteSpace(excludedPath)) continue;
+            var folder = Normalize(excludedPath);
+            if (string.Equals(path, folder, StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith(folder + "\\", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+
+        // Text-only Windows comparisons: no disk access or current-directory resolution.
+        // Trimming a drive root to "C:" still gives the correct descendant prefix "C:\".
+        static string Normalize(string value) => value.Trim().Replace('/', '\\').TrimEnd('\\');
     }
 
     private IEnumerable<CopilotSession> ApplySort(IEnumerable<CopilotSession> rows)
@@ -343,8 +454,10 @@ public enum SessionSortField
 /// Display projection of a CopilotSession for the Sessions page card.
 /// Pre-computes display strings so XAML bindings stay simple.
 /// </summary>
-public sealed class SessionRow
+public sealed class SessionRow : ObservableObject
 {
+    private string _tags = string.Empty;
+
     public required string SessionId { get; init; }
     public required string ShortId { get; init; }
 
@@ -375,18 +488,13 @@ public sealed class SessionRow
 
     public required string RepoBranch { get; init; }
     public required string LastOpenedDisplay { get; init; }
-    public required string Tags { get; init; }
+    public required string Tags { get => _tags; set => SetProperty(ref _tags, value); }
     public bool UserNamed { get; init; }
     public bool HeavyUse { get; init; }
 
     public static SessionRow From(CopilotSession s, bool showFullId = false)
     {
         var ago = HumanizeRelative(s.LastModified);
-        var tags = new List<string>();
-        if (s.SummaryCount >= 10) tags.Add($"heavy: {s.SummaryCount} summaries");
-        else if (s.SummaryCount > 0) tags.Add($"{s.SummaryCount} summaries");
-        if (s.SizeBytes > 0) tags.Add(FormatBytes(s.SizeBytes));
-
         // Title resolution:
         //   user_named=true,  name set  -> bold (HasUserName)
         //   user_named=false, name set  -> regular weight (HasAutoName) — Copilot
@@ -417,10 +525,19 @@ public sealed class SessionRow
                 ? "(no git repo)"
                 : (string.IsNullOrEmpty(s.Branch) ? s.Repository : $"{s.Repository} · {s.Branch}"),
             LastOpenedDisplay = $"{ago} · id {idDisplay}",
-            Tags = string.Join(" · ", tags),
+            Tags = BuildTags(s),
             UserNamed = s.UserNamed,
             HeavyUse = s.SummaryCount >= 10,
         };
+    }
+
+    internal static string BuildTags(CopilotSession session)
+    {
+        var tags = new List<string>();
+        if (session.SummaryCount >= 10) tags.Add($"heavy: {session.SummaryCount} summaries");
+        else if (session.SummaryCount > 0) tags.Add($"{session.SummaryCount} summaries");
+        if (session.SizeBytes > 0) tags.Add(FormatBytes(session.SizeBytes));
+        return string.Join(" · ", tags);
     }
 
     private static string HumanizeRelative(DateTime when) => RelativeTime.Humanize(when);

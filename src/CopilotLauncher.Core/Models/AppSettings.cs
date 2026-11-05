@@ -13,6 +13,7 @@ public sealed class AppSettings
     public BriefingSettings Briefings { get; set; } = new();
     public RepairSettings Repair { get; set; } = new();
     public SessionListingSettings SessionListing { get; set; } = new();
+    public ProjectImportSettings ProjectImport { get; set; } = new();
     public LauncherBehaviorSettings LauncherBehavior { get; set; } = new();
     public StorageSettings Storage { get; set; } = new();
 
@@ -37,11 +38,14 @@ public sealed class AppSettings
         Briefings        ??= new();
         Repair           ??= new();
         SessionListing   ??= new();
+        ProjectImport    ??= new();
         LauncherBehavior ??= new();
         Storage          ??= new();
 
         Repair.TrackedGitHubIssues   ??= new();
+        SessionListing.ExcludedPaths ??= new();
         SessionListing.HiddenPathGlobs ??= new();
+        ProjectImport.HiddenPaths ??= new();
     }
 }
 
@@ -157,7 +161,15 @@ public sealed class SessionListingSettings
     public int HeavyUseSummaryThreshold { get; set; } = 10;
     public bool GroupByProject { get; set; }
     public bool ShowFullSessionId { get; set; }
+    /// <summary>Folders whose sessions (including subfolders) are hidden by default.</summary>
+    public List<string> ExcludedPaths { get; set; } = new();
     public List<string> HiddenPathGlobs { get; set; } = new();
+}
+
+public sealed class ProjectImportSettings
+{
+    /// <summary>Folders (including subfolders) hidden only from project import suggestions.</summary>
+    public List<string> HiddenPaths { get; set; } = new();
 }
 
 public sealed class LauncherBehaviorSettings

@@ -17,11 +17,13 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ITerminalDiscoveryService _terminals;
     private readonly System.Threading.Timer _saveTimer;
     private int _saveScheduled;  // 0 = idle, 1 = debounce in flight; single-flight guard
+    private string _excludedPathsText;
 
     public SettingsViewModel(ISettingsService settings, ITerminalDiscoveryService terminals)
     {
         _settings = settings;
         _terminals = terminals;
+        _excludedPathsText = string.Join(Environment.NewLine, Settings.SessionListing.ExcludedPaths ?? new());
         _saveTimer = new System.Threading.Timer(_ => Flush(), null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
     }
 
@@ -84,6 +86,22 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public int HeavyUseSummaryThreshold { get => Settings.SessionListing.HeavyUseSummaryThreshold; set { Settings.SessionListing.HeavyUseSummaryThreshold = value; OnPropertyChanged(); ScheduleSave(); } }
     public bool GroupByProject { get => Settings.SessionListing.GroupByProject; set { Settings.SessionListing.GroupByProject = value; OnPropertyChanged(); ScheduleSave(); } }
     public bool ShowFullSessionId { get => Settings.SessionListing.ShowFullSessionId; set { Settings.SessionListing.ShowFullSessionId = value; OnPropertyChanged(); ScheduleSave(); } }
+
+    /// <summary>Keep the editor text intact so typing a new line doesn't remove it.</summary>
+    public string ExcludedPathsText
+    {
+        get => _excludedPathsText;
+        set
+        {
+            var text = value ?? string.Empty;
+            if (_excludedPathsText == text) return;
+            Settings.SessionListing.ExcludedPaths = text.Split(
+                new[] { '\r', '\n' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            SetProperty(ref _excludedPathsText, text);
+            ScheduleSave();
+        }
+    }
 
     // Repair
     public bool AutoRepairDanglingToolUse { get => Settings.Repair.AutoRepairDanglingToolUse; set { Settings.Repair.AutoRepairDanglingToolUse = value; OnPropertyChanged(); ScheduleSave(); } }

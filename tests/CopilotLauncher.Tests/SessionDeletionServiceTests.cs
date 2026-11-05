@@ -29,7 +29,7 @@ public sealed class SessionDeletionServiceTests : IDisposable
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "workspace.yaml"), "cwd: C:\\x");
         File.WriteAllBytes(Path.Combine(dir, "events.jsonl"), new byte[bytes]);
-        if (locked) File.WriteAllText(Path.Combine(dir, "inuse.1234.lock"), "");
+        if (locked) File.WriteAllText(Path.Combine(dir, $"inuse.{Environment.ProcessId}.lock"), "");
         return dir;
     }
 
@@ -56,6 +56,33 @@ public sealed class SessionDeletionServiceTests : IDisposable
         Assert.False(result.Deleted);
         Assert.Contains("in use", result.Error);
         Assert.True(Directory.Exists(dir));   // untouched
+    }
+
+    [Fact]
+    public void Delete_AllowsSession_WithOrphanedLock()
+    {
+        var dir = MakeSession("stale-lock");
+        File.WriteAllText(Path.Combine(dir, $"inuse.{int.MaxValue}.lock"), "");
+
+        var result = _svc.Delete("stale-lock");
+
+        Assert.True(result.Deleted, result.Error);
+        Assert.False(Directory.Exists(dir));
+    }
+
+    [Fact]
+    public void Delete_RechecksLock_AfterSessionWasListed()
+    {
+        var dir = MakeSession("became-active");
+        var discovered = new SessionDiscoveryService(_root).Enumerate().Single();
+        Assert.False(discovered.IsLocked);
+        File.WriteAllText(Path.Combine(dir, $"inuse.{Environment.ProcessId}.lock"), "");
+
+        var result = _svc.Delete(discovered.Id);
+
+        Assert.False(result.Deleted);
+        Assert.Contains("in use", result.Error);
+        Assert.True(Directory.Exists(dir));
     }
 
     [Fact]

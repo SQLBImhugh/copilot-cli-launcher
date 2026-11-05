@@ -6,6 +6,12 @@ using CopilotLauncher.Services;
 
 namespace CopilotLauncher.ViewModels;
 
+public enum ProjectSortField
+{
+    Name,
+    WorkingDirectory,
+}
+
 /// <summary>One plugin row with a per-repo on/off checkbox.</summary>
 public sealed partial class RepoPluginToggle : ObservableObject
 {
@@ -41,20 +47,32 @@ public sealed partial class ProjectImportRow : ObservableObject
     public required ProjectImportCandidate Candidate { get; init; }
 
     /// <summary>Odd-numbered row — the view tints these for readability.</summary>
-    public bool IsAlternate { get; init; }
+    [ObservableProperty]
+    private bool _isAlternate;
 
     [ObservableProperty]
     private bool _isSelected;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Caption))]
+    [NotifyPropertyChangedFor(nameof(DetailText))]
+    [NotifyPropertyChangedFor(nameof(CanImport))]
+    [NotifyPropertyChangedFor(nameof(RowOpacity))]
+    [NotifyPropertyChangedFor(nameof(AccessibleName))]
+    private bool _isHidden;
+
     public string SuggestedName => Candidate.SuggestedName;
     public string Path => Candidate.Path;
-    public string Caption => Candidate.Caption;
+    public string Caption => IsHidden ? $"{Candidate.Caption} · hidden from import" : Candidate.Caption;
     public string SessionsText => Candidate.SessionsText;
-    public string DetailText => Candidate.DetailText;
+    public string DetailText => !IsHidden ? Candidate.DetailText
+        : string.IsNullOrEmpty(Candidate.DetailText) ? "hidden from import"
+        : $"hidden from import · {Candidate.DetailText}";
     public string LastUsedDate => Candidate.LastUsedDate;
     public string LastUsedRelative => Candidate.LastUsedRelative;
-    public bool CanImport => !Candidate.AlreadyImported;
-    public double RowOpacity => Candidate.AlreadyImported ? 0.5 : 1.0;
+    public bool CanSelect => !Candidate.AlreadyImported;
+    public bool CanImport => CanSelect && !IsHidden;
+    public double RowOpacity => Candidate.AlreadyImported || IsHidden ? 0.5 : 1.0;
 
     /// <summary>Single-line label for screen readers — the row's visual content is a stack of
     /// TextBlocks, which would otherwise announce as nothing.</summary>
@@ -80,6 +98,22 @@ public sealed partial class ProjectsViewModel : ObservableObject
     public ObservableCollection<RepoPluginToggle> RepoPlugins { get; } = new();
     public ObservableCollection<RepoConfigRow> RepoConfigFiles { get; } = new();
     public ObservableCollection<ProjectImportRow> ImportCandidates { get; } = new();
+
+    // View-lifetime presentation state only; never reorder or write the project store.
+    [ObservableProperty] private ProjectSortField _sortField = ProjectSortField.Name;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SortDirectionGlyph))]
+    [NotifyPropertyChangedFor(nameof(SortDirectionDescription))]
+    private bool _isSortDescending;
+
+    public string SortDirectionGlyph => IsSortDescending ? "\uE74B" : "\uE74A";
+    public string SortDirectionDescription => IsSortDescending
+        ? "Sorted descending (Z to A). Activate to sort ascending (A to Z)."
+        : "Sorted ascending (A to Z). Activate to sort descending (Z to A).";
+
+    partial void OnSortFieldChanged(ProjectSortField value) => ApplySort();
+    partial void OnIsSortDescendingChanged(bool value) => ApplySort();
 
     /// <summary>Terminal ids offered in the override picker; "" = inherit the global default.</summary>
     public ObservableCollection<string> TerminalOptions { get; } = new();
@@ -177,6 +211,7 @@ public sealed partial class ProjectsViewModel : ObservableObject
             _store.Reload();
             Items.Clear();
             foreach (var p in _store.All) Items.Add(p);
+            ApplySort();
 
             TerminalOptions.Clear();
             TerminalOptions.Add(string.Empty);   // inherit
@@ -194,6 +229,26 @@ public sealed partial class ProjectsViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"Failed to load projects.json: {ex.Message}";
+        }
+    }
+
+    private void ApplySort()
+    {
+        var sorted = SortField == ProjectSortField.WorkingDirectory
+            ? Items.OrderBy(p => p.Path, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(p => p.Label, StringComparer.OrdinalIgnoreCase)
+            : Items.OrderBy(p => p.Label, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(p => p.Path, StringComparer.OrdinalIgnoreCase);
+        var ordered = sorted.ThenBy(p => p.Id, StringComparer.Ordinal).ToList();
+        if (IsSortDescending) ordered.Reverse();
+
+        // Keep the same instances and never clear the list: selection and unsaved editor
+        // state must not change just because rows move. IDs make case-insensitive ties
+        // deterministic even when the store is reloaded in a different order.
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            var currentIndex = Items.IndexOf(ordered[index]);
+            if (currentIndex != index) Items.Move(currentIndex, index);
         }
     }
 
@@ -330,6 +385,7 @@ public sealed partial class ProjectsViewModel : ObservableObject
             return null;
         }
 
+        ApplySort();
         Selected = target;
         IsEditing = false;
         StatusMessage = $"Saved '{target.Label}'.";
@@ -532,15 +588,36 @@ public sealed partial class ProjectsViewModel : ObservableObject
 
     // ---- bulk import from past sessions ----
 
+    private readonly List<ProjectImportRow> _allImportRows = new();
+    private bool _hasLoadedImportCandidates;
+    private bool _isUpdatingImportRows;
+    private int _hiddenImportPathCount;
+
     [ObservableProperty] private string _importMessage = string.Empty;
 
     /// <summary>True while past sessions are being scanned on a background thread.</summary>
     [ObservableProperty] private bool _isScanningSessions;
 
-    partial void OnIsScanningSessionsChanged(bool value) => OnPropertyChanged(nameof(CanRunImport));
+    partial void OnIsScanningSessionsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanRunImport));
+        OnPropertyChanged(nameof(CanToggleImportPathVisibility));
+    }
+
+    /// <summary>View-lifetime filter only. Revealing hidden paths never selects them.</summary>
+    [ObservableProperty] private bool _showHiddenImportPaths;
+
+    partial void OnShowHiddenImportPathsChanged(bool value)
+    {
+        ApplyImportVisibility();
+        if (_hasLoadedImportCandidates && !IsScanningSessions) UpdateImportSummary();
+    }
 
     /// <summary>Gates the dialog's Import / Select all buttons while the scan is in flight.</summary>
     public bool CanRunImport => !IsScanningSessions;
+
+    public bool CanToggleImportPathVisibility =>
+        !IsScanningSessions && ImportCandidates.Any(r => r.IsSelected && r.CanSelect);
 
     public bool HasImportCandidates => ImportCandidates.Count > 0;
 
@@ -564,10 +641,14 @@ public sealed partial class ProjectsViewModel : ObservableObject
     /// </remarks>
     public async Task LoadImportCandidatesAsync(CancellationToken ct = default)
     {
-        foreach (var row in ImportCandidates) row.PropertyChanged -= OnImportRowChanged;
+        if (IsScanningSessions) return;
+
+        foreach (var row in _allImportRows) row.PropertyChanged -= OnImportRowChanged;
+        _allImportRows.Clear();
         ImportCandidates.Clear();
-        OnPropertyChanged(nameof(HasImportCandidates));
-        OnPropertyChanged(nameof(SelectedImportCount));
+        _hasLoadedImportCandidates = false;
+        _hiddenImportPathCount = 0;
+        NotifyImportState();
 
         if (_sessions is null)
         {
@@ -609,30 +690,177 @@ public sealed partial class ProjectsViewModel : ObservableObject
             {
                 Candidate = c,
                 IsSelected = c.RecommendedByDefault,
-                IsAlternate = ImportCandidates.Count % 2 == 1,
             };
             row.PropertyChanged += OnImportRowChanged;
-            ImportCandidates.Add(row);
+            _allImportRows.Add(row);
         }
 
+        _hasLoadedImportCandidates = true;
+        ApplyImportVisibility();
+        UpdateImportSummary();
+    }
+
+    private HashSet<string> ExistingImportPaths() => _store.All
+        .Select(p => ProjectMatcher.Normalize(p?.Path))
+        .OfType<string>()
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Literal folder matching, not globbing; roots cover descendants but not siblings.</summary>
+    internal static bool IsImportPathHidden(string? path, IEnumerable<string>? hiddenPaths)
+    {
+        var target = ProjectMatcher.Normalize(path);
+        if (target is null || hiddenPaths is null) return false;
+        return hiddenPaths.Any(entry =>
+        {
+            var root = ProjectMatcher.Normalize(entry);
+            if (root is null) return false;
+            if (string.Equals(root, target, StringComparison.OrdinalIgnoreCase)) return true;
+            var prefix = Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
+            return target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private void ApplyImportVisibility()
+    {
+        var existing = ExistingImportPaths();
+        var hiddenPaths = _settings.Current.ProjectImport?.HiddenPaths;
+        _hiddenImportPathCount = 0;
+        _isUpdatingImportRows = true;
+        try
+        {
+            ImportCandidates.Clear();
+            foreach (var row in _allImportRows)
+            {
+                var isHidden = IsImportPathHidden(row.Path, hiddenPaths);
+                if (row.IsHidden != isHidden) row.IsSelected = false;
+                row.IsHidden = isHidden;
+
+                var path = ProjectMatcher.Normalize(row.Path);
+                if (path is null || row.Candidate.AlreadyImported || existing.Contains(path))
+                {
+                    row.IsSelected = false;
+                    continue;
+                }
+
+                if (isHidden) _hiddenImportPathCount++;
+                if (isHidden && !ShowHiddenImportPaths)
+                {
+                    row.IsSelected = false;
+                    continue;
+                }
+
+                row.IsAlternate = ImportCandidates.Count % 2 == 1;
+                ImportCandidates.Add(row);
+            }
+        }
+        finally
+        {
+            _isUpdatingImportRows = false;
+        }
+        NotifyImportState();
+    }
+
+    private void NotifyImportState()
+    {
         OnPropertyChanged(nameof(HasImportCandidates));
         OnPropertyChanged(nameof(SelectedImportCount));
-        ImportMessage = candidates.Count == 0
-            ? "No session working directories found to import."
-            : $"{ImportCandidates.Count(r => r.CanImport)} folder(s) available, {SelectedImportCount} selected.";
+        OnPropertyChanged(nameof(CanToggleImportPathVisibility));
     }
+
+    private string ImportSummary()
+    {
+        if (ImportCandidates.Count == 0 && _hiddenImportPathCount == 0)
+            return "No session working directories found to import.";
+
+        var summary = $"{ImportCandidates.Count(r => r.CanImport)} folder(s) available, {SelectedImportCount} selected.";
+        if (_hiddenImportPathCount > 0)
+            summary += $" {_hiddenImportPathCount} hidden path(s){(ShowHiddenImportPaths ? " shown" : "")}.";
+        var selectedHidden = ImportCandidates.Count(r => r.IsSelected && r.CanSelect && r.IsHidden);
+        if (selectedHidden > 0) summary += $" {selectedHidden} hidden path(s) selected to unhide.";
+        return summary;
+    }
+
+    private void UpdateImportSummary() => ImportMessage = ImportSummary();
 
     private void OnImportRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(ProjectImportRow.IsSelected)) return;
-        OnPropertyChanged(nameof(SelectedImportCount));
-        ImportMessage = $"{ImportCandidates.Count(r => r.CanImport)} folder(s) available, {SelectedImportCount} selected.";
+        if (_isUpdatingImportRows || e.PropertyName != nameof(ProjectImportRow.IsSelected)) return;
+        NotifyImportState();
+        if (!IsScanningSessions) UpdateImportSummary();
     }
 
     public void SetAllImportSelections(bool selected)
     {
-        foreach (var row in ImportCandidates)
-            if (row.CanImport) row.IsSelected = selected;
+        if (IsScanningSessions || ImportCandidates.Count == 0) return;
+        _isUpdatingImportRows = true;
+        try
+        {
+            foreach (var row in ImportCandidates)
+                if (row.CanSelect) row.IsSelected = selected;
+        }
+        finally
+        {
+            _isUpdatingImportRows = false;
+        }
+        NotifyImportState();
+        UpdateImportSummary();
+    }
+
+    /// <summary>
+    /// Hide selected visible paths, or unhide paths that were hidden when the action began.
+    /// Unhiding a descendant removes every persisted root covering it, but leaves independent
+    /// roots intact. Returns the number of selected paths whose hidden state changed.
+    /// </summary>
+    public int ToggleSelectedImportPaths()
+    {
+        if (IsScanningSessions) return 0;
+
+        var existing = ExistingImportPaths();
+        var selected = ImportCandidates.Where(r => r.IsSelected && r.CanSelect)
+            .Select(r => (Row: r, Path: ProjectMatcher.Normalize(r.Path), IsOriginallyHidden: r.IsHidden))
+            .Where(s => s.Path is not null && !existing.Contains(s.Path))
+            .ToList();
+        if (selected.Count == 0) return 0;
+
+        var importSettings = _settings.Current.ProjectImport;
+        var original = importSettings.HiddenPaths;
+        var updated = original.ToList();
+
+        // Remove covering roots using the original row states before adding any new roots:
+        // mixed parent/child selections must not depend on their display order.
+        updated.RemoveAll(root => selected.Any(s => s.IsOriginallyHidden && IsImportPathHidden(s.Path, new[] { root })));
+        foreach (var item in selected.Where(s => !s.IsOriginallyHidden))
+        {
+            if (!updated.Any(root => string.Equals(ProjectMatcher.Normalize(root), item.Path, StringComparison.OrdinalIgnoreCase)))
+                updated.Add(item.Path!);
+        }
+        if (original.SequenceEqual(updated)) return 0;
+
+        var changed = selected.Count(s => s.IsOriginallyHidden != IsImportPathHidden(s.Path, updated));
+        importSettings.HiddenPaths = updated;
+        try
+        {
+            _settings.Save();
+        }
+        catch (Exception ex)
+        {
+            importSettings.HiddenPaths = original;
+            ImportMessage = $"Could not save hidden import paths: {ex.Message}. No visibility changes were saved.";
+            return 0;
+        }
+
+        _isUpdatingImportRows = true;
+        try
+        {
+            foreach (var item in selected) item.Row.IsSelected = false;
+        }
+        finally
+        {
+            _isUpdatingImportRows = false;
+        }
+        ApplyImportVisibility();
+        ImportMessage = $"Updated import visibility for {changed} path(s). {ImportSummary()}";
+        return changed;
     }
 
     /// <summary>
@@ -642,32 +870,41 @@ public sealed partial class ProjectsViewModel : ObservableObject
     /// </summary>
     public int ImportSelected()
     {
+        if (IsScanningSessions) return 0;
+        if (!_hasLoadedImportCandidates && ImportCandidates.Count == 0) return 0;
+
         var chosen = ImportCandidates.Where(r => r.IsSelected && r.CanImport).ToList();
         if (chosen.Count == 0)
         {
-            ImportMessage = "Nothing selected.";
+            ApplyImportVisibility();
+            ImportMessage = ImportCandidates.Any(r => r.IsSelected && r.IsHidden)
+                ? $"Unhide selected hidden paths before importing. {ImportSummary()}"
+                : $"Nothing selected for import. {ImportSummary()}";
             return 0;
         }
 
         var created = 0;
         var failed = 0;
+        var existing = ExistingImportPaths();
         foreach (var row in chosen)
         {
             // Re-check against the live store: the list is a snapshot.
-            if (_store.All.Any(p => string.Equals(ProjectMatcher.Normalize(p.Path), row.Path, StringComparison.OrdinalIgnoreCase)))
+            var path = ProjectMatcher.Normalize(row.Path);
+            if (path is null || existing.Contains(path) || IsImportPathHidden(path, _settings.Current.ProjectImport?.HiddenPaths))
                 continue;
 
             var project = new ProjectProfile
             {
                 Id = Guid.NewGuid().ToString(),
                 Label = row.SuggestedName,
-                Path = row.Path,
+                Path = path,
             };
 
             try
             {
                 _store.Add(project);
                 Items.Add(project);
+                existing.Add(path);
                 created++;
             }
             catch
@@ -676,6 +913,7 @@ public sealed partial class ProjectsViewModel : ObservableObject
             }
         }
 
+        if (created > 0) ApplySort();
         StatusMessage = created switch
         {
             0 => "No projects imported.",
@@ -684,7 +922,8 @@ public sealed partial class ProjectsViewModel : ObservableObject
         };
         if (failed > 0) StatusMessage += $" {failed} failed to save.";
 
-        ImportMessage = StatusMessage;
+        ApplyImportVisibility();
+        ImportMessage = $"{StatusMessage} {ImportSummary()}";
         OnPropertyChanged(nameof(HasItems));
         OnPropertyChanged(nameof(HasNoItems));
         return created;

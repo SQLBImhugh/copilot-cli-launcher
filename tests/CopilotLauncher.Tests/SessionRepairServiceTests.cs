@@ -38,11 +38,27 @@ public class SessionRepairServiceTests : IDisposable
     public void RepairOne_SkipsLockedSessions()
     {
         var dir = MakeSession("locked", AssistantWithToolRequest("call-abc", "intx-1") + "\n" + ExecStart("call-abc", "ts1", "evt-start-1"));
-        File.WriteAllText(Path.Combine(dir, "inuse.1234.lock"), "");
+        File.WriteAllText(Path.Combine(dir, $"inuse.{Environment.ProcessId}.lock"), "");
         var result = SessionRepairService.RepairOne(dir);
         Assert.True(result.Skipped);
         Assert.Contains("in use", result.SkipReason ?? "");
         Assert.False(result.Patched);
+    }
+
+    [Fact]
+    public void RepairOne_AllowsSession_WithOrphanedLock()
+    {
+        var dir = MakeSession("stale-lock",
+            AssistantWithToolRequest("call-abc", "intx-1") + "\n" +
+            ExecStart("call-abc", "ts1", "evt-start-1"));
+        var marker = Path.Combine(dir, $"inuse.{int.MaxValue}.lock");
+        File.WriteAllText(marker, "");
+
+        var result = SessionRepairService.RepairOne(dir);
+
+        Assert.False(result.Skipped, result.SkipReason);
+        Assert.True(result.Patched);
+        Assert.True(File.Exists(marker));
     }
 
     [Fact]
@@ -340,6 +356,23 @@ public class SessionRepairServiceTests : IDisposable
         svc.RepairAll();
 
         Assert.True(File.Exists(oldBak));    // retention 0 = keep forever
+    }
+
+    [Fact]
+    public void RepairAll_DoesNotPruneBackups_ForAnActiveSession()
+    {
+        var dir = MakeSession("active", BareEvent("session.start"));
+        var backup = Path.Combine(dir, "events.jsonl.bak-20200101-000000");
+        File.WriteAllText(backup, "keep");
+        File.SetLastWriteTimeUtc(backup, DateTime.UtcNow.AddDays(-30));
+        File.WriteAllText(Path.Combine(dir, $"inuse.{Environment.ProcessId}.lock"), "");
+        var svc = new SessionRepairService(_tmpRoot, stateDir: null, backupRetentionDays: 7, skipUnchanged: false);
+
+        var result = Assert.Single(svc.RepairAll());
+
+        Assert.True(result.Skipped);
+        Assert.Contains("in use", result.SkipReason);
+        Assert.True(File.Exists(backup));
     }
 
     // ─── Fixture helpers ────────────────────────────────────────────────────

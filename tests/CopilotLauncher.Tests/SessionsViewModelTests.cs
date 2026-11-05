@@ -131,9 +131,150 @@ public class SessionsViewModelTests
         Assert.Contains("No sessions found", viewModel.StatusMessage);
     }
 
+    [Fact]
+    public async Task RefreshAsync_ShowsSessions_BeforeRecursiveSizingCompletes()
+    {
+        using var discovery = new DeferredSizeDiscovery();
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings());
+        var refresh = vm.RefreshAsync();
+        SessionRow? initialRow = null;
+        var changed = new List<string?>();
+
+        try
+        {
+            await discovery.SizingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, vm.TotalCount);
+            initialRow = Assert.Single(vm.Visible);
+            initialRow.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+            Assert.False(refresh.IsCompleted);
+        }
+        finally
+        {
+            discovery.FinishSizing.Set();
+            await refresh;
+        }
+
+        var finalRow = Assert.Single(vm.Visible);
+        Assert.Same(initialRow, finalRow);
+        Assert.Contains("4 KB", finalRow.Tags);
+        Assert.Contains(nameof(SessionRow.Tags), changed);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_UpdatesSizeSorting_WhenSizingCompletes()
+    {
+        using var discovery = new DeferredSizeDiscovery(sessionCount: 2);
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings())
+        {
+            SortField = SessionSortField.Size,
+        };
+        var refresh = vm.RefreshAsync();
+        try
+        {
+            await discovery.SizingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(2, vm.TotalCount);
+        }
+        finally
+        {
+            discovery.FinishSizing.Set();
+            await refresh;
+        }
+
+        Assert.Equal("deferred-size-1", vm.Visible[0].SessionId);
+        Assert.Contains("8 KB", vm.Visible[0].Tags);
+        Assert.Contains("4 KB", vm.Visible[1].Tags);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_NewerRefresh_CancelsThePreviousSizeScan()
+    {
+        using var discovery = new DeferredSizeDiscovery();
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings());
+        var first = vm.RefreshAsync();
+        Task second = Task.CompletedTask;
+        try
+        {
+            await discovery.SizingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            second = vm.RefreshAsync();
+            await discovery.SecondSizingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await first.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Contains("Updating sizes", vm.StatusMessage);
+            Assert.False(second.IsCompleted);
+        }
+        finally
+        {
+            discovery.FinishSizing.Set();
+            await Task.WhenAll(first, second);
+        }
+
+        Assert.Single(vm.Visible);
+        Assert.DoesNotContain("canceled", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_Cancellation_LeavesMetadataVisible()
+    {
+        using var discovery = new DeferredSizeDiscovery();
+        using var cancellation = new CancellationTokenSource();
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings());
+        var refresh = vm.RefreshAsync(cancellation.Token);
+        try
+        {
+            await discovery.SizingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            cancellation.Cancel();
+            await refresh.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Single(vm.Visible);
+            Assert.Contains("canceled", vm.StatusMessage);
+        }
+        finally
+        {
+            discovery.FinishSizing.Set();
+            await refresh;
+        }
+    }
+
+    [Fact]
+    public async Task RefreshAsync_DoesNotRestoreASession_DeletedDuringSizing()
+    {
+        using var discovery = new DeferredSizeDiscovery();
+        var vm = new SessionsViewModel(
+            discovery, new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings(),
+            deletion: new SuccessfulDeletion());
+        var refresh = vm.RefreshAsync();
+        try
+        {
+            await discovery.SizingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(vm.DeleteSession(Assert.Single(vm.Visible)));
+        }
+        finally
+        {
+            discovery.FinishSizing.Set();
+            await refresh;
+        }
+
+        Assert.Empty(vm.Visible);
+        Assert.Equal(0, vm.TotalCount);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_SizingFailure_LeavesMetadataVisibleAndReportsTheError()
+    {
+        using var discovery = new DeferredSizeDiscovery { FailSizing = true };
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings());
+        discovery.FinishSizing.Set();
+
+        await vm.RefreshAsync();
+
+        Assert.Single(vm.Visible);
+        Assert.Contains("Failed to update session sizes", vm.StatusMessage);
+        Assert.Contains("size scan failed", vm.StatusMessage);
+    }
+
     // ---- filtering ----
 
-    private static CopilotSession Session(string id, string? name, string cwd) => new()
+    private static CopilotSession Session(string id, string? name, string? cwd) => new()
     {
         Id = id,
         FolderPath = @"C:\fake\" + id,
@@ -143,9 +284,12 @@ public class SessionsViewModelTests
         UserNamed = name is not null,
     };
 
-    private static async Task<SessionsViewModel> LoadedAsync(params CopilotSession[] sessions)
+    private static Task<SessionsViewModel> LoadedAsync(params CopilotSession[] sessions) =>
+        LoadedAsync(new FakeSettings(), sessions);
+
+    private static async Task<SessionsViewModel> LoadedAsync(FakeSettings settings, params CopilotSession[] sessions)
     {
-        var vm = new SessionsViewModel(new SeededDiscovery(sessions), new FakeTerminals(), new FakeLaunch(_ => { }), new FakeSettings());
+        var vm = new SessionsViewModel(new SeededDiscovery(sessions), new FakeTerminals(), new FakeLaunch(_ => { }), settings);
         await vm.RefreshAsync();
         return vm;
     }
@@ -195,12 +339,257 @@ public class SessionsViewModelTests
         Assert.Single(vm.Visible);
     }
 
+    [Theory]
+    [InlineData(@"C:\work\Frontier", @"C:\work\Frontier", true)]
+    [InlineData(@"C:\work\Frontier\run\nested", @"C:\work\Frontier", true)]
+    [InlineData(@"c:/WORK/frontier/run/", @"C:\work\Frontier\\", true)]
+    [InlineData(@"C:\work\Frontier\", "  C:/work/Frontier/  ", true)]
+    [InlineData(@"C:\work\Frontier2", @"C:\work\Frontier", false)]
+    [InlineData(@"C:\work\Frontier-old\run", @"C:\work\Frontier\", false)]
+    [InlineData(@"C:\work", @"C:\work\Frontier", false)]
+    [InlineData(@"C:\other\Frontier", @"C:\work\Frontier", false)]
+    [InlineData(@"C:\", @"C:\", true)]
+    [InlineData(@"c:/work/Frontier", @"C:\", true)]
+    [InlineData(@"D:\work\Frontier", @"C:\", false)]
+    [InlineData(@"\", @"\", true)]
+    [InlineData(@"\Frontier\run", "/", true)]
+    [InlineData(@"\\server\share", @"\\SERVER\share\", true)]
+    [InlineData("//SERVER/share/Frontier/run/", @"\\server\share\", true)]
+    [InlineData(@"\\server\share2\Frontier", @"\\server\share", false)]
+    [InlineData(null, @"C:\", false)]
+    [InlineData("", @"C:\", false)]
+    [InlineData("   ", @"C:\", false)]
+    [InlineData(@"C:\work\Frontier", null, false)]
+    [InlineData(@"C:\work\Frontier", "", false)]
+    [InlineData(@"C:\work\Frontier", " \t ", false)]
+    public async Task ExcludedPaths_MatchWindowsFolderBoundaries(string? cwd, string? excludedPath, bool isExcluded)
+    {
+        var settings = new FakeSettings();
+        settings.Current.SessionListing.ExcludedPaths.Add(excludedPath!);
+        var vm = await LoadedAsync(settings, Session("boundary-session", null, cwd));
+        vm.ShowAll = true;
+
+        Assert.True(vm.IsHidingExcludedPaths);
+        Assert.Equal(1, vm.TotalCount);
+        Assert.Equal(isExcluded ? 0 : 1, vm.VisibleCount);
+    }
+
+    [Fact]
+    public async Task ExcludedPaths_IgnoreBlankEntriesAndLegacyGlobs()
+    {
+        var settings = new FakeSettings();
+        settings.Current.SessionListing.ExcludedPaths.AddRange(new[] { "", " \t ", null!, @"C:\work\Frontier" });
+        settings.Current.SessionListing.HiddenPathGlobs.Add("**");
+        var vm = await LoadedAsync(settings,
+            Session("excluded", null, @"C:\work\Frontier\run"),
+            Session("included", null, @"C:\work\repo"));
+        vm.ShowAll = true;
+
+        Assert.Equal("included", Assert.Single(vm.Visible).SessionId);
+        Assert.Equal(2, vm.TotalCount);
+    }
+
+    [Fact]
+    public async Task ExcludedPaths_ToggleBothDirections_WithoutRescanningOrSaving()
+    {
+        var settings = new FakeSettings();
+        settings.Current.SessionListing.ExcludedPaths.Add(@"C:\work\Frontier");
+        var discovery = new SeededDiscovery(new[]
+        {
+            Session("excluded-parent", null, @"C:\work\Frontier"),
+            Session("excluded-child", null, @"C:\work\Frontier\run"),
+            Session("included", null, @"C:\work\repo"),
+        });
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), settings)
+        {
+            ShowAll = true,
+        };
+        await vm.RefreshAsync();
+        var scans = discovery.EnumerationCount;
+        Assert.Equal("included", Assert.Single(vm.Visible).SessionId);
+
+        vm.IsHidingExcludedPaths = false;
+        Assert.Equal(3, vm.VisibleCount);
+        vm.IsHidingExcludedPaths = true;
+        Assert.Equal("included", Assert.Single(vm.Visible).SessionId);
+
+        Assert.Equal(3, vm.TotalCount);
+        Assert.Equal(scans, discovery.EnumerationCount);
+        Assert.Equal(0, settings.SaveCount);
+        Assert.Equal(new[] { @"C:\work\Frontier" }, settings.Current.SessionListing.ExcludedPaths);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExcludedPaths_ShowAllAndNoChips_StillRespectExclusions(bool showAll)
+    {
+        var settings = new FakeSettings();
+        settings.Current.SessionListing.ExcludedPaths.Add(@"C:\work\Frontier");
+        var vm = await LoadedAsync(settings,
+            Session("excluded", "Excluded", @"C:\work\Frontier\run"),
+            Session("included", "Included", @"C:\work\repo"));
+        vm.ShowRecent = showAll;
+        vm.ShowNamed = showAll;
+        vm.ShowHeavy = showAll;
+        vm.ShowAll = showAll;
+
+        Assert.Equal("included", Assert.Single(vm.Visible).SessionId);
+        Assert.Contains("1 of 2", vm.StatusMessage);
+        vm.IsHidingExcludedPaths = false;
+        Assert.Equal(2, vm.VisibleCount);
+        vm.IsHidingExcludedPaths = true;
+        Assert.Equal("included", Assert.Single(vm.Visible).SessionId);
+    }
+
+    [Fact]
+    public async Task ExcludedPaths_TemporaryOverride_StillUsesSearchChipsAndSort()
+    {
+        var settings = new FakeSettings();
+        settings.Current.SessionListing.ExcludedPaths.Add(@"C:\work\Frontier");
+        var vm = await LoadedAsync(settings,
+            Session("excluded", "Match Alpha", @"C:\work\Frontier\run"),
+            Session("included", "Match Zebra", @"C:\work\repo"),
+            Session("unnamed", null, @"C:\work\match-unnamed"),
+            Session("other", "Other", @"C:\work\other"));
+        vm.ShowRecent = false;
+        vm.ShowNamed = true;
+        vm.SortField = SessionSortField.Name;
+        vm.SortDescending = false;
+        vm.SearchText = "match";
+        Assert.Equal("included", Assert.Single(vm.Visible).SessionId);
+
+        vm.IsHidingExcludedPaths = false;
+        Assert.Equal(new[] { "excluded", "included" }, vm.Visible.Select(row => row.SessionId));
+
+        vm.ShowAll = true;
+        Assert.Equal(new[] { "unnamed", "excluded", "included" }, vm.Visible.Select(row => row.SessionId));
+        vm.IsHidingExcludedPaths = true;
+        Assert.Equal(new[] { "unnamed", "included" }, vm.Visible.Select(row => row.SessionId));
+        vm.SearchText = "Frontier";
+        Assert.Empty(vm.Visible);
+        vm.IsHidingExcludedPaths = false;
+        Assert.Equal("excluded", Assert.Single(vm.Visible).SessionId);
+    }
+
+    [Fact]
+    public async Task ExcludedPaths_ApplyFilters_ReadsReplacedCurrentSettings()
+    {
+        var settings = new FakeSettings();
+        var discovery = new SeededDiscovery(new[]
+        {
+            Session("excluded", null, @"C:\work\Frontier\run"),
+            Session("included", null, @"C:\work\repo"),
+        });
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), settings)
+        {
+            ShowAll = true,
+        };
+        await vm.RefreshAsync();
+        var scans = discovery.EnumerationCount;
+        Assert.Equal(2, vm.VisibleCount);
+
+        settings.Current = new AppSettings
+        {
+            SessionListing = new SessionListingSettings { ExcludedPaths = new() { @"C:\work\Frontier" } },
+        };
+        vm.ApplyFilters();
+        Assert.Equal("included", Assert.Single(vm.Visible).SessionId);
+
+        settings.Current.SessionListing.ExcludedPaths.Clear();
+        vm.ApplyFilters();
+        Assert.Equal(2, vm.VisibleCount);
+        Assert.Equal(scans, discovery.EnumerationCount);
+    }
+
+    [Fact]
+    public async Task ExcludedPaths_RefreshRereadsSettings_AndKeepsOverrideForViewLifetime()
+    {
+        var settings = new FakeSettings();
+        settings.Current.SessionListing.ExcludedPaths.Add(@"C:\work\Frontier");
+        var sessions = new[]
+        {
+            Session("frontier", null, @"C:\work\Frontier\run"),
+            Session("repo", null, @"C:\work\repo"),
+        };
+        var vm = await LoadedAsync(settings, sessions);
+        vm.ShowAll = true;
+        Assert.Equal("repo", Assert.Single(vm.Visible).SessionId);
+
+        settings.Current.SessionListing.ExcludedPaths = new() { @"C:\work\repo" };
+        await vm.RefreshAsync();
+        Assert.Equal("frontier", Assert.Single(vm.Visible).SessionId);
+
+        vm.IsHidingExcludedPaths = false;
+        await vm.RefreshAsync();
+        Assert.False(vm.IsHidingExcludedPaths);
+        Assert.Equal(2, vm.VisibleCount);
+
+        var nextView = await LoadedAsync(settings, sessions);
+        nextView.ShowAll = true;
+        Assert.True(nextView.IsHidingExcludedPaths);
+        Assert.Equal("frontier", Assert.Single(nextView.Visible).SessionId);
+    }
+
+    [Theory]
+    [InlineData(SessionSortField.LastModified)]
+    [InlineData(SessionSortField.Size)]
+    public async Task ExcludedPaths_FilterMetadataBeforeSizing_AndRevealLoadedSizes(SessionSortField sortField)
+    {
+        var settings = new FakeSettings();
+        settings.Current.SessionListing.ExcludedPaths.Add(@"C:\work\Frontier");
+        using var discovery = new DeferredSizeDiscovery(sessionCount: 2)
+        {
+            WorkingDirectory = @"C:\work\Frontier\run",
+        };
+        var vm = new SessionsViewModel(discovery, new FakeTerminals(), new FakeLaunch(_ => { }), settings)
+        {
+            ShowAll = true,
+            SortField = sortField,
+        };
+        var refresh = vm.RefreshAsync();
+        try
+        {
+            await discovery.SizingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(2, vm.TotalCount);
+            Assert.Empty(vm.Visible);
+            Assert.False(refresh.IsCompleted);
+
+            vm.IsHidingExcludedPaths = false;
+            Assert.Equal(2, vm.VisibleCount);
+            Assert.All(vm.Visible, row => Assert.Empty(row.Tags));
+            vm.IsHidingExcludedPaths = true;
+            Assert.Empty(vm.Visible);
+        }
+        finally
+        {
+            discovery.FinishSizing.Set();
+            await refresh;
+        }
+
+        Assert.Empty(vm.Visible);
+        Assert.Equal(2, vm.TotalCount);
+        vm.IsHidingExcludedPaths = false;
+        Assert.Equal(2, vm.VisibleCount);
+        Assert.Contains("4 KB", vm.Visible.Single(row => row.SessionId == "deferred-size-0").Tags);
+        Assert.Contains("8 KB", vm.Visible.Single(row => row.SessionId == "deferred-size-1").Tags);
+        if (sortField == SessionSortField.Size)
+            Assert.Equal("deferred-size-1", vm.Visible[0].SessionId);
+        vm.IsHidingExcludedPaths = true;
+        Assert.Empty(vm.Visible);
+    }
+
     private sealed class SeededDiscovery : ISessionDiscoveryService
     {
         private readonly IReadOnlyList<CopilotSession> _sessions;
         public SeededDiscovery(IReadOnlyList<CopilotSession> sessions) { _sessions = sessions; }
         public string SessionRoot => Path.GetTempPath();
-        public IEnumerable<CopilotSession> Enumerate() => _sessions;
+        public int EnumerationCount { get; private set; }
+        public IEnumerable<CopilotSession> Enumerate()
+        {
+            EnumerationCount++;
+            return _sessions;
+        }
     }
 
     // ---- project profiles ----
@@ -384,12 +773,62 @@ public class SessionsViewModelTests
         public string SessionRoot => Path.GetTempPath();
         public IEnumerable<CopilotSession> Enumerate() => Array.Empty<CopilotSession>();
     }
+    private sealed class DeferredSizeDiscovery : ISessionDiscoveryService, IDisposable
+    {
+        private readonly int _sessionCount;
+        private int _sizeScans;
+
+        public DeferredSizeDiscovery(int sessionCount = 1) => _sessionCount = sessionCount;
+
+        public string SessionRoot => Path.GetTempPath();
+        public TaskCompletionSource SizingStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource SecondSizingStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim FinishSizing { get; } = new();
+        public bool FailSizing { get; init; }
+        public string? WorkingDirectory { get; init; }
+
+        public IEnumerable<CopilotSession> Enumerate() => Enumerate(includeSizes: true);
+
+        public IEnumerable<CopilotSession> Enumerate(bool includeSizes, CancellationToken ct = default)
+        {
+            if (includeSizes)
+            {
+                SizingStarted.TrySetResult();
+                if (Interlocked.Increment(ref _sizeScans) == 2)
+                    SecondSizingStarted.TrySetResult();
+                FinishSizing.Wait(ct);
+                if (FailSizing)
+                    throw new IOException("size scan failed");
+            }
+
+            for (var i = 0; i < _sessionCount; i++)
+            {
+                yield return new CopilotSession
+                {
+                    Id = $"deferred-size-{i}",
+                    FolderPath = @$"C:\fake\deferred-size-{i}",
+                    LastModified = DateTime.UtcNow,
+                    Cwd = WorkingDirectory,
+                    SizeBytes = includeSizes ? 4096 * (i + 1) : 0,
+                };
+            }
+        }
+
+        public void Dispose() => FinishSizing.Dispose();
+    }
+    private sealed class SuccessfulDeletion : ISessionDeletionService
+    {
+        public SessionDeleteResult Delete(string sessionId) => new() { SessionId = sessionId, Deleted = true };
+        public BulkDeleteResult DeleteMany(IEnumerable<string> sessionIds) =>
+            new() { Results = sessionIds.Select(Delete).ToArray() };
+    }
     private sealed class FakeSettings : ISettingsService
     {
         public string AppDataDirectory => Path.GetTempPath();
         public string SettingsFilePath => Path.Combine(Path.GetTempPath(), "fake-settings.json");
-        public AppSettings Current { get; } = new();
+        public AppSettings Current { get; set; } = new();
+        public int SaveCount { get; private set; }
         public void Load() { }
-        public void Save() { }
+        public void Save() => SaveCount++;
     }
 }

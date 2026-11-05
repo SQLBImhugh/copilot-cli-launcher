@@ -112,10 +112,43 @@ public sealed partial class ProjectsPage : Page
             ViewModel.EditTerminal = item.Tag as string ?? string.Empty;
     }
 
+    private void OnProjectSortChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox combo && combo.SelectedItem is ComboBoxItem item &&
+            item.Tag is string tag && Enum.TryParse<ProjectSortField>(tag, out var field))
+        {
+            PreserveProjectSelection(() => ViewModel.SortField = field);
+        }
+    }
+
+    private void OnToggleProjectSortDirection(object sender, RoutedEventArgs e) =>
+        PreserveProjectSelection(() => ViewModel.IsSortDescending = !ViewModel.IsSortDescending);
+
+    /// <summary>ListView may change its selection while collection items move. Ignore those
+    /// events and restore the same row without reloading any unsaved editor content.</summary>
+    private void PreserveProjectSelection(Action updateItems)
+    {
+        var selected = ProjectList?.SelectedItem;
+        var wasSuppressed = _suppressSelectionChanged;
+        _suppressSelectionChanged = true;
+        try
+        {
+            updateItems();
+            // The sort ComboBox can fire during InitializeComponent, before the list exists.
+            if (ProjectList is not null) ProjectList.SelectedItem = selected;
+        }
+        finally
+        {
+            _suppressSelectionChanged = wasSuppressed;
+        }
+    }
+
     private async void OnProjectSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressSelectionChanged) return;
         if (ProjectList.SelectedItem is not ProjectProfile project) return;
+        // A reselect notification for the same row must not reload the editor's draft.
+        if (ReferenceEquals(project, ViewModel.Selected)) return;
 
         ViewModel.Edit(project);
         PopulateTerminals(ViewModel.EditTerminal);
@@ -166,6 +199,9 @@ public sealed partial class ProjectsPage : Page
     private void OnImportSelectAll(object sender, RoutedEventArgs e) =>
         ViewModel.SetAllImportSelections(true);
 
+    private void OnImportToggleHiddenSelected(object sender, RoutedEventArgs e) =>
+        ViewModel.ToggleSelectedImportPaths();
+
     /// <summary>Keeps the dialog open so the user can see the new selection state.</summary>
     private void OnImportDialogSelectNone(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
@@ -175,16 +211,13 @@ public sealed partial class ProjectsPage : Page
 
     private void OnImportDialogPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
-        if (ViewModel.ImportSelected() == 0)
+        var created = 0;
+        PreserveProjectSelection(() => created = ViewModel.ImportSelected());
+        if (created == 0)
         {
             // Nothing was created — keep the dialog up rather than silently closing.
             args.Cancel = true;
-            return;
         }
-
-        _suppressSelectionChanged = true;
-        ProjectList.SelectedItem = null;
-        _suppressSelectionChanged = false;
     }
 
     /// <summary>Load the capability catalog + in-repo config for whatever folder is
@@ -244,12 +277,17 @@ public sealed partial class ProjectsPage : Page
     {
         ViewModel.EditExtraArgs = ArgsEditor.ReadArgs();
         var caps = ViewModel.EditOverrideCapabilities ? CapEditor.ReadCapabilities() : null;
-        var saved = ViewModel.Save(caps);
-        if (saved is null) return;
-
+        var wasSuppressed = _suppressSelectionChanged;
         _suppressSelectionChanged = true;
-        ProjectList.SelectedItem = saved;
-        _suppressSelectionChanged = false;
+        try
+        {
+            var saved = ViewModel.Save(caps);
+            if (saved is not null) ProjectList.SelectedItem = saved;
+        }
+        finally
+        {
+            _suppressSelectionChanged = wasSuppressed;
+        }
     }
 
     private void OnCancelClick(object sender, RoutedEventArgs e)

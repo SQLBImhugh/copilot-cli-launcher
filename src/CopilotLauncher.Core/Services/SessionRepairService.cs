@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CopilotLauncher.Helpers;
 
 namespace CopilotLauncher.Services;
 
@@ -36,7 +38,7 @@ public interface ISessionRepairService
     /// Idempotent — a fully-repaired session reports zero dangles on the next
     /// run. Backs up <c>events.jsonl</c> as <c>events.jsonl.bak-YYYYMMDD-HHmmss</c>
     /// before mutating, and restores on write failure. Skips locked sessions
-    /// (<c>inuse.*.lock</c> file present).
+    /// (a live or unverifiable <c>inuse.*.lock</c> owner).
     ///
     /// Direct port of <c>legacy/repair-copilot-sessions.py</c>; tracks the
     /// real event shape used by the Copilot CLI:
@@ -121,11 +123,17 @@ public sealed class SessionRepairService : ISessionRepairService
 
         foreach (var dir in Directory.EnumerateDirectories(_sessionRoot))
         {
+            var eventsPath = Path.Combine(dir, "events.jsonl");
+            if (SessionLock.IsInUse(dir))
+            {
+                results.Add(InUseResult(new DirectoryInfo(dir).Name, eventsPath));
+                continue;
+            }
+
             // Prune stale backups regardless of whether we re-scan the session.
             if (backupCutoff is DateTime cutoff)
                 PruneBackupsInDir(dir, cutoff);
 
-            var eventsPath = Path.Combine(dir, "events.jsonl");
             var fingerprint = TryFingerprint(eventsPath);
 
             if (_skipUnchanged
@@ -268,17 +276,8 @@ public sealed class SessionRepairService : ISessionRepairService
         }
 
         // Skip active sessions — never touch a file the live writer has open.
-        var hasLock = Directory.EnumerateFiles(sessionDir, "inuse.*.lock").Any();
-        if (hasLock)
-        {
-            return new RepairResult
-            {
-                SessionId = sessionId,
-                EventsFilePath = eventsPath,
-                Skipped = true,
-                SkipReason = "session is in use (lock file present)",
-            };
-        }
+        if (SessionLock.IsInUse(sessionDir))
+            return InUseResult(sessionId, eventsPath);
 
         // PASS 1 — stream-scan for dangling tool calls WITHOUT materializing
         // the file. events.jsonl can be hundreds of MB (multi-hundred-MB
@@ -329,6 +328,9 @@ public sealed class SessionRepairService : ISessionRepairService
         }
 
         // Backup before mutating.
+        if (SessionLock.IsInUse(sessionDir))
+            return InUseResult(sessionId, eventsPath);
+
         var backup = eventsPath + ".bak-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         try
         {
@@ -368,6 +370,16 @@ public sealed class SessionRepairService : ISessionRepairService
                 }
             }
 
+            if (SessionLock.IsInUse(sessionDir))
+            {
+                try { File.Delete(tmp); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Trace.TraceWarning("Could not remove repair temp file {0}: {1}", tmp, ex.Message);
+                }
+                return InUseResult(sessionId, eventsPath);
+            }
+
             if (File.Exists(eventsPath))
                 File.Replace(tmp, eventsPath, destinationBackupFileName: null);
             else
@@ -375,8 +387,8 @@ public sealed class SessionRepairService : ISessionRepairService
         }
         catch (IOException)
         {
-            // Restore from backup on failure.
-            try { File.Copy(backup, eventsPath, overwrite: true); }
+            var inUse = SessionLock.IsInUse(sessionDir);
+            try { if (!inUse) File.Copy(backup, eventsPath, overwrite: true); }
             catch { /* best effort */ }
             try { if (File.Exists(tmp)) File.Delete(tmp); }
             catch { /* best effort */ }
@@ -386,7 +398,9 @@ public sealed class SessionRepairService : ISessionRepairService
                 EventsFilePath = eventsPath,
                 DanglingCount = scan.Dangling.Count,
                 Skipped = true,
-                SkipReason = "write failed; restored from backup",
+                SkipReason = inUse
+                    ? "write failed; session is now in use, so the original was not restored"
+                    : "write failed; restored from backup",
             };
         }
 
@@ -398,6 +412,14 @@ public sealed class SessionRepairService : ISessionRepairService
             Patched = true,
         };
     }
+
+    private static RepairResult InUseResult(string sessionId, string eventsPath) => new()
+    {
+        SessionId = sessionId,
+        EventsFilePath = eventsPath,
+        Skipped = true,
+        SkipReason = "session is in use (active or unverifiable lock)",
+    };
 
     /// <summary>
     /// One dangling tool call discovered while streaming: the raw line number

@@ -88,8 +88,15 @@
                           AutomationProperties.AutomationId="SessionsFilterShowAll"
                           MinWidth="0"
                           FontSize="{ThemeResource FilterCheckBoxFontSize}"
-                          ToolTipService.ToolTip="Override above; show every session"
+                          ToolTipService.ToolTip="Bypass Recent, Named, and Heavily used filters. Excluded paths remain hidden unless Hide excluded paths is cleared."
                           IsChecked="{x:Bind ViewModel.ShowAll, Mode=TwoWay}"/>
+
+                <CheckBox Content="Hide excluded paths"
+                          AutomationProperties.AutomationId="SessionsFilterHideExcludedPaths"
+                          MinWidth="0"
+                          FontSize="{ThemeResource FilterCheckBoxFontSize}"
+                          ToolTipService.ToolTip="Hide sessions in folders configured under Settings > Session listing, including subfolders. Clear to show them temporarily."
+                          IsChecked="{x:Bind ViewModel.IsHidingExcludedPaths, Mode=TwoWay}"/>
             </controls:WrapPanel>
 
             <Button Grid.Column="1"
@@ -211,7 +218,7 @@
                             <TextBlock Text="{x:Bind RepoBranch, Mode=OneTime}"
                                        Opacity="0.7"
                                        Style="{StaticResource CaptionTextBlockStyle}"/>
-                            <TextBlock Text="{x:Bind Tags, Mode=OneTime}"
+                            <TextBlock Text="{x:Bind Tags, Mode=OneWay}"
                                        Opacity="0.7"
                                        Style="{StaticResource CaptionTextBlockStyle}"/>
                             <StackPanel Orientation="Horizontal" Spacing="6">

@@ -163,6 +163,19 @@
                     <ToggleSwitch Header="Show full session id (instead of truncated to 8 chars)"
                                   AutomationProperties.AutomationId="SettingsShowFullSessionIdToggle"
                                   IsOn="{x:Bind ViewModel.ShowFullSessionId, Mode=TwoWay}"/>
+                    <StackPanel Spacing="4">
+                        <TextBox Header="Excluded session folders"
+                                 AutomationProperties.AutomationId="SettingsExcludedSessionFoldersTextBox"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="100"
+                                 MaxHeight="240"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 Text="{x:Bind ViewModel.ExcludedPathsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="C:\work\Frontier"/>
+                        <TextBlock Text="Enter one folder per line. Sessions in these folders and their subfolders are hidden by default. Clear Hide excluded paths on the Sessions tab to show them temporarily."
+                                   Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"/>
+                    </StackPanel>
                 </StackPanel>
             </muxc:Expander>
 

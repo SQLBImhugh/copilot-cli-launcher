@@ -51,11 +51,31 @@
             <!-- Saved projects -->
             <Grid Grid.Column="0" RowSpacing="8">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <ListView Grid.Row="0"
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Sort by:" VerticalAlignment="Center" Opacity="0.7"/>
+                    <ComboBox x:Name="ProjectSortCombo"
+                              AutomationProperties.AutomationId="ProjectsSortCombo"
+                              AutomationProperties.Name="Sort saved projects by"
+                              ToolTipService.ToolTip="Sort saved projects by name or working directory"
+                              SelectionChanged="OnProjectSortChanged"
+                              MinWidth="160">
+                        <ComboBoxItem Tag="Name" Content="Name" IsSelected="True"/>
+                        <ComboBoxItem Tag="WorkingDirectory" Content="Working directory"/>
+                    </ComboBox>
+                    <Button AutomationProperties.AutomationId="ProjectsSortDirectionButton"
+                            AutomationProperties.Name="{x:Bind ViewModel.SortDirectionDescription, Mode=OneWay}"
+                            ToolTipService.ToolTip="{x:Bind ViewModel.SortDirectionDescription, Mode=OneWay}"
+                            Click="OnToggleProjectSortDirection">
+                        <FontIcon Glyph="{x:Bind ViewModel.SortDirectionGlyph, Mode=OneWay}" FontSize="14"/>
+                    </Button>
+                </StackPanel>
+
+                <ListView Grid.Row="1"
                           x:Name="ProjectList"
                           AutomationProperties.AutomationId="ProjectsList"
                           ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
@@ -99,7 +119,7 @@
                     </ListView.ItemTemplate>
                 </ListView>
 
-                <TextBlock Grid.Row="1"
+                <TextBlock Grid.Row="2"
                            Text="No projects yet. Click “Add project” to pin a folder's startup behavior."
                            Visibility="{x:Bind BoolToVis(ViewModel.HasNoItems), Mode=OneWay}"
                            TextWrapping="Wrap"
@@ -341,19 +361,30 @@
 
                 <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75"
                            Style="{StaticResource CaptionTextBlockStyle}"
-                           Text="Working directories from your past Copilot sessions, most recently used first. Your user folder is excluded, sessions in the same git repo are grouped and named after the repo, and install/tooling folders are listed but left unticked."/>
+                           Text="Working directories from past sessions, most recently used first. Your user folder and already-added projects are excluded. Sessions in the same git repo are grouped and named after the repo; install/tooling folders start unchecked. Hidden folders and their subfolders stay hidden in future imports."/>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                <controls:WrapPanel Grid.Row="1" HorizontalSpacing="8" VerticalSpacing="6">
                     <Button Content="Select all" Click="OnImportSelectAll"
                             AutomationProperties.AutomationId="ProjectImportSelectAllButton"
                             IsEnabled="{x:Bind ViewModel.CanRunImport, Mode=OneWay}"/>
+                    <Button Content="Hide/unhide selected"
+                            AutomationProperties.AutomationId="ProjectImportToggleHiddenButton"
+                            ToolTipService.ToolTip="Hide selected folders from future imports, or restore selected hidden folders. Unhiding a subfolder clears its covering folder exclusion."
+                            Click="OnImportToggleHiddenSelected"
+                            IsEnabled="{x:Bind ViewModel.CanToggleImportPathVisibility, Mode=OneWay}"/>
+                    <ToggleButton Content="Show hidden paths"
+                                  AutomationProperties.AutomationId="ProjectImportShowHiddenToggle"
+                                  ToolTipService.ToolTip="Show hidden folders so you can select and unhide them. Already-added projects remain excluded."
+                                  IsEnabled="{x:Bind ViewModel.CanRunImport, Mode=OneWay}"
+                                  IsChecked="{x:Bind ViewModel.ShowHiddenImportPaths, Mode=TwoWay}"/>
                     <muxc:ProgressRing Width="16" Height="16"
                                        VerticalAlignment="Center"
                                        IsActive="{x:Bind ViewModel.IsScanningSessions, Mode=OneWay}"/>
                     <TextBlock Text="{x:Bind ViewModel.ImportMessage, Mode=OneWay}"
                                VerticalAlignment="Center" Opacity="0.8"
+                               MaxWidth="500" TextWrapping="Wrap"
                                Style="{StaticResource CaptionTextBlockStyle}"/>
-                </StackPanel>
+                </controls:WrapPanel>
 
                 <!-- Table header. Column widths MUST match the row template below;
                      WinUI has no SharedSizeGroup, so alignment relies on both using
@@ -393,9 +424,9 @@
                         <DataTemplate x:DataType="vm:ProjectImportRow">
                             <!-- Alternating tint applied on the row Border so it spans the
                                  full width regardless of content length. -->
-                            <Border Background="{x:Bind pages:ProjectsPage.RowBackground(IsAlternate)}"
+                            <Border Background="{x:Bind pages:ProjectsPage.RowBackground(IsAlternate), Mode=OneWay}"
                                     Padding="8,6"
-                                    Opacity="{x:Bind RowOpacity}">
+                                    Opacity="{x:Bind RowOpacity, Mode=OneWay}">
                                 <Grid ColumnSpacing="12" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="28"/>
@@ -405,10 +436,11 @@
                                     </Grid.ColumnDefinitions>
 
                                     <CheckBox Grid.Column="0"
+                                              AutomationProperties.AutomationId="ProjectImportPathCheckBox"
                                               MinWidth="0" Width="28" Padding="0" Margin="0"
                                               VerticalAlignment="Center"
-                                              IsEnabled="{x:Bind CanImport}"
-                                              AutomationProperties.Name="{x:Bind AccessibleName}"
+                                              IsEnabled="{x:Bind CanSelect, Mode=OneWay}"
+                                              AutomationProperties.Name="{x:Bind AccessibleName, Mode=OneWay}"
                                               IsChecked="{x:Bind IsSelected, Mode=TwoWay}"/>
 
                                     <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
@@ -426,10 +458,10 @@
                                                    Opacity="0.75"
                                                    TextTrimming="CharacterEllipsis"
                                                    Style="{StaticResource CaptionTextBlockStyle}"/>
-                                        <TextBlock Text="{x:Bind DetailText}"
+                                        <TextBlock Text="{x:Bind DetailText, Mode=OneWay}"
                                                    Opacity="0.5"
                                                    TextTrimming="CharacterEllipsis"
-                                                   ToolTipService.ToolTip="{x:Bind DetailText}"
+                                                   ToolTipService.ToolTip="{x:Bind DetailText, Mode=OneWay}"
                                                    Style="{StaticResource CaptionTextBlockStyle}"/>
                                     </StackPanel>
 
@@ -449,7 +481,7 @@
 
                 <TextBlock Grid.Row="4" TextWrapping="Wrap" Opacity="0.6"
                            Style="{StaticResource CaptionTextBlockStyle}"
-                           Text="Imported projects start with no overrides — they inherit every global default until you edit them."/>
+                           Text="Hidden choices affect only this import list. Imported projects start with no overrides; they inherit every global default until you edit them."/>
             </Grid>
         </ContentDialog>
     </Grid>

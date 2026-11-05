@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using CopilotLauncher.Helpers;
 using CopilotLauncher.Models;
 using YamlDotNet.RepresentationModel;
 
@@ -12,12 +15,21 @@ public interface ISessionDiscoveryService
     /// </summary>
     IEnumerable<CopilotSession> Enumerate();
 
+    /// <summary>
+    /// When includeSizes is false, return metadata and any previously calculated
+    /// sizes without recursively scanning session artifacts.
+    /// </summary>
+    IEnumerable<CopilotSession> Enumerate(bool includeSizes, CancellationToken ct = default) => Enumerate();
+
     /// <summary>Path being scanned. Honors %USERPROFILE% override for testing.</summary>
     string SessionRoot { get; }
 }
 
 public sealed class SessionDiscoveryService : ISessionDiscoveryService
 {
+    private readonly ConcurrentDictionary<string, long> _sizes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Func<string, CancellationToken, long> _calculateSize = SafeSumSize;
+
     public string SessionRoot { get; }
 
     public SessionDiscoveryService()
@@ -33,29 +45,42 @@ public sealed class SessionDiscoveryService : ISessionDiscoveryService
         SessionRoot = root;
     }
 
-    public IEnumerable<CopilotSession> Enumerate()
+    internal SessionDiscoveryService(string root, Func<string, CancellationToken, long> calculateSize)
+        : this(root)
     {
+        _calculateSize = calculateSize;
+    }
+
+    public IEnumerable<CopilotSession> Enumerate() => Enumerate(includeSizes: true);
+
+    public IEnumerable<CopilotSession> Enumerate(bool includeSizes, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
         if (!Directory.Exists(SessionRoot))
             yield break;
 
         foreach (var dir in Directory.EnumerateDirectories(SessionRoot))
         {
+            ct.ThrowIfCancellationRequested();
             CopilotSession? parsed = null;
             try
             {
-                parsed = ParseSession(dir);
+                parsed = ParseSession(dir, includeSizes, ct);
             }
-            catch
+            catch (OperationCanceledException)
             {
-                // Skip unreadable / mid-write sessions silently. Phase 5 will
-                // surface these as warnings in a logs panel.
+                throw;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Trace.TraceWarning("Could not read session {0}: {1}", dir, ex.Message);
             }
             if (parsed is not null)
                 yield return parsed;
         }
     }
 
-    private static CopilotSession? ParseSession(string folder)
+    private CopilotSession? ParseSession(string folder, bool includeSizes, CancellationToken ct)
     {
         var wsPath = Path.Combine(folder, "workspace.yaml");
         if (!File.Exists(wsPath))
@@ -66,8 +91,12 @@ public sealed class SessionDiscoveryService : ISessionDiscoveryService
             return null;
 
         var folderInfo = new DirectoryInfo(folder);
-        var size = SafeSumSize(folder);
-        var hasLock = folderInfo.EnumerateFiles("inuse.*.lock").Any();
+        var size = includeSizes
+            ? _calculateSize(folder, ct)
+            : _sizes.GetValueOrDefault(folder);
+        if (includeSizes)
+            _sizes[folder] = size;
+        var hasLock = SessionLock.IsInUse(folder);
 
         return new CopilotSession
         {
@@ -123,16 +152,21 @@ public sealed class SessionDiscoveryService : ISessionDiscoveryService
         return DateTime.TryParse(s, out var dt) ? dt : null;
     }
 
-    private static long SafeSumSize(string folder)
+    private static long SafeSumSize(string folder, CancellationToken ct)
     {
         try
         {
-            return new DirectoryInfo(folder)
-                .EnumerateFiles("*", SearchOption.AllDirectories)
-                .Sum(f => f.Length);
+            long size = 0;
+            foreach (var file in new DirectoryInfo(folder).EnumerateFiles("*", SearchOption.AllDirectories))
+            {
+                ct.ThrowIfCancellationRequested();
+                size += file.Length;
+            }
+            return size;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            Trace.TraceWarning("Could not calculate session size for {0}: {1}", folder, ex.Message);
             return 0;
         }
     }

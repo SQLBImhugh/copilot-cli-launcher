@@ -23,12 +23,12 @@ public sealed class CopilotSession
     public bool UserNamed { get; init; }
     public int SummaryCount { get; init; }
     public DateTime? CreatedAt { get; init; }
-    public long SizeBytes { get; init; }
+    /// <summary>Refreshed after metadata is displayed; includes nested session artifacts.</summary>
+    public long SizeBytes { get; set; }
 
     /// <summary>Path to the session folder on disk.</summary>
     public required string FolderPath { get; init; }
 
-    /// <summary>True if a sibling inuse.*.lock file is present (active session).</summary>
+    /// <summary>True if an inuse.*.lock owner is still running or cannot be verified.</summary>
     public bool IsLocked { get; init; }
 }
-
